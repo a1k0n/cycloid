@@ -1,0 +1,3 @@
+(fp_lib_table
+  (lib (name Teensy)(type Github)(uri https://github.com/XenGi/teensy.pretty)(options "")(descr ""))
+)
