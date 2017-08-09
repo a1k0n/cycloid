@@ -9,6 +9,13 @@ C_UFs = {
     "Max": "fmaxf"
 }
 
+Py_UFs = {
+    "Abs": "abs",
+    "Min": "min",
+    "Max": "max",
+    "atan": "arctan"
+}
+
 pyprint = PythonPrinter(None)
 
 
@@ -17,7 +24,7 @@ def ccode(expr):
 
 
 def pycode(expr):
-    return pyprint._str(expr)
+    return pyprint._str(expr.subs(Py_UFs))
 
 
 def ccode_matrix(matexpr, indent):
@@ -93,15 +100,25 @@ EKF::EKF() : x_(%d), P_(%d, %d) {
 
         print >>self.fpy, '''#!/usr/bin/env python
 import numpy as np
+from numpy import sin, cos, exp, sign, arctan as atan, abs as Abs
+from __builtin__ import min as Min, max as Max
+
 
 def Heaviside(x):
     return np.maximum(0, x)
 
 
+def DiracDelta(x):
+    return x == 0 and 1 or 0
+
+
 def initial_state():'''
-        print >>self.fpy, '    x = np.float32(['
-        print >>self.fpy, '        ' + pycode_matrix(x0, 8)
-        print >>self.fpy, '    ])'
+        print >>self.fpy, '    x = np.float32('
+        print >>self.fpy, '        ' + pycode_matrix(x0.T, 8)
+        print >>self.fpy, '    )'
+        print >>self.fpy, '    P = np.diag('
+        print >>self.fpy, '        ' + pycode_matrix(P0.T, 8)
+        print >>self.fpy, '    )'
         print >>self.fpy, '\n    return x, P\n\n'
 
     def close(self):
@@ -155,9 +172,9 @@ def initial_state():'''
 
         for i, term in enumerate(es[1]):
             if term != 0:
-                print >>self.fpy, '    x[%d] += %s;' % (i, pycode(term))
+                print >>self.fpy, '    x[%d] += %s' % (i, pycode(term))
 
-        print >>self.fpy, '\n    P = np.dot(Fk_1, np.dot(P, Fk_1.T)) + Delta_t * np.diag(Q)'
+        print >>self.fpy, '\n    P = np.dot(F, np.dot(P, F.T)) + Delta_t * np.diag(Q)'
 
         print >>self.fpy, "    return x, P\n\n"
 
@@ -286,8 +303,8 @@ def initial_state():'''
         for x in vs:
             print >>self.fpy, '    %s = %s' % (pycode(x[0]), pycode(x[1]))
 
-        print >>self.fpy, '\n    yk = np.float32(['
-        print >>self.fpy, ' '*8 + pycode_matrix(es[0], 8) + '])'
+        print >>self.fpy, '\n    yk = np.float32('
+        print >>self.fpy, ' '*8 + pycode_matrix(es[0].T, 8) + ')'
 
         print >>self.fpy, '\n    Hk = np.float32(['
         print >>self.fpy, ' '*8 + pycode_matrix(es[1], 8) + '])'

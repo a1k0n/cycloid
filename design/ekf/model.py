@@ -18,11 +18,12 @@ sp.init_printing()
  ) = sp.symbols("v, delta, y_e, psi_e, kappa", real=True)
 
 (ml_1, ml_2, ml_3,  # log of brushed DC motor model constants
+ ml_4,              # log of static friction constant
  srv_a, srv_b, srv_r,  # servo response model; delta -> srv_a * control + srv_b
                        # at rate srv_r
  srvfb_a, srvfb_b,  # servo feedback measurement = srvfb_a * delta + srvfb_b
  o_g  # gyroscope offset; gyro measures v * delta + o_g
- ) = sp.symbols("ml_1, ml_2, ml_3, srv_a, srv_b, srv_r, srvfb_a, srvfb_b, o_g",
+ ) = sp.symbols("ml_1, ml_2, ml_3, ml_4, srv_a, srv_b, srv_r, srvfb_a, srvfb_b, o_g",
                 real=True)
 
 # dt, steering input, motor input
@@ -32,10 +33,9 @@ sp.init_printing()
  ) = sp.symbols("Delta_t u_delta u_M", real=True)
 
 
-
 # state vector x is all of the above
 X = sp.Matrix([v, delta, y_e, psi_e, kappa,
-               ml_1, ml_2, ml_3,
+               ml_1, ml_2, ml_3, ml_4,
                srv_a, srv_b, srv_r, srvfb_a, srvfb_b, o_g])
 
 print "state variables:"
@@ -51,6 +51,8 @@ x0 = np.float32([
     np.log(5000 * np.pi * 0.101 / 40),
     # ml_2, ml_3 (both log 1/s)
     np.log(4), np.log(1),
+    # ml_4 (m/s^2 static frictional deceleration)
+    np.log(0.1),
     # srv_a, srv_b, srv_r,
     1.0, 0, 3.0,   # ??? untested yet
     # srvfb_a, srvfb_b
@@ -59,10 +61,10 @@ x0 = np.float32([
     0])
 
 P0 = np.float32([
-    # s_m, v, delta, y_e, psi_e, kappa
-    0.01, 1, 0.1, 2, 1, 1,
-    # ml_1, ml_2, ml_3
-    0.25, 0.25, 0.25,
+    # v, delta, y_e, psi_e, kappa
+    1, 0.1, 2, 1, 1,
+    # ml_1, ml_2, ml_3, ml_4
+    0.25, 0.25, 0.25, 0.25,
     # srv_a, srv_b, srv_r
     0.1, 0.1, 0.1,
     # srvfb_a, srvfb_b
@@ -100,11 +102,15 @@ ekfgen.open(sp.Matrix(x0), sp.Matrix(P0))
 # k1: m/s^2 / V  (acceleration per volt)
 # k2: 1/s  (EMF decay time constant)
 # k3: 1/s  (friction decay time constant)
-k1, k2, k3 = sp.exp(ml_1), sp.exp(ml_2), sp.exp(ml_3)
+# k4: m/s^2  (coulomb friction, minimum torque to get moving)
+k1, k2, k3, k4 = sp.exp(ml_1), sp.exp(ml_2), sp.exp(ml_3), sp.exp(ml_4)
 
 u_DC = sp.Abs(u_M)
 u_V = sp.Heaviside(u_M)  # 1 if u_M > 0, else 0
-dv = Delta_t*(u_V * u_DC * k1 - u_DC * v * k2 - v * k3)
+# we also have a static friction coefficient which tries to make the velocity
+# exactly 0, up to the friction limit
+dv = Delta_t*(u_V * u_DC * k1 - u_DC * v * k2 - v * k3 - k4)
+dv = sp.Max(dv, -v)  # velocity cannot go negative
 av = v + dv / 2  # average velocity during the timestep
 
 
@@ -135,6 +141,7 @@ f = sp.Matrix([
     ml_1,
     ml_2,
     ml_3,
+    ml_4,
     srv_a,
     srv_b,
     srv_r,
@@ -147,7 +154,17 @@ print "state transition: x +="
 sp.pprint(f - X)
 
 # Our prediction error AKA process noise is kinda seat of the pants:
-Q = sp.Matrix([4, 2, 1, 1, 10, 1e-1, 1e-2, 1e-2, 1e-2, 1e-2, 1e-2, 1e-3, 1e-5, 1e-3])
+Q = sp.Matrix([
+    # v, delta, y_e, psi_e, kappa
+    4, 2, 1, 1, 10,
+    # ml_1, ml_2, ml_3, ml_4
+    1e-1, 1e-2, 1e-2, 1e-2,
+    # srv_a, srv_b, srv_r
+    1e-2, 1e-2, 1e-2,
+    # srvfb_a, srvfb_b
+    1e-3, 1e-5,
+    # o_g
+    1e-3])
 
 # Generate the prediction code:
 ekfgen.generate_predict(f, sp.Matrix([u_M, u_delta]), Q, Delta_t)
