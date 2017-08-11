@@ -1,6 +1,7 @@
 import numpy as np
 import sympy as sp
 import codegen
+import os
 
 
 sp.init_printing()
@@ -73,7 +74,9 @@ P0 = np.float32([
     # o_g
     1])**2
 
-ekfgen.open(sp.Matrix(x0), sp.Matrix(P0))
+os.mkdir("out_cc")
+os.mkdir("out_py")
+ekfgen.open("out_cc", "out_py", sp.Matrix(x0), sp.Matrix(P0))
 
 # The brushed DC motor model has three components:
 # The electronic "speed controller" is really just a voltage source

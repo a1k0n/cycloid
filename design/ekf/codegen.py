@@ -54,11 +54,11 @@ class EKFGen:
         self.fcc = None
         self.fpy = None
 
-    def open(self, x0, P0):
+    def open(self, outdir_cc, outdir_py, x0, P0):
         # FIXME: make class name, file name, path flexible
-        self.fh = open("ekf.h", "w")
-        self.fcc = open("ekf.cc", "w")
-        self.fpy = open("ekf.py", "w")
+        self.fh = open("%s/ekf.h" % outdir_cc, "w")
+        self.fcc = open("%s/ekf.cc" % outdir_cc, "w")
+        self.fpy = open("%s/ekf.py" % outdir_py, "w")
         N = self.N
 
         print >>self.fh, '''#ifndef MODEL_EKF_H_
