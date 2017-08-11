@@ -48,21 +48,22 @@ x0 = np.float32([
     # v, delta, y_e, psi_e, kappa
     0, 0, 0, 0, 0,
     # m1_ (log m/s^2) (overestimated for slow start)
-    np.log(5000 * np.pi * 0.101 / 40),
+    3.7,
     # ml_2, ml_3 (both log 1/s)
-    np.log(4), np.log(1),
-    # ml_4 (m/s^2 static frictional deceleration)
-    np.log(0.1),
+    1.6, 0.98,
+    # ml_4 (log m/s^2 static frictional deceleration)
+    1,
     # srv_a, srv_b, srv_r,
-    1.0, 0, 3.0,   # ??? untested yet
+    0.85,   -0.14,   2.2,
     # srvfb_a, srvfb_b
-    -60, 117,
+    -180, 107.8,
     # o_g
     0])
 
 P0 = np.float32([
     # v, delta, y_e, psi_e, kappa
-    1, 0.1, 2, 1, 1,
+    # assume we start stationary
+    0.001, 0.1, 2, 1, 1,
     # ml_1, ml_2, ml_3, ml_4
     0.25, 0.25, 0.25, 0.25,
     # srv_a, srv_b, srv_r
@@ -158,13 +159,13 @@ Q = sp.Matrix([
     # v, delta, y_e, psi_e, kappa
     4, 2, 1, 1, 10,
     # ml_1, ml_2, ml_3, ml_4
-    1e-1, 1e-2, 1e-2, 1e-2,
+    1e-1, 1e-2, 1e-2, 1e-1,
     # srv_a, srv_b, srv_r
     1e-2, 1e-2, 1e-2,
     # srvfb_a, srvfb_b
     1e-3, 1e-5,
     # o_g
-    1e-3])
+    1e-5])
 
 # Generate the prediction code:
 ekfgen.generate_predict(f, sp.Matrix([u_M, u_delta]), Q, Delta_t)
@@ -198,8 +199,23 @@ h_imu
 
 g_z = sp.symbols("g_z")
 h_gyro = sp.Matrix([g_z])
-R_gyro = sp.Matrix([1e-2])
+R_gyro = sp.Matrix([0.1])  # measured noise std.dev
 ekfgen.generate_measurement(
     "IMU", h_imu, h_gyro, h_gyro, R_gyro)
+
+
+# generate measurement for encoders
+METERS_PER_ENCODER_TICK = np.pi * 0.101 / 20
+dsdt, fb_delta = sp.symbols("dsdt fb_delta")
+h_z_encoders = sp.Matrix([dsdt, fb_delta])
+h_x_encoders = sp.Matrix([
+    v / METERS_PER_ENCODER_TICK,
+    srvfb_b + delta * srvfb_a
+])
+R_encoders = sp.Matrix([1, 1])
+
+ekfgen.generate_measurement(
+    "encoders", h_x_encoders,
+    h_z_encoders, h_z_encoders, R_encoders)
 
 ekfgen.close()
