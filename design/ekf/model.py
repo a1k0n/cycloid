@@ -48,12 +48,12 @@ ekfgen = codegen.EKFGen(X)
 x0 = np.float32([
     # v, delta, y_e, psi_e, kappa
     0, 0, 0, 0, 0,
-    # m1_ (log m/s^2) (overestimated for slow start)
-    3.7,
+    # ml_1 (log m/s^2) (overestimated for slow start)
+    4.3,
     # ml_2, ml_3 (both log 1/s)
-    1.6, 0.98,
+    2.6, -0.7,
     # ml_4 (log m/s^2 static frictional deceleration)
-    1,
+    2.4,
     # srv_a, srv_b, srv_r,
     0.85,   -0.14,   2.2,
     # srvfb_a, srvfb_b
@@ -74,8 +74,14 @@ P0 = np.float32([
     # o_g
     1])**2
 
-os.mkdir("out_cc")
-os.mkdir("out_py")
+try:
+    os.mkdir("out_cc")
+except:
+    pass
+try:
+    os.mkdir("out_py")
+except:
+    pass
 ekfgen.open("out_cc", "out_py", sp.Matrix(x0), sp.Matrix(P0))
 
 # The brushed DC motor model has three components:
@@ -160,7 +166,7 @@ sp.pprint(f - X)
 # Our prediction error AKA process noise is kinda seat of the pants:
 Q = sp.Matrix([
     # v, delta, y_e, psi_e, kappa
-    4, 2, 1, 1, 10,
+    4, 2, 0.5, 0.5, 3,
     # ml_1, ml_2, ml_3, ml_4
     1e-1, 1e-2, 1e-2, 1e-1,
     # srv_a, srv_b, srv_r
