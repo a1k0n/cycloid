@@ -72,12 +72,12 @@ def predict(x, P, Delta_t, u_M, u_delta):
     F[1, 9] += tmp17*u_delta
     F[1, 10] += tmp17
     F[1, 11] += Delta_t*tmp16*Heaviside(-tmp13 + tmp14)
-    F[2, 0] += -tmp18*tmp19
-    F[2, 3] += tmp23
-    F[2, 5] += tmp25*tmp6
-    F[2, 6] += -tmp25*tmp5
-    F[2, 7] += -tmp2*tmp25
-    F[2, 8] += -tmp0*tmp25
+    F[2, 0] += tmp18*tmp19
+    F[2, 3] += -tmp23
+    F[2, 5] += -tmp25*tmp6
+    F[2, 6] += tmp25*tmp5
+    F[2, 7] += tmp2*tmp25
+    F[2, 8] += tmp0*tmp25
     F[3, 0] += -tmp19*tmp30
     F[3, 1] += tmp22
     F[3, 2] += kappa**2*tmp23/tmp27**2
@@ -90,7 +90,7 @@ def predict(x, P, Delta_t, u_M, u_delta):
     Q = np.float32([ 16, 4, 0.250000000000000, 0.250000000000000, 9, 0.0100000000000000, 0.000100000000000000, 0.000100000000000000, 0.0100000000000000, 0.000100000000000000, 0.000100000000000000, 0.000100000000000000, 1.00000000000000e-6, 1.00000000000000e-10, 1.00000000000000e-10])
     x[0] += tmp21
     x[1] += tmp15*tmp16
-    x[2] += tmp31
+    x[2] += -tmp31
     x[3] += tmp22*tmp30
 
     P = np.dot(F, np.dot(P, F.T)) + Delta_t * np.diag(Q)

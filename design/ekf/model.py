@@ -145,7 +145,7 @@ ddelta = sp.Min(Delta_t * srv_r, sp.Abs(srv_a * u_delta + srv_b - delta)) * sp.s
 f = sp.Matrix([
     v + dv,
     delta + ddelta,
-    y_e + Delta_t * av * sp.sin(psi_e),
+    y_e - Delta_t * av * sp.sin(psi_e),
     psi_e + Delta_t * av * (delta + kappa * sp.cos(psi_e) / (1 - kappa * y_e)),
     kappa,
     ml_1,
