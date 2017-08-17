@@ -53,8 +53,8 @@ def tophat(img):
 
     # detected = (0.25*hv[:, :, 0] - 2*hv[:, :, 1] + 0.5*hv[:, :, 2] - 30)
 
-    detected = -hv - 30
-    # detected = -hv - 10
+    # detected = -hv - 30
+    detected = -hv - 20
     
 
     # hh = np.cumsum(m, axis=0)
@@ -74,6 +74,7 @@ def detect_centerline(img):
         w = th[indices]  # * bucketcount[:, 3:-3][indices]
         X = np.vstack([w*s*s*indices[0]**2, w*s*indices[0], w]).T
         y = w*s*(indices[1] - th.shape[1] / 2)
+        yc = np.sum(w * s * indices[0]) / np.sum(w)
         XTX = np.dot(X.T, X)
         XTy = np.dot(X.T, y)
         XTXinv = np.linalg.inv(XTX)
@@ -82,8 +83,10 @@ def detect_centerline(img):
         # squared residuals
         r2 = np.dot(B.T, np.dot(XTX, B)) - 2*np.dot(B, XTy) + np.dot(y.T, y)
         # covariance matrix
-        Rk = XTXinv * r2
-        # Rk = 100 * XTXinv * r2 / (N - 1)
-        return m, hv, th, B, Rk
+        Rk = np.zeros((4, 4))
+        Rk[:3, :3] = XTXinv * r2
+        # covariance of y_c
+        # Rk[3, 3] = XTX[1, 1] / np.sum(w) - yc**2
+        return m, hv, th, B, yc, Rk
 
-    return m, hv, th, None, None
+    return m, hv, th, None, None, None
