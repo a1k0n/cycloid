@@ -66,7 +66,7 @@ def draw_state(timg, x, ps, weight):
     # draw an arc for v/delta
     vx, vy, theta = 0, 0, 0
     dt = 1.0/30
-    for i in range(3):
+    for i in range(10):
         tt = theta + dt * delta / 2.0
         theta += dt * delta
         ny = vy + v * dt * np.cos(tt)
@@ -113,11 +113,12 @@ def replay(fname, f):
 
         x, P = ekf.predict(x, P, dt, throttle / 127.0, steering / 127.0)
         print 'x_predict\n', x
+        xpred, Ppred = np.copy(x), np.copy(P)
 
-        m, hv, th, B, Rk = imgproc.detect_centerline(frame)
+        m, hv, th, B, yc, Rk = imgproc.detect_centerline(frame)
 
         if B is not None:
-            x, P = ekf.update_centerline(x, P, B[0], B[1], B[2], Rk)
+            x, P = ekf.update_centerline(x, P, B[0], B[1], B[2], yc, Rk)
             print 'x_centerline\n', x
 
         print 'gyro', gyro[2]
@@ -196,13 +197,20 @@ def replay(fname, f):
                 vidframe[frame.shape[0]:, 320:],
                 B, vidscale, (0, 255, 0), 1)
 
-        U = np.linalg.cholesky(P[:5, :5]).T
-        # now we render x, and each x + U[i] / x - U[i]
+        # draw_state(vidframe[frame.shape[0]:, 320:], x[:5], vidscale, 2)
+        draw_state(vidframe[frame.shape[0]:, 320:], xpred[:5], vidscale, 2)
+        try:
+            # U = np.linalg.cholesky(P[:5, :5]).T
+            U = np.linalg.cholesky(Ppred[:5, :5]).T
+            # now we render x, and each x + U[i] / x - U[i]
 
-        draw_state(vidframe[frame.shape[0]:, 320:], x[:5], vidscale, 2)
-        for i in range(5):
-            draw_state(vidframe[frame.shape[0]:, 320:], x[:5] + U[i], vidscale, 1)
-            draw_state(vidframe[frame.shape[0]:, 320:], x[:5] - U[i], vidscale, 1)
+            for i in range(5):
+                draw_state(vidframe[frame.shape[0]:, 320:],
+                           x[:5] + U[i], vidscale, 1)
+                draw_state(vidframe[frame.shape[0]:, 320:],
+                           x[:5] - U[i], vidscale, 1)
+        except np.linalg.linalg.LinAlgError:
+            pass
 
         vidout.write(vidframe)
         cv2.imshow('f', vidframe)
