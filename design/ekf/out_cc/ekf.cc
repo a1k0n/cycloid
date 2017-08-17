@@ -28,31 +28,31 @@ void EKF::Reset() {
         0.0,
         0.0,
         0.0,
-        4.30000019073486,
-        2.59999990463257,
-        -0.699999988079071,
-        2.40000009536743,
-        0.850000023841858,
-        -0.140000000596046,
-        2.20000004768372,
-        -180.000000000000,
-        107.800003051758,
+        3.40000009536743,
+        2.29999995231628,
+        -0.600000023841858,
+        0.800000011920929,
+        -2.29999995231628,
+        0.109999999403954,
+        3.29999995231628,
+        -25.0000000000000,
+        121.000000000000,
         0.0;
   P_.setIdentity();
   P_.diagonal() << 1.00000011116208e-6,
     0.0100000007078052,
     4.00000000000000,
     1.00000000000000,
-    1.00000000000000,
+    0.160000011324883,
     0.0625000000000000,
     0.0625000000000000,
     0.0625000000000000,
     0.0625000000000000,
-    0.0100000007078052,
-    0.0100000007078052,
-    0.0100000007078052,
-    2500.00000000000,
-    100.000000000000,
+    0.250000000000000,
+    0.250000000000000,
+    0.250000000000000,
+    10000.0000000000,
+    10000.0000000000,
     1.00000000000000;
 }
 
@@ -100,9 +100,10 @@ void EKF::Predict(float Delta_t, float u_M, float u_delta) {
   float tmp27 = tmp26 - 1;
   float tmp28 = 1.0/tmp27;
   float tmp29 = kappa*tmp28;
-  float tmp30 = delta - tmp20*tmp29;
+  float tmp30 = delta + tmp20*tmp29;
   float tmp31 = tmp18*tmp22;
   float tmp32 = (1.0L/2.0L)*tmp24*tmp30*tmp9;
+  float tmp33 = 0.1*v + 1.0e-5;
 
   MatrixXf F(15, 15);
   F.setIdentity();
@@ -121,48 +122,58 @@ void EKF::Predict(float Delta_t, float u_M, float u_delta) {
   F(2, 6) += tmp25*tmp5;
   F(2, 7) += tmp2*tmp25;
   F(2, 8) += tmp0*tmp25;
-  F(3, 0) += -tmp19*tmp30;
-  F(3, 1) += tmp22;
+  F(3, 0) += tmp19*tmp30;
+  F(3, 1) += -tmp22;
   F(3, 2) += pow(kappa, 2)*tmp23/pow(tmp27, 2);
   F(3, 3) += tmp29*tmp31;
   F(3, 4) += tmp23*tmp28*(tmp26*tmp28 - 1);
-  F(3, 5) += tmp32*tmp6;
-  F(3, 6) += -tmp32*tmp5;
-  F(3, 7) += -tmp2*tmp32;
-  F(3, 8) += -tmp0*tmp32;
+  F(3, 5) += -tmp32*tmp6;
+  F(3, 6) += tmp32*tmp5;
+  F(3, 7) += tmp2*tmp32;
+  F(3, 8) += tmp0*tmp32;
 
   VectorXf Q(15);
-  Q << 16, 4, 0.250000000000000, 0.250000000000000, 9, 0.0100000000000000, 0.000100000000000000, 0.000100000000000000, 0.0100000000000000, 0.000100000000000000, 0.000100000000000000, 0.000100000000000000, 1.00000000000000e-6, 1.00000000000000e-10, 1.00000000000000e-10;
+  Q << 16, 4, pow(tmp33, 2), pow(tmp33, 2), pow(tmp33, 2), 0.0100000000000000, 0.000100000000000000, 0.000100000000000000, 0.0100000000000000, 0.000100000000000000, 0.000100000000000000, 0.000100000000000000, 1.00000000000000e-6, 1.00000000000000e-10, 1.00000000000000e-10;
   x_[0] += tmp21;
   x_[1] += tmp15*tmp16;
   x_[2] += -tmp31;
-  x_[3] += tmp22*tmp30;
+  x_[3] += -tmp22*tmp30;
 
   P_ = F * P_ * F.transpose();
   P_.diagonal() += Delta_t * Q;
 }
 
-bool EKF::UpdateCenterline(float a, float b, float c, Eigen::MatrixXf Rk) {
+bool EKF::UpdateCenterline(float a, float b, float c, float y_c, Eigen::MatrixXf Rk) {
   float y_e = x_[2];
   float psi_e = x_[3];
   float kappa = x_[4];
-  float tmp0 = pow(b, 2) + 1;
-  float tmp1 = 2*pow(tmp0, -1.5);
+  float tmp0 = a*y_c;
+  float tmp1 = b + 2*tmp0;
+  float tmp2 = pow(tmp1, 2) + 1;
+  float tmp3 = pow(tmp2, -1.0L/2.0L);
+  float tmp4 = a*pow(y_c, 2) + b*y_c + c - tmp1*y_c;
+  float tmp5 = 2*pow(tmp2, -1.5);
+  float tmp6 = 1.0/tmp2;
+  float tmp7 = 2*tmp6;
+  float tmp8 = tmp1*tmp4;
+  float tmp9 = 2*a;
+  float tmp10 = pow(tmp2, -2.5);
+  float tmp11 = 12.0*tmp1*tmp10;
 
 
   VectorXf yk(3);
-  yk << -(c + y_e),
-        -psi_e + atan(b),
-        a*tmp1 - kappa;
+  yk << -tmp3*tmp4 - y_e,
+        -psi_e + atan(tmp1),
+        a*tmp5 - kappa;
 
   MatrixXf Hk(3, 15);
   Hk << 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
         0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
         0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0;
-  MatrixXf Mk(3, 3);
-  Mk << 0, 0, -1,
-        0, 1.0/tmp0, 0,
-        tmp1, -6.0*a*b*pow(tmp0, -2.5), 0;
+  MatrixXf Mk(3, 4);
+  Mk << tmp3*y_c*(tmp7*tmp8 + y_c), tmp8/pow(tmp2, 3.0L/2.0L), -tmp3, tmp3*tmp9*(tmp6*tmp8 + y_c),
+        tmp7*y_c, tmp6, 0, a*tmp7,
+        -tmp0*tmp11 + tmp5, -tmp10*tmp9*(3.0*b + 6.0*tmp0), 0, -pow(a, 2)*tmp11;
   Rk = Mk * Rk * Mk.transpose();
 
   MatrixXf S = Hk * P_ * Hk.transpose() + Rk;
@@ -186,7 +197,7 @@ bool EKF::UpdateIMU(float g_z) {
   Hk << -delta, -v, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1;
 
   VectorXf Rk(1);
-  Rk << 0.0100000000000000;
+  Rk << 0.000100000000000000;
 
   MatrixXf S = Hk * P_ * Hk.transpose();
   S.diagonal() += Rk;

@@ -44,33 +44,34 @@ sp.pprint(X.T)
 
 ekfgen = codegen.EKFGen(X)
 
+
 # Define a default initial state and covariance
 x0 = np.float32([
     # v, delta, y_e, psi_e, kappa
     0, 0, 0, 0, 0,
     # ml_1 (log m/s^2) (overestimated for slow start)
-    4.3,
+    3.4,
     # ml_2, ml_3 (both log 1/s)
-    2.6, -0.7,
+    2.3, -0.6,
     # ml_4 (log m/s^2 static frictional deceleration)
-    2.4,
+    0.8,
     # srv_a, srv_b, srv_r,
-    0.85,   -0.14,   2.2,
+    -2.3, 0.11, 3.3,
     # srvfb_a, srvfb_b
-    -180, 107.8,
+    -25, 121,
     # o_g
     0])
 
 P0 = np.float32([
     # v, delta, y_e, psi_e, kappa
     # assume we start stationary
-    0.001, 0.1, 2, 1, 1,
+    0.001, 0.1, 2, 1, 0.4,
     # ml_1, ml_2, ml_3, ml_4
     0.25, 0.25, 0.25, 0.25,
     # srv_a, srv_b, srv_r
-    0.1, 0.1, 0.1,
+    0.5, 0.5, 0.5,
     # srvfb_a, srvfb_b
-    50, 10,
+    100, 100,
     # o_g
     1])**2
 
@@ -146,7 +147,7 @@ f = sp.Matrix([
     v + dv,
     delta + ddelta,
     y_e - Delta_t * av * sp.sin(psi_e),
-    psi_e + Delta_t * av * (delta + kappa * sp.cos(psi_e) / (1 - kappa * y_e)),
+    psi_e + Delta_t * av * (-delta + kappa * sp.cos(psi_e) / (1 - kappa * y_e)),
     kappa,
     ml_1,
     ml_2,
@@ -166,7 +167,7 @@ sp.pprint(f - X)
 # Our prediction error AKA process noise is kinda seat of the pants:
 Q = sp.Matrix([
     # v, delta, y_e, psi_e, kappa
-    4, 2, 0.5, 0.5, 3,
+    4, 2, 0.1*v + 1e-5, 0.1*v + 1e-5, 0.1*v + 1e-5,
     # ml_1, ml_2, ml_3, ml_4
     1e-1, 1e-2, 1e-2, 1e-1,
     # srv_a, srv_b, srv_r
@@ -186,17 +187,67 @@ ekfgen.generate_predict(f, sp.Matrix([u_M, u_delta]), Q, Delta_t)
 # our camera / image processing pipeline. The result of that is a quadratic
 # regression equation ax^2 + bx + c, and a quadratic fit covariance Rk also
 # comes from our image processing pipeline.
-a, b, c = sp.symbols("a b c", real=True)
-z_k_centerline = sp.Matrix([a, b, c])
 
-# These parameters correspond to our state in the following way:
-# We measure an approximate y_e, psi_e, and kappa:
-h_x_centerline = sp.Matrix([y_e, psi_e, kappa])
-h_z_centerline = sp.Matrix([
-    -c,
-    sp.atan(b),
-    2*a * (b**2 + 1)**-1.5
-])
+def centerline_derivation():
+    a, b, c, yc, t = sp.symbols("a b c y_c t", real=True)
+    z_k = sp.Matrix([a, b, c, yc])
+
+    # y_c is the center of the original datapoints, where our regression should
+    # have the least amount of error. we will measure the centerline curvature
+    # (kappa) and angle (psi_e) at this point, and then compute y_e as our
+    # perpendicular distance to that line.
+
+    # the regression line is x = a y^2 + b y + c
+    xc = a*yc**2 + b*yc + c
+    dx = sp.diff(xc, yc)
+    dxx = sp.diff(dx, yc)
+    kappa_est = dxx / ((dx**2 + 1)**(1.5))  # curvature at yc
+
+    pc = sp.Matrix([xc, yc])  # regression center on curve
+    N = sp.Matrix([-1, dx])  # N is a vector normal to the curve
+    Nnorm = sp.sqrt((N.T * N)[0])  # length of normal
+
+    # if curvature is low, assume we have a straight line; project our
+    # regression centerpoint onto the unit normal vector to determine distance
+    # to centerline, and tan(psi_e) = dx/dy = dx/1
+    ye_linear_est = (N.T * pc)[0] / Nnorm
+    tanpsi_linear_est = dx
+
+    # if curvature is nonzero, we're tracing a circle:
+    # find the center of curvature by projecting 1/kappa meters along the unit
+    # normal
+
+    curve_center = sp.simplify(pc + N / kappa_est)
+    print 'curve_center', curve_center
+    # and then find the closest point on the circle to the car's CG (the
+    # origin) by projecting back
+    curve_normal = sp.simplify(-curve_center /
+                               sp.sqrt((curve_center.T * curve_center)[0]))
+    curve_refpoint = curve_center + curve_normal / kappa_est
+    ye_circular_est = (curve_refpoint.T * curve_normal)[0]
+    tanpsi_circular_est = sp.simplify(curve_center[0] / curve_center[1])
+
+    # this is a (maybe bad) approximation, as the center point isn't
+    # necessarily the correct point on the circular curve our model assumes,
+    # but the math for circular curves isn't numerically stable when curvature
+    # is close to zero. I'm hoping this works well enough as an approximation.
+
+    h_x = sp.Matrix([y_e, psi_e, kappa])
+    h_z = sp.Matrix([
+        ye_linear_est,
+        sp.atan(tanpsi_linear_est),
+        # ye_circular_est,
+        # sp.Piecewise((ye_linear_est, sp.Abs(kappa_est) < 1e-2),
+        #             (ye_circular_est, True)),
+        # tanpsi_circular_est,
+        # sp.Piecewise((tanpsi_linear_est, sp.Abs(kappa_est) < 1e-2),
+        #             (tanpsi_circular_est, True)),
+        kappa_est
+    ])
+
+    return h_x, h_z, z_k
+
+h_x_centerline, h_z_centerline, z_k_centerline = centerline_derivation()
 
 ekfgen.generate_measurement(
     "centerline", h_x_centerline, h_z_centerline,
@@ -208,7 +259,7 @@ h_imu
 
 g_z = sp.symbols("g_z")
 h_gyro = sp.Matrix([g_z])
-R_gyro = sp.Matrix([0.1])  # measured noise std.dev
+R_gyro = sp.Matrix([0.01])  # measured noise std.dev
 ekfgen.generate_measurement(
     "IMU", h_imu, h_gyro, h_gyro, R_gyro)
 
