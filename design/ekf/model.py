@@ -44,21 +44,20 @@ sp.pprint(X.T)
 
 ekfgen = codegen.EKFGen(X)
 
-
 # Define a default initial state and covariance
 x0 = np.float32([
     # v, delta, y_e, psi_e, kappa
     0, 0, 0, 0, 0,
     # ml_1 (log m/s^2) (overestimated for slow start)
-    3.4,
+    3.9,
     # ml_2, ml_3 (both log 1/s)
-    2.3, -0.6,
+    2.2, -0.25,
     # ml_4 (log m/s^2 static frictional deceleration)
-    0.8,
+    1.7,
     # srv_a, srv_b, srv_r,
-    -2.3, 0.11, 3.3,
+    -1.6, 0.2, 4.0,
     # srvfb_a, srvfb_b
-    -25, 121,
+    -35, 125,
     # o_g
     0])
 
@@ -120,6 +119,7 @@ u_DC = sp.Abs(u_M)
 u_V = sp.Heaviside(u_M)  # 1 if u_M > 0, else 0
 # we also have a static friction coefficient which tries to make the velocity
 # exactly 0, up to the friction limit
+k4 = k4 * (1 + sp.Heaviside(sp.Max(0, v - 0.2)))
 dv = Delta_t*(u_V * u_DC * k1 - u_DC * v * k2 - v * k3 - k4)
 dv = sp.Max(dv, -v)  # velocity cannot go negative
 av = v + dv / 2  # average velocity during the timestep

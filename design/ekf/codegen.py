@@ -116,8 +116,8 @@ def Heaviside(x):
     return 1 * (x > 0)
 
 
-def DiracDelta(x):
-    return x == 0 and 1 or 0
+def DiracDelta(x, v=1):
+    return x == 0 and v or 0
 
 
 def initial_state():'''

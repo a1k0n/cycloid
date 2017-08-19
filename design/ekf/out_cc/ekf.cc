@@ -28,15 +28,15 @@ void EKF::Reset() {
         0.0,
         0.0,
         0.0,
-        3.40000009536743,
-        2.29999995231628,
-        -0.600000023841858,
-        0.800000011920929,
-        -2.29999995231628,
-        0.109999999403954,
-        3.29999995231628,
-        -25.0000000000000,
-        121.000000000000,
+        3.90000009536743,
+        2.20000004768372,
+        -0.250000000000000,
+        1.70000004768372,
+        -1.60000002384186,
+        0.200000002980232,
+        4.00000000000000,
+        -35.0000000000000,
+        125.000000000000,
         0.0;
   P_.setIdentity();
   P_.diagonal() << 1.00000011116208e-6,
@@ -70,74 +70,77 @@ void EKF::Predict(float Delta_t, float u_M, float u_delta) {
   float srv_b = x_[10];
   float srv_r = x_[11];
 
-  float tmp0 = exp(ml_4);
-  float tmp1 = exp(ml_3);
-  float tmp2 = tmp1*v;
-  float tmp3 = fabsf(u_M);
-  float tmp4 = tmp3*exp(ml_2);
-  float tmp5 = tmp4*v;
-  float tmp6 = tmp3*exp(ml_1)*Heaviside(u_M);
-  float tmp7 = Heaviside(-Delta_t*(-tmp0 - tmp2 - tmp5 + tmp6) - v);
-  float tmp8 = -Delta_t*(tmp0 + tmp2 + tmp5 - tmp6);
-  float tmp9 = Heaviside(tmp8 + v);
-  float tmp10 = Delta_t*tmp9;
-  float tmp11 = tmp10*(tmp1 + tmp4);
-  float tmp12 = -delta + srv_a*u_delta + srv_b;
-  float tmp13 = Delta_t*srv_r;
-  float tmp14 = fabsf(tmp12);
-  float tmp15 = Min(tmp13, tmp14);
-  float tmp16 = (((tmp12) > 0) - ((tmp12) < 0));
-  float tmp17 = 2*tmp15*DiracDelta(tmp12) + pow(tmp16, 2)*Heaviside(tmp13 - tmp14);
-  float tmp18 = sin(psi_e);
-  float tmp19 = Delta_t*((1.0L/2.0L)*tmp11 + (1.0L/2.0L)*tmp7 - 1);
-  float tmp20 = cos(psi_e);
-  float tmp21 = Max(tmp8, -v);
-  float tmp22 = Delta_t*((1.0L/2.0L)*tmp21 + v);
-  float tmp23 = tmp20*tmp22;
-  float tmp24 = pow(Delta_t, 2);
-  float tmp25 = (1.0L/2.0L)*tmp18*tmp24*tmp9;
-  float tmp26 = kappa*y_e;
-  float tmp27 = tmp26 - 1;
-  float tmp28 = 1.0/tmp27;
-  float tmp29 = kappa*tmp28;
-  float tmp30 = delta + tmp20*tmp29;
-  float tmp31 = tmp18*tmp22;
-  float tmp32 = (1.0L/2.0L)*tmp24*tmp30*tmp9;
-  float tmp33 = 0.1*v + 1.0e-5;
+  float tmp0 = exp(ml_3);
+  float tmp1 = tmp0*v;
+  float tmp2 = fabsf(u_M);
+  float tmp3 = tmp2*exp(ml_2);
+  float tmp4 = tmp3*v;
+  float tmp5 = tmp2*exp(ml_1)*Heaviside(u_M);
+  float tmp6 = exp(ml_4);
+  float tmp7 = v - 0.2;
+  float tmp8 = Max(0, tmp7);
+  float tmp9 = tmp6*(Heaviside(tmp8) + 1);
+  float tmp10 = Heaviside(-Delta_t*(-tmp1 - tmp4 + tmp5 - tmp9) - v);
+  float tmp11 = -Delta_t*(tmp1 + tmp4 - tmp5 + tmp9);
+  float tmp12 = Heaviside(tmp11 + v);
+  float tmp13 = Delta_t*tmp12;
+  float tmp14 = tmp13*(tmp0 + tmp3 + tmp6*DiracDelta(tmp8)*Heaviside(tmp7));
+  float tmp15 = -delta + srv_a*u_delta + srv_b;
+  float tmp16 = Delta_t*srv_r;
+  float tmp17 = fabsf(tmp15);
+  float tmp18 = Min(tmp16, tmp17);
+  float tmp19 = (((tmp15) > 0) - ((tmp15) < 0));
+  float tmp20 = 2*tmp18*DiracDelta(tmp15) + pow(tmp19, 2)*Heaviside(tmp16 - tmp17);
+  float tmp21 = sin(psi_e);
+  float tmp22 = Delta_t*((1.0L/2.0L)*tmp10 + (1.0L/2.0L)*tmp14 - 1);
+  float tmp23 = cos(psi_e);
+  float tmp24 = Max(tmp11, -v);
+  float tmp25 = Delta_t*((1.0L/2.0L)*tmp24 + v);
+  float tmp26 = tmp23*tmp25;
+  float tmp27 = pow(Delta_t, 2);
+  float tmp28 = (1.0L/2.0L)*tmp12*tmp21*tmp27;
+  float tmp29 = kappa*y_e;
+  float tmp30 = tmp29 - 1;
+  float tmp31 = 1.0/tmp30;
+  float tmp32 = kappa*tmp31;
+  float tmp33 = delta + tmp23*tmp32;
+  float tmp34 = tmp21*tmp25;
+  float tmp35 = (1.0L/2.0L)*tmp12*tmp27*tmp33;
+  float tmp36 = 0.1*v + 1.0e-5;
 
   MatrixXf F(15, 15);
   F.setIdentity();
-  F(0, 0) += -tmp11 - tmp7;
-  F(0, 5) += tmp10*tmp6;
-  F(0, 6) += -tmp10*tmp5;
-  F(0, 7) += -tmp10*tmp2;
-  F(0, 8) += -tmp0*tmp10;
-  F(1, 1) += -tmp17;
-  F(1, 9) += tmp17*u_delta;
-  F(1, 10) += tmp17;
-  F(1, 11) += Delta_t*tmp16*Heaviside(-tmp13 + tmp14);
-  F(2, 0) += tmp18*tmp19;
-  F(2, 3) += -tmp23;
-  F(2, 5) += -tmp25*tmp6;
-  F(2, 6) += tmp25*tmp5;
-  F(2, 7) += tmp2*tmp25;
-  F(2, 8) += tmp0*tmp25;
-  F(3, 0) += tmp19*tmp30;
-  F(3, 1) += -tmp22;
-  F(3, 2) += pow(kappa, 2)*tmp23/pow(tmp27, 2);
-  F(3, 3) += tmp29*tmp31;
-  F(3, 4) += tmp23*tmp28*(tmp26*tmp28 - 1);
-  F(3, 5) += -tmp32*tmp6;
-  F(3, 6) += tmp32*tmp5;
-  F(3, 7) += tmp2*tmp32;
-  F(3, 8) += tmp0*tmp32;
+  F(0, 0) += -tmp10 - tmp14;
+  F(0, 5) += tmp13*tmp5;
+  F(0, 6) += -tmp13*tmp4;
+  F(0, 7) += -tmp1*tmp13;
+  F(0, 8) += -tmp13*tmp9;
+  F(1, 1) += -tmp20;
+  F(1, 9) += tmp20*u_delta;
+  F(1, 10) += tmp20;
+  F(1, 11) += Delta_t*tmp19*Heaviside(-tmp16 + tmp17);
+  F(2, 0) += tmp21*tmp22;
+  F(2, 3) += -tmp26;
+  F(2, 5) += -tmp28*tmp5;
+  F(2, 6) += tmp28*tmp4;
+  F(2, 7) += tmp1*tmp28;
+  F(2, 8) += tmp28*tmp9;
+  F(3, 0) += tmp22*tmp33;
+  F(3, 1) += -tmp25;
+  F(3, 2) += pow(kappa, 2)*tmp26/pow(tmp30, 2);
+  F(3, 3) += tmp32*tmp34;
+  F(3, 4) += tmp26*tmp31*(tmp29*tmp31 - 1);
+  F(3, 5) += -tmp35*tmp5;
+  F(3, 6) += tmp35*tmp4;
+  F(3, 7) += tmp1*tmp35;
+  F(3, 8) += tmp35*tmp9;
 
   VectorXf Q(15);
-  Q << 16, 4, pow(tmp33, 2), pow(tmp33, 2), pow(tmp33, 2), 0.0100000000000000, 0.000100000000000000, 0.000100000000000000, 0.0100000000000000, 0.000100000000000000, 0.000100000000000000, 0.000100000000000000, 1.00000000000000e-6, 1.00000000000000e-10, 1.00000000000000e-10;
-  x_[0] += tmp21;
-  x_[1] += tmp15*tmp16;
-  x_[2] += -tmp31;
-  x_[3] += -tmp22*tmp30;
+  Q << 16, 4, pow(tmp36, 2), pow(tmp36, 2), pow(tmp36, 2), 0.0100000000000000, 0.000100000000000000, 0.000100000000000000, 0.0100000000000000, 0.000100000000000000, 0.000100000000000000, 0.000100000000000000, 1.00000000000000e-6, 1.00000000000000e-10, 1.00000000000000e-10;
+  x_[0] += tmp24;
+  x_[1] += tmp18*tmp19;
+  x_[2] += -tmp34;
+  x_[3] += -tmp25*tmp33;
 
   P_ = F * P_ * F.transpose();
   P_.diagonal() += Delta_t * Q;
