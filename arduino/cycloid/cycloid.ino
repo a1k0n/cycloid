@@ -104,20 +104,24 @@ void loop() {
     for (uint8_t i = 0; i < 4; i++) {
       w = digitalRead(PIN_ENCs[i]);
       if (w != last_w[i]) {
-        uint32_t timestamp = micros();
         uint16_t count = enc_counts[i] + 1;
-        uint32_t dt = timestamp - enc_timestamps[i];
-        if (dt > 65535) dt = 65535;  // indicate overflowed counter
+        uint32_t timestamp = micros();
         cli();  // make sure to atomically set i2cdata
         i2cdata[ADDR_ENCODER_COUNT + 2*i] = count & 255;
         i2cdata[ADDR_ENCODER_COUNT + 1 + 2*i] = count >> 8;
-        i2cdata[ADDR_ENCODER_PERIOD + 2*i] = dt & 255;
-        i2cdata[ADDR_ENCODER_PERIOD + 1 + 2*i] = dt >> 8;
+        if (w == 0) {  // on falling edge, also record period in us
+          uint32_t dt = timestamp - enc_timestamps[i];
+          if (dt > 65535) dt = 65535;  // indicate overflowed counter
+          i2cdata[ADDR_ENCODER_PERIOD + 2*i] = dt & 255;
+          i2cdata[ADDR_ENCODER_PERIOD + 1 + 2*i] = dt >> 8;
+        }
         sei();
         enc_counts[i] = count;
-        enc_timestamps[i] = timestamp;
+        if (w == 0) {
+          enc_timestamps[i] = timestamp;
+        }
         last_w[i] = w;
-#if 1
+#if 0
         Serial.print("encoder ");
         Serial.print(i);
         Serial.print(" count ");
