@@ -119,7 +119,7 @@ u_DC = sp.Abs(u_M)
 u_V = sp.Heaviside(u_M)  # 1 if u_M > 0, else 0
 # we also have a static friction coefficient which tries to make the velocity
 # exactly 0, up to the friction limit
-k4 = k4 * (1 + sp.Heaviside(sp.Max(0, v - 0.2)))
+k4 = k4 * (1 + sp.Heaviside(sp.Max(0, 0.2 - v)))
 dv = Delta_t*(u_V * u_DC * k1 - u_DC * v * k2 - v * k3 - k4)
 dv = sp.Max(dv, -v)  # velocity cannot go negative
 av = v + dv / 2  # average velocity during the timestep
@@ -167,15 +167,15 @@ sp.pprint(f - X)
 # Our prediction error AKA process noise is kinda seat of the pants:
 Q = sp.Matrix([
     # v, delta, y_e, psi_e, kappa
-    4, 2, 0.1*v + 1e-5, 0.1*v + 1e-5, 0.1*v + 1e-5,
+    2, 0.7, 0.2*v + 1e-5, 0.2*v + 1e-5, 0.2*v + 1e-5,
     # ml_1, ml_2, ml_3, ml_4
-    1e-1, 1e-2, 1e-2, 1e-1,
+    0, 0, 0, 0,
     # srv_a, srv_b, srv_r
-    1e-2, 1e-2, 1e-2,
+    0, 0, 0,
     # srvfb_a, srvfb_b
-    1e-3, 1e-5,
+    0, 0,
     # o_g
-    1e-5])
+    0])
 
 # Generate the prediction code:
 ekfgen.generate_predict(f, sp.Matrix([u_M, u_delta]), Q, Delta_t)
@@ -217,15 +217,15 @@ def centerline_derivation():
     # find the center of curvature by projecting 1/kappa meters along the unit
     # normal
 
-    curve_center = sp.simplify(pc + N / kappa_est)
-    print 'curve_center', curve_center
+    # curve_center = sp.simplify(pc + N / kappa_est)
+    # print 'curve_center', curve_center
     # and then find the closest point on the circle to the car's CG (the
     # origin) by projecting back
-    curve_normal = sp.simplify(-curve_center /
-                               sp.sqrt((curve_center.T * curve_center)[0]))
-    curve_refpoint = curve_center + curve_normal / kappa_est
-    ye_circular_est = (curve_refpoint.T * curve_normal)[0]
-    tanpsi_circular_est = sp.simplify(curve_center[0] / curve_center[1])
+    # curve_normal = sp.simplify(-curve_center /
+    #                            sp.sqrt((curve_center.T * curve_center)[0]))
+    # curve_refpoint = curve_center + curve_normal / kappa_est
+    # ye_circular_est = (curve_refpoint.T * curve_normal)[0]
+    # tanpsi_circular_est = sp.simplify(curve_center[0] / curve_center[1])
 
     # this is a (maybe bad) approximation, as the center point isn't
     # necessarily the correct point on the circular curve our model assumes,
@@ -272,7 +272,7 @@ h_x_encoders = sp.Matrix([
     v / METERS_PER_ENCODER_TICK,
     srvfb_b + delta * srvfb_a
 ])
-R_encoders = sp.Matrix([1, 1])
+R_encoders = sp.Matrix([120, 7])
 
 ekfgen.generate_measurement(
     "encoders", h_x_encoders,
