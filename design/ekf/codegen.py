@@ -152,11 +152,16 @@ def initial_state():'''
         variable name u is the symbolic control input vector. '''
         N = self.N
         F = f.jacobian(self.X)
+        U = f.jacobian(u)
         vs, es = sp.cse([F - sp.eye(N), f - self.X, Q], optimizations='basic',
                         symbols=sp.numbered_symbols("tmp"))
 
         self.generate_predict_cc(f, u, Q, dt, N, F, vs, es)
         self.generate_predict_py(f, u, Q, dt, N, F, vs, es)
+
+        vs, es = sp.cse([f - self.X, F - sp.eye(N), U], optimizations='basic',
+                        symbols=sp.numbered_symbols("tmp"))
+        self.generate_controlstep_py(f, u, dt, N, vs, es)
 
     def generate_predict_py(self, f, u, Q, dt, N, F, vs, es):
         # maybe we should just lambdify this or ufuncify
@@ -185,6 +190,36 @@ def initial_state():'''
         print >>self.fpy, '\n    P = np.dot(F, np.dot(P, F.T)) + Delta_t * np.diag(Q)'
 
         print >>self.fpy, "    return x, P\n\n"
+
+    def generate_controlstep_py(self, f, u, dt, N, vs, es):
+        ''' Generate a prediction step suitable for model-predictive control, which
+        returns Jacobians w.r.t. the control inputs '''
+        print >>self.fpy, "def step(x, u, %s):" % pycode(dt)
+
+        print >>self.fpy, "    (%s) = x" % ', '.join([pycode(x) for x in self.X])
+        print >>self.fpy, "    (%s) = u" % ', '.join([pycode(x) for x in u])
+        print >>self.fpy, ""
+
+        for x in vs:
+            print >>self.fpy, '    %s = %s' % (pycode(x[0]), pycode(x[1]))
+
+        print >>self.fpy, '\n    F = np.eye(%d)' % N
+        for i, term in enumerate(es[1]):
+            if term != 0:
+                print >>self.fpy, '    F[%d, %d] += %s' % (
+                    i / N, i % N, pycode(term))
+
+        print >>self.fpy, '\n    J = np.zeros((%d, %d))' % (N, len(u))
+        for i, term in enumerate(es[2]):
+            if term != 0:
+                print >>self.fpy, '    J[%d, %d] = %s' % (
+                    i / len(u), i % len(u), pycode(term))
+
+        for i, term in enumerate(es[0]):
+            if term != 0:
+                print >>self.fpy, '    x[%d] += %s' % (i, pycode(term))
+
+        print >>self.fpy, "    return x, F, J\n\n"
 
     def generate_predict_cc(self, f, u, Q, dt, N, F, vs, es):
         N = self.N
@@ -283,16 +318,26 @@ def initial_state():'''
             print >>self.fcc, '  Mk <<', ccode_matrix(es[2], 8)
             print >>self.fcc, '  Rk = Mk * Rk * Mk.transpose();'
 
+        Sshape = es[1].shape[0]
+        if Sshape >= 2 and Sshape <= 6:
+            Sshape = str(Sshape)
+        else:
+            Sshape = 'X'
         if R_k.is_Matrix and R_k.shape[1] == 1:
-            print >>self.fcc, '\n  MatrixXf S = Hk * P_ * Hk.transpose();'
+            print >>self.fcc, \
+                '\n  Eigen::Matrix%sf S = Hk * P_ * Hk.transpose();' % (
+                    Sshape)
             print >>self.fcc, '  S.diagonal() += Rk;'
         else:
-            print >>self.fcc, '\n  MatrixXf S = Hk * P_ * Hk.transpose() + Rk;'
+            print >>self.fcc, \
+                '\n  Eigen::Matrix%sf S = Hk * P_ * Hk.transpose() + Rk;' % (
+                    Sshape)
         print >>self.fcc, '  MatrixXf K = P_ * Hk.transpose() * S.inverse();'
         # FIXME: return false if S is not invertible?
 
         print >>self.fcc, '\n  x_.noalias() += K * yk;'
-        print >>self.fcc, '  P_ = (MatrixXf::Identity(%d, %d) - K*Hk) * P_;' % (N, N)
+        print >>self.fcc, \
+            '  P_ = (MatrixXf::Identity(%d, %d) - K*Hk) * P_;' % (N, N)
 
         print >>self.fcc, '  return true;'
         print >>self.fcc, '}\n'
@@ -333,13 +378,15 @@ def initial_state():'''
             print >>self.fpy, '    Rk = np.dot(Mk, np.dot(Rk, Mk.T))'
 
         print >>self.fpy, '\n    S = np.dot(Hk, np.dot(P, Hk.T)) + Rk'
+        print >>self.fpy, '\n    LL = -np.dot(yk, np.dot(np.linalg.inv(S), yk)) - 0.5 * np.log(2 * np.pi * np.linalg.det(S))'
         # linalg.solve? lstsq?
-        print >>self.fpy, '    K = np.dot(P, np.dot(Hk.T, np.linalg.inv(S)))'
+        #print >>self.fpy, '    K = np.dot(P, np.dot(Hk.T, np.linalg.inv(S)))'
+        print >>self.fpy, '    K = np.linalg.lstsq(S, np.dot(Hk, P))[0].T'
         # FIXME: return false if S is not invertible?
 
         print >>self.fpy, '''    x += np.dot(K, yk)
     KHk = np.dot(K, Hk)
     P = np.dot((np.eye(len(x)) - KHk), P)
-    return x, P
+    return x, P, LL
 
 '''
