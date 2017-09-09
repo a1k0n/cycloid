@@ -53,8 +53,8 @@ def tophat(img):
 
     # detected = (0.25*hv[:, :, 0] - 2*hv[:, :, 1] + 0.5*hv[:, :, 2] - 30)
 
-    # detected = -hv - 30
-    detected = -hv - 20
+    detected = -hv - 30
+    # detected = -hv - 20
     
 
     # hh = np.cumsum(m, axis=0)
@@ -86,7 +86,8 @@ def detect_centerline(img):
         Rk = np.zeros((4, 4))
         Rk[:3, :3] = XTXinv * r2
         # covariance of y_c
-        # Rk[3, 3] = XTX[1, 1] / np.sum(w) - yc**2
+        Rk[3, 3] = XTX[1, 1] / np.sum(w) - yc**2
+        Rk /= N
         return m, hv, th, B, yc, Rk
 
     return m, hv, th, None, None, None

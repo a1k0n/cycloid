@@ -88,6 +88,10 @@ def replay(fname, f):
     statelist = []
     encoderlist = []
     tlist = []
+    last_throttle = 0
+    last_steering = 0
+
+    LL_center, LL_imu, LL_encoders = 0, 0, 0
 
     while True:
         framesiz = 320*140 + 55
@@ -101,6 +105,7 @@ def replay(fname, f):
         gyro = np.float32(header[8:11])
         servo = header[11]
         wheels = np.uint16(header[12:16])
+        periods = np.uint16(header[16:20])
         frame = np.frombuffer(buf[55:], np.uint8).reshape((-1, 320))
 
         frameno += 1
@@ -111,28 +116,39 @@ def replay(fname, f):
 
         x0, P0 = np.copy(x), np.copy(P)
 
-        x, P = ekf.predict(x, P, dt, throttle / 127.0, steering / 127.0)
+        t = (last_throttle + 2*throttle) / 3.0
+        s = last_steering
+        #x, P = ekf.predict(x, P, dt, throttle / 127.0, steering / 127.0)
+        x, P = ekf.predict(x, P, dt, t / 127.0, s / 127.0)
+        last_throttle, last_steering = throttle, steering
         print 'x_predict\n', x
         xpred, Ppred = np.copy(x), np.copy(P)
 
         m, hv, th, B, yc, Rk = imgproc.detect_centerline(frame)
 
         if B is not None:
-            x, P = ekf.update_centerline(x, P, B[0], B[1], B[2], yc, Rk)
+            x, P, LL_center = ekf.update_centerline(x, P, B[0], B[1], B[2], yc, Rk)
             print 'x_centerline\n', x
 
+        print 'accel', accel
         print 'gyro', gyro[2]
-        x, P = ekf.update_IMU(x, P, gyro[2])
+        x, P, LL_imu = ekf.update_IMU(x, P, gyro[2])
         print 'x_gyro\n', x
 
+        print 'wheels', wheels, 'periods', periods
         if wheels_last is not None:
             ds = np.sum(wheels - wheels_last) / 4.0
             if ds != 0:
-                x, P = ekf.update_encoders(x, P, ds/dt, float(servo))
+                x, P, LL_encoders = ekf.update_encoders(x, P, ds/dt, float(servo))
+                print 'x_encoders\n', x
+            else:
+                x, P, LL_encoders = ekf.update_encoders(x, P, 0, float(servo))
                 print 'x_encoders\n', x
 
         # gyrozs.append(gyro[2])
         # print 'gyro', gyro[2], 'mean', np.mean(gyrozs), 'std', np.std(gyrozs)
+
+        print 'LL', LL_center, LL_imu, LL_encoders
 
         timg = cv2.resize(
             th[::-1],
@@ -214,7 +230,6 @@ def replay(fname, f):
 
         vidout.write(vidframe)
         cv2.imshow('f', vidframe)
-        print len(statelist), len(encoderlist)
         k = cv2.waitKey()
         if k == ord('q'):
             break
