@@ -48,12 +48,12 @@ ekfgen = codegen.EKFGen(X)
 x0 = np.float32([
     # v, delta, y_e, psi_e, kappa
     0, 0, 0, 0, 0,
-    # ml_1 (log m/s^2) (overestimated for slow start)
-    3.9,
-    # ml_2, ml_3 (both log 1/s)
-    2.2, -0.25,
-    # ml_4 (log m/s^2 static frictional deceleration)
+    # ml_1 (log m/s^2)
     1.7,
+    # ml_2 (log 1/s)
+    0.3, 
+    # ml_3, ml_4 (log m/s^2 static frictional deceleration)
+    -2.7, -2.3,
     # srv_a, srv_b, srv_r,
     -1.6, 0.2, 4.0,
     # srvfb_a, srvfb_b
@@ -66,7 +66,7 @@ P0 = np.float32([
     # assume we start stationary
     0.001, 0.1, 2, 1, 0.4,
     # ml_1, ml_2, ml_3, ml_4
-    0.25, 0.25, 0.25, 0.25,
+    4, 4, 4, 4,
     # srv_a, srv_b, srv_r
     0.5, 0.5, 0.5,
     # srvfb_a, srvfb_b
@@ -98,29 +98,29 @@ ekfgen.open("out_cc", "out_py", sp.Matrix(x0), sp.Matrix(P0))
 # The car's acceleration is proportional to the torque produced by the motor,
 # so we fold the inertia into the system constants. The car's acceleration is
 # thus:
-#   k1 * u_V * u_DC - k2 * u_DC * v - k3 * v
+#   k1 * u_V * u_DC - k2 * u_DC * v - k3*(static?) - k4
 # where u_V is the control voltage signal (assumed 1 or 0) and u_DC is the
 # duty cycle control input (from 0 to 1) and v is the current velocity.
 # The ESC takes a positive or negative u_M control input which is transformed
 # to u_DC and u_V here first.
 
-# since k1, k2, and k3 are scale constants, we keep them as logarithms in the
-# model. That way they can never go negative, and we avoid huge derivatives when
-# the relative scales are very different. This can, however, blow up to huge
-# values if we're not carefully managing measurement and process noise.
+# since k1, k2, k3, and k4 are scale constants, we keep them as logarithms in
+# the model. That way they can never go negative, and we avoid huge derivatives
+# when the relative scales are very different. This can, however, blow up to
+# huge values if we're not carefully managing measurement and process noise.
 # units:
 # k1: m/s^2 / V  (acceleration per volt)
 # k2: 1/s  (EMF decay time constant)
-# k3: 1/s  (friction decay time constant)
-# k4: m/s^2  (coulomb friction, minimum torque to get moving)
+# k3: m/s^2  (coulomb friction, minimum torque to get moving)
+# k4: m/s^2  (dynamic friction)
 k1, k2, k3, k4 = sp.exp(ml_1), sp.exp(ml_2), sp.exp(ml_3), sp.exp(ml_4)
 
 u_DC = sp.Abs(u_M)
 u_V = sp.Heaviside(u_M)  # 1 if u_M > 0, else 0
 # we also have a static friction coefficient which tries to make the velocity
 # exactly 0, up to the friction limit
-k4 = k4 * (1 + sp.Heaviside(sp.Max(0, 0.2 - v)))
-dv = Delta_t*(u_V * u_DC * k1 - u_DC * v * k2 - v * k3 - k4)
+k3 = k3 * sp.Heaviside(0.2 - v)  # k3 applies only when v < 0.2
+dv = Delta_t*(u_V * u_DC * k1 - u_DC * v * k2 - k3 - k4)
 dv = sp.Max(dv, -v)  # velocity cannot go negative
 av = v + dv / 2  # average velocity during the timestep
 
@@ -259,7 +259,7 @@ h_imu
 
 g_z = sp.symbols("g_z")
 h_gyro = sp.Matrix([g_z])
-R_gyro = sp.Matrix([0.01])  # measured noise std.dev
+R_gyro = sp.Matrix([0.1])
 ekfgen.generate_measurement(
     "IMU", h_imu, h_gyro, h_gyro, R_gyro)
 
