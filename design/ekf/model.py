@@ -49,13 +49,13 @@ x0 = np.float32([
     # v, delta, y_e, psi_e, kappa
     0, 0, 0, 0, 0,
     # ml_1 (log m/s^2)
-    1.7,
+    2.7,
     # ml_2 (log 1/s)
-    0.3, 
+    1.05, 
     # ml_3, ml_4 (log m/s^2 static frictional deceleration)
-    -2.7, -2.3,
+    2.0, -0.65,
     # srv_a, srv_b, srv_r,
-    -1.6, 0.2, 4.0,
+    -1.4, 0.2, 3.8,
     # srvfb_a, srvfb_b
     -35, 125,
     # o_g
@@ -66,7 +66,7 @@ P0 = np.float32([
     # assume we start stationary
     0.001, 0.1, 2, 1, 0.4,
     # ml_1, ml_2, ml_3, ml_4
-    4, 4, 4, 4,
+    0.2, 0.2, 4, 0.5,
     # srv_a, srv_b, srv_r
     0.5, 0.5, 0.5,
     # srvfb_a, srvfb_b
@@ -164,10 +164,11 @@ f = sp.Matrix([
 print "state transition: x +="
 sp.pprint(f - X)
 
-# Our prediction error AKA process noise is kinda seat of the pants:
+# Our prediction error AKA process noise is kinda seat of the pants, but tuned
+# on real runs by maximizing the subsequent measurement likelihood:
 Q = sp.Matrix([
     # v, delta, y_e, psi_e, kappa
-    2, 0.7, 0.2*v + 1e-5, 0.2*v + 1e-5, 0.2*v + 1e-5,
+    2, 0.7, 0.1*v + 1e-3, 0.15*v + 1e-3, 0.75*v + 1e-3,
     # ml_1, ml_2, ml_3, ml_4
     0, 0, 0, 0,
     # srv_a, srv_b, srv_r
@@ -175,7 +176,7 @@ Q = sp.Matrix([
     # srvfb_a, srvfb_b
     0, 0,
     # o_g
-    0])
+    1e-3])
 
 # Generate the prediction code:
 ekfgen.generate_predict(f, sp.Matrix([u_M, u_delta]), Q, Delta_t)
