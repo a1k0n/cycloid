@@ -72,7 +72,9 @@ def generate_maps():
 
     np.savetxt("udplane.txt", udplane[:, :, :2].reshape(-1), fmt='%d', newline=',\n')
     np.savetxt("udmask.txt", udmask.reshape(-1), fmt='%d', newline=',\n')
-    np.savetxt("bucketcount.txt", bucketcount.reshape(-1), fmt='%d', newline=',\n')
+    invbucketcount = np.copy(bucketcount)
+    invbucketcount[bucketcount != 0] = 1.0 / bucketcount[bucketcount != 0]
+    np.savetxt("bucketcount.txt", invbucketcount.reshape(-1), fmt='%f', newline=',\n')
     np.savetxt("floodmap.txt", floodmap.reshape(-1), fmt='%d', newline=',\n')
 
     floodmap = np.stack([
@@ -81,7 +83,7 @@ def generate_maps():
 
     np.save("udplane", udplane)
     np.save("udmask", udmask)
-    np.save("bucketcount", bucketcount)
+    np.save("bucketcount", invbucketcount)
     np.save("floodmap", floodmap)
     print "maps saved, output is %d x %d" % (bucketcount.shape[1], bucketcount.shape[0])
     print "uxrange", uxrange, "uyrange", uyrange, 'x0', x0, 'y0', y0

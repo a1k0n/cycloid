@@ -8,7 +8,17 @@ uyrange = np.min(udplane[udmask, 1]), np.max(udplane[udmask, 1]) + 1
 pixel_scale_m = 0.025
 
 
-def tophat(img):
+def reproject(img):
+    x0, y0 = uxrange[0], uyrange[0]
+    # uint16 maybe? could overflow on certain pixels
+    m = np.zeros((uyrange[1] - y0, uxrange[1] - x0), np.float32)
+    np.add.at(m, (udplane[udmask, 1] - y0, udplane[udmask, 0] - x0),
+              img[-240 + imgremap.ytop:][udmask])
+    m *= bucketcount
+    m[bucketcount == 0] = m[(floodmap[:, 0], floodmap[:, 1])]
+    return m
+    
+def tophat(m):
     ''' So-called "top hat filter" which is like two nested boxcar
     filters: it's a convolution with [-1, -1, 2, 2, -1, -1].
 
@@ -36,15 +46,6 @@ def tophat(img):
     '''
 
     x0, y0 = uxrange[0], uyrange[0]
-    # uint16 maybe? could overflow on certain pixels
-    m = np.zeros((uyrange[1] - y0, uxrange[1] - x0), np.float32)
-    np.add.at(m, (udplane[udmask, 1] - y0, udplane[udmask, 0] - x0),
-              img[-240 + imgremap.ytop:][udmask])
-    m[bucketcount > 0] = (
-        m[bucketcount > 0].T / (bucketcount[bucketcount > 0]).T).T
-    m[bucketcount == 0] = m[(floodmap[:, 0], floodmap[:, 1])]
-
-    # TODO: expand m to have a margin of 3
 
     # convolve [-1, -1, 2, 2, -1, -1] with image
     hv = np.cumsum(m, axis=1)
@@ -60,11 +61,11 @@ def tophat(img):
     # hh = np.cumsum(m, axis=0)
     # hh = -(hh[6:, :] - hh[:-6, :]) + 3*(hh[4:-2, :] - hh[2:-4, :])
     # , (hh * 0.2 + 128).astype(np.uint8)[:, :]
-    return m, hv, (np.clip(detected, 0, 255)).astype(np.uint8)[:, :]
+    return hv, (np.clip(detected, 0, 255)).astype(np.uint8)[:, :]
 
 
 def detect_centerline(img):
-    m, hv, th = tophat(img)
+    hv, th = tophat(img)
 
     # quadratic regression
     indices = np.nonzero(th)
@@ -88,6 +89,6 @@ def detect_centerline(img):
         # covariance of y_c
         Rk[3, 3] = XTX[1, 1] / np.sum(w) - yc**2
         Rk /= N
-        return m, hv, th, B, yc, Rk
+        return hv, th, B, yc, Rk
 
-    return m, hv, th, None, None, None
+    return hv, th, None, None, None

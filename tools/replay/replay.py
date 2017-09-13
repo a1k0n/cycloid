@@ -94,7 +94,8 @@ def replay(fname, f):
     LL_center, LL_imu, LL_encoders = 0, 0, 0
 
     while True:
-        framesiz = 320*140 + 55
+        imgsiz = imgproc.bucketcount.shape[0] * imgproc.bucketcount.shape[1] * 3
+        framesiz = 55 + imgsiz
         buf = f.read(framesiz)
         if len(buf) < framesiz:
             break
@@ -106,7 +107,14 @@ def replay(fname, f):
         servo = header[11]
         wheels = np.uint16(header[12:16])
         periods = np.uint16(header[16:20])
-        frame = np.frombuffer(buf[55:], np.uint8).reshape((-1, 320))
+        frame = np.frombuffer(buf[55:], np.uint8).reshape(
+            (imgproc.bucketcount.shape[0], imgproc.bucketcount.shape[1], 3))
+        bgr = cv2.cvtColor(frame, cv2.COLOR_YUV2BGR)
+        bgrbig = cv2.resize(bgr[::-1], None, fx=8, fy=8, interpolation=cv2.INTER_NEAREST)
+        frame = np.int32(frame)
+        print 'frame.shape', frame.shape
+        cv2.imshow("frame", bgrbig)
+        # cv2.waitKey()
 
         frameno += 1
         print fname, 'frame', frameno
@@ -124,7 +132,7 @@ def replay(fname, f):
         print 'x_predict\n', x
         xpred, Ppred = np.copy(x), np.copy(P)
 
-        m, hv, th, B, yc, Rk = imgproc.detect_centerline(frame)
+        hv, th, B, yc, Rk = imgproc.detect_centerline(frame[:, :, 1])
 
         if B is not None:
             x, P, LL_center = ekf.update_centerline(x, P, B[0], B[1], B[2], yc, Rk)
@@ -156,8 +164,8 @@ def replay(fname, f):
             interpolation=cv2.INTER_NEAREST)
         timg = np.uint8(timg * (255.0 / np.max(timg)))
         mimg = cv2.resize(
-            m[::-1],
-            (320, int(320 * m.shape[0] / m.shape[1])),
+            bgr[::-1],
+            (320, int(320 * bgr.shape[0] / bgr.shape[1])),
             interpolation=cv2.INTER_NEAREST)
         hvimg = cv2.resize(
             hv[::-1],
@@ -168,12 +176,10 @@ def replay(fname, f):
         if vidout is None:
             vidout = cv2.VideoWriter("replay.h264", cv2.VideoWriter_fourcc(
                 'X', '2', '6', '4'), 30, (640, vidframe.shape[0]), True)
-        vidframe[:frame.shape[0], :320, 0] = 255 - frame
-        vidframe[:frame.shape[0], :320, 1] = 255 - frame
-        vidframe[:frame.shape[0], :320, 2] = 255 - frame
-        vidframe[:mimg.shape[0]:, 320:, 0] = 255 - mimg
-        vidframe[:mimg.shape[0]:, 320:, 1] = 255 - mimg
-        vidframe[:mimg.shape[0]:, 320:, 2] = 255 - mimg
+        # vidframe[:frame.shape[0], :320, 0] = 255 - frame
+        # vidframe[:frame.shape[0], :320, 1] = 255 - frame
+        # vidframe[:frame.shape[0], :320, 2] = 255 - frame
+        vidframe[:mimg.shape[0]:, 320:, :] = mimg
         vidframe[-hvimg.shape[0]:, :320, 0] = 128 - hvimg * 0.25
         vidframe[-hvimg.shape[0]:, :320, 1] = 128 - hvimg * 0.25
         vidframe[-hvimg.shape[0]:, :320, 2] = 128 - hvimg * 0.25

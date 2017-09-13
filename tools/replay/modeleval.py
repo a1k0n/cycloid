@@ -24,12 +24,20 @@ def replay_LL(fname, f):
 
     LLsum = np.zeros(3)
 
+    steertrim = open("steertrim.txt", "w")
+    likelihood = open("likelihood.txt", "w")
+
     while True:
-        framesiz = 320*140 + 55
+        imgsiz = imgproc.bucketcount.shape[0] * imgproc.bucketcount.shape[1] * 3
+        framesiz = 55 + imgsiz
         buf = f.read(framesiz)
         if len(buf) < framesiz:
             break
         header = struct.unpack("=IIIbbffffffBHHHHHHHH", buf[:55])
+        if header[0] != framesiz:
+            print "recording frame size doesn't match this parser"
+            raise Exception("image should be %d bytes (%dx%d), is %d bytes" % (
+                (framesiz,) + imgproc.bucketcount.shape + (header[0],)))
         tstamp = header[1] + header[2] / 1000000.
         throttle, steering = header[3:5]
         accel = np.float32(header[5:8])
@@ -37,7 +45,9 @@ def replay_LL(fname, f):
         servo = header[11]
         wheels = np.uint16(header[12:16])
         periods = np.uint16(header[16:20])
-        frame = np.frombuffer(buf[55:], np.uint8).reshape((-1, 320))
+        frame = np.frombuffer(buf[55:], np.uint8).reshape(
+            (imgproc.bucketcount.shape[0], imgproc.bucketcount.shape[1], 3))
+        frame = np.int32(frame)
 
         frameno += 1
 
@@ -54,22 +64,12 @@ def replay_LL(fname, f):
         # print 'x_predict\n', x
         xpred, Ppred = np.copy(x), np.copy(P)
 
-        m, hv, th, B, yc, Rk = imgproc.detect_centerline(frame)
+        hv, th, B, yc, Rk = imgproc.detect_centerline(frame[:, :, 1])
 
 
         LL_center, LL_imu, LL_encoders = 0, 0, 0
 
         if B is not None:
-            # No Rk augmentation: [  1511.82892081  -1151.05519279 -13387.46449827]
-            # Rk *= 2  # [   774.77745676  -1149.97915352 -13387.34062435]
-            # Rk *= 0.5  # [  2157.30426716  -1146.89230878 -13384.45517675]
-            # Rk *= 0.25  # [  2720.73178577  -1142.60890088 -13384.52882874]
-            # Rk *= 0.125  # [  3102.00202631  -1131.43688061 -13383.10351163]
-            # Rk -> divide by number of activations [  1683.43728218  -1118.14023456 -13379.9952535 ]
-            # Rk[:3, :3] / 16.0  -> [  1628.07800111  -1111.44020082 -13378.9630254 ]
-            # Rk[:3, :3] / 8.0  -> [  2008.41358695  -1133.03634863 -13382.78859215]
-            # Rk /= N -> 
-
             x, P, LL_center = ekf.update_centerline(x, P, B[0], B[1], B[2], yc, Rk)
             # print 'x_centerline\n', x
 
@@ -89,11 +89,17 @@ def replay_LL(fname, f):
                 # print 'x_encoders\n', x
         wheels_last = wheels
 
+        print >>steertrim, x[0], x[1], last_steering, gyro
+        print >>likelihood, LL_center, LL_imu, LL_encoders
+
         # gyrozs.append(gyro[2])
         # print 'gyro', gyro[2], 'mean', np.mean(gyrozs), 'std', np.std(gyrozs)
 
         print 'LL', LL_center, LL_imu, LL_encoders
         LLsum += [LL_center, LL_imu, LL_encoders]
+
+    print 'final x\n', x
+    print 'final P\n', np.diag(P)
     return LLsum
 
 
