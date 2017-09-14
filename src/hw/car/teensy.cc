@@ -1,4 +1,4 @@
-#include "car/teensy.h"
+#include "hw/car/teensy.h"
 
 static const int TEENSY_ADDRESS = 118;
 

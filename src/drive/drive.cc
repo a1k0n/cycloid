@@ -12,14 +12,14 @@
 
 #include <deque>
 
-#include "cam/cam.h"
-// #include "car/pca9685.h"
-#include "car/teensy.h"
 #include "drive/controller.h"
 #include "drive/imgproc.h"
-#include "gpio/i2c.h"
-#include "imu/imu.h"
-#include "input/js.h"
+#include "hw/cam/cam.h"
+// #include "hw/car/pca9685.h"
+#include "hw/car/teensy.h"
+#include "hw/gpio/i2c.h"
+#include "hw/imu/imu.h"
+#include "hw/input/js.h"
 
 volatile bool done = false;
 int8_t throttle_ = 0, steering_ = 0;

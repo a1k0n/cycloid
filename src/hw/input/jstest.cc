@@ -1,7 +1,7 @@
 #include <stdio.h>
 #include <unistd.h>
 
-#include "input/js.h"
+#include "hw/input/js.h"
 
 int main() {
   JoystickInput js;

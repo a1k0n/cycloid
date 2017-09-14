@@ -3,7 +3,7 @@
 
 #include <stdint.h>
 #include <Eigen/Dense>
-#include "gpio/i2c.h"
+#include "hw/gpio/i2c.h"
 
 // TODO: rename to imu/dev.h for IMU device raw access
 // then make an IMU class which is self-calibrating, has a kalman filter, etc.

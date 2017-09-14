@@ -4,7 +4,7 @@
 #include <stdio.h>
 #include <unistd.h>
 
-#include "input/js.h"
+#include "hw/input/js.h"
 
 // assumes MOGA 2 controller, doesn't bother to read axis labels or anything
 

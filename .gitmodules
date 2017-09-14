@@ -1,0 +1,3 @@
+[submodule "src/userland"]
+	path = src/userland
+	url = https://github.com/raspberrypi/userland

@@ -12,3 +12,19 @@ Can be compiled on a host PC with a cross compiler (e.g. on macOS you can
 install this: https://www.jaredwolff.com/toolchains/) or on the Raspberry Pi
 itself.
 
+If you want to build the code, clone with `git clone --recursive
+https://github.com/a1k0n/cycloid` in order to get the Raspberry Pi userland
+submodule (otherwise just run `git submodule init` and `git submodule update`).
+
+Here's how I build it:
+
+Once you have a raspberry pi cross compiler (see two paragraphs above), edit
+`crosscompile.cmake` to point to the correct compiler name / path, and do this:
+
+```
+$ mkdir build
+$ cd build
+$ cmake -DCMAKE_TOOLCHAIN_FILE=../crosscompile.cmake ../src -DCMAKE_BUILD_TYPE=RelWithDebInfo
+$ make -j4
+```
+

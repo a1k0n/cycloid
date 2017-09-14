@@ -3,9 +3,9 @@
 #include <stdio.h>
 #include <unistd.h>
 
-// #include "car/pca9685.h"
-#include "car/teensy.h"
-#include "gpio/i2c.h"
+// #include "hw/car/pca9685.h"
+#include "hw/car/teensy.h"
+#include "hw/gpio/i2c.h"
 
 int main() {
   I2C i2c;

@@ -1,7 +1,7 @@
 #ifndef HW_CAR_TEENSY_H_
 #define HW_CAR_TEENSY_H_
 
-#include "gpio/i2c.h"
+#include "hw/gpio/i2c.h"
 
 // i2c-connected teensy running a program to write to servo / ESC, read from
 // encoders & analog servo position feedback

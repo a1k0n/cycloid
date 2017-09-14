@@ -4,7 +4,7 @@
 #include <sys/time.h>
 #include <unistd.h>
 
-#include "cam/cam.h"
+#include "hw/cam/cam.h"
 
 volatile bool done = false;
 
