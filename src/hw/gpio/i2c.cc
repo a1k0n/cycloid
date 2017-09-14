@@ -5,7 +5,7 @@
 #include <string.h>
 #include <sys/ioctl.h>
 #include <unistd.h>
-#include "./i2c.h"
+#include "hw/gpio/i2c.h"
 
 static const char I2C_DEVICE[] = "/dev/i2c-1";
 

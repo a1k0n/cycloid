@@ -26,6 +26,8 @@ def replay_LL(fname, f):
 
     steertrim = open("steertrim.txt", "w")
     likelihood = open("likelihood.txt", "w")
+    trackcurv = open("trackcurv.txt", "w")
+    s_coord = 0
 
     while True:
         imgsiz = imgproc.bucketcount.shape[0] * imgproc.bucketcount.shape[1] * 3
@@ -91,6 +93,9 @@ def replay_LL(fname, f):
 
         print >>steertrim, x[0], x[1], last_steering, gyro
         print >>likelihood, LL_center, LL_imu, LL_encoders
+        v, delta, ye, psie, kappa = x[:5]
+        s_coord += dt * v / (1 - kappa * ye)
+        print >>trackcurv, s_coord, kappa
 
         # gyrozs.append(gyro[2])
         # print 'gyro', gyro[2], 'mean', np.mean(gyrozs), 'std', np.std(gyrozs)

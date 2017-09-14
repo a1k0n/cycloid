@@ -1,0 +1,67 @@
+IMU is 3 devices on i2c (/dev/i2c-1):
+
+address map:
+0x68: ITG3200 3-axis gyro
+0x1e: HMC5883L 3-axis compass
+0x53: ADXL345 3-axis accelerometer
+
+ITG3200 gyro:
+16 DLPF_FS -> set to 0x18 + 0..6,
+  0=256Hz bw / 8kHz samplerate,
+ ... all 1kHz after this
+  1=188Hz bw / 1kHz samplerate,
+  2=98Hz bw  / 1kHz samplerate,
+  5=10Hz,
+  6=5Hz bw
+1D GYRO_XOUT_H
+1E GYRO_XOUT_L
+1F GYRO_YOUT_H
+20 GYRO_YOUT_L
+21 GYRO_ZOUT_H
+22 GYRO_ZOUT_L
+no fifo, but an interrupt pin.  hmm.  not sure if there's any way to tell if
+there's new data without using the interrupt pin, but a 1kHz samplerate is
+really fast; we'll have to set the bandwidth and assume our own samplerate
+
+ADXL345 accelerometer:
+0x2c - bw_rate - defaults to 0x0a, 100Hz, 50Hz bandwidth
+ 0x07 - 12.5Hz samplerate, 6.25Hz bw
+ 0x08 - 25Hz samplerate, 12.5Hz bw
+0x2d - power_ctl - need to enable measure bit to turn on; set to 0x08
+0x31 — DATA_FORMAT - 0x08 - set FULL_RES
+32 X-Axis data 0
+33 X-Axis data 1
+...
+37 Z-Axis data 1
+
+this chip has a FIFO; how to use it?
+
+HMC5883L compass:
+0x00 - CRA - controls output rate and number of averaged samples
+0x01 - CRB - upper 3 bits control gain, 0xe0 least gain, 0x00 most, 0x20 default
+ -- need to do some sort of AGC here to try to figure out compass direction, though local magnetic fields might just throw it off completely, especially from our motor
+0x02 - mode register - 0x00 for continuous measurement
+0x03:04 - x (towards pins 5-8) msb:lsb
+0x05:06 - z (up) msb:lsb
+0x07:08 - y (towards pins 9-12) msb:lsb
+0x09 - status - bit 0 set if new data
+
+---
+
+our motion model:
+
+three modes of motion:
+ - A: on the ground, full traction (or slight understeer?)
+ - B: on the ground, rear-wheel skidding
+ - C: off the ground, i.e. jumping off a ramp
+   - unlikely unless we experienced a vertical acceleration beforehand, and are experiencing 0g vertical now
+
+basic motion model:
+ - use verlet integration
+ - servo position estimate <- pwm
+ - yaw rate <- kalman filter(servo position estimate, lateral accel, gyro, compass)
+ - orientation += yaw rate
+ - motor speed estimate <- pwm
+ - velocity <- kalman filter(motor speed estimate, straight accel, gps)
+ - position <- kalman filter(velocity estimate, gps)
+something like that?

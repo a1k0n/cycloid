@@ -1,3 +1,0 @@
-[submodule "userland"]
-	path = userland
-	url = https://github.com/raspberrypi/userland
