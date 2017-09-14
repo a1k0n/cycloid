@@ -60,6 +60,7 @@ bool JoystickInput::ReadInput(InputReceiver *receiver) {
     int16_t value = buf[4] + (buf[5] << 8);
     uint8_t type = buf[6];
     uint8_t number = buf[7];
+    newvalue = true;
     if (type == 0x01) {  // button
       value = value ? 1 : 0;
       int16_t oldvalue = (buttons_ >> number) & 1;

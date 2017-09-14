@@ -401,7 +401,7 @@ int main(int argc, char *argv[]) {
       if (!driver_.autosteer_) {
         // really need a better way to get this
         float steeroffset = driver_.controller_.ekf.GetState()[10];
-        steering_ = 127 * clip(js_steering_ / 32767.0 - steeroffset, -1, 1);
+        steering_ = -127 * clip(js_steering_ / 32767.0 - steeroffset, -1, 1);
         throttle_ = 127 * clip(js_throttle_ / 32767.0, -1, 1);
         // pca.SetPWM(PWMCHAN_STEERING, steering_);
         // pca.SetPWM(PWMCHAN_ESC, throttle_);
