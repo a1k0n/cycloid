@@ -14,14 +14,6 @@ using Eigen::Vector2f;
 using Eigen::Vector3f;
 using Eigen::VectorXf;
 
-static const float MAX_THROTTLE = 0.5;
-static const float SPEED_LIMIT = 2.0;
-
-static const float ACCEL_LIMIT = 8.0;  // maximum dv/dt (m/s^2)
-static const float BRAKE_LIMIT = -100.0;  // minimum dv/dt
-static const float TRACTION_LIMIT = 5.0;  // maximum v*w product (m/s^2)
-static const float kpy = 1.0;
-static const float kvy = 2.0;
 
 static const float LANE_OFFSET = 0.0;
 static const float LANEOFFSET_PER_K = 0.15;
@@ -42,12 +34,13 @@ static inline float clip(float x, float min, float max) {
   return x;
 }
 
-void DriveController::UpdateCamera(int32_t *reprojected) {
+void DriveController::UpdateCamera(const DriverConfig &config,
+    int32_t *reprojected) {
   Vector3f B;
   Matrix4f Rk = Matrix4f::Zero();
   float yc;
 
-  if (!imgproc::TophatFilter(reprojected, &B, &yc, &Rk)) {
+  if (!imgproc::TophatFilter(config.yellow_thresh, reprojected, &B, &yc, &Rk)) {
     return;
   }
 
@@ -58,10 +51,10 @@ void DriveController::UpdateCamera(int32_t *reprojected) {
   ekf.UpdateCenterline(a, b, c, yc, Rk);
 }
 
-void DriveController::UpdateState(int32_t *reprojected,
-      float throttle_in, float steering_in,
-      const Vector3f &accel, const Vector3f &gyro,
-      uint8_t servo_pos, const uint16_t *wheel_encoders, float dt) {
+void DriveController::UpdateState(const DriverConfig &config,
+    int32_t *reprojected, float throttle_in, float steering_in,
+    const Vector3f &accel, const Vector3f &gyro,
+    uint8_t servo_pos, const uint16_t *wheel_encoders, float dt) {
   Eigen::VectorXf &x_ = ekf.GetState();
   if (isinf(x_[0]) || isnan(x_[0])) {
     fprintf(stderr, "WARNING: kalman filter diverged to inf/NaN! resetting!\n");
@@ -78,7 +71,7 @@ void DriveController::UpdateState(int32_t *reprojected,
   ekf.Predict(dt, throttle_in, steering_in);
   std::cout << "x after predict " << x_.transpose() << std::endl;
 
-  UpdateCamera(reprojected);
+  UpdateCamera(config, reprojected);
 
   ekf.UpdateIMU(gyro[2]);
   std::cout << "x after IMU (" << gyro[2] << ")" << x_.transpose() << std::endl;
@@ -138,7 +131,8 @@ static float MotorControl_model(float accel,
   return V == 1 ? DC : -DC;
 }
 
-static float MotorControlPID(float v_target, float v) {
+static float MotorControlPID(const DriverConfig &config,
+    float v_target, float v) {
   static float last_err = 0;
   static float ierr = 0;
   float err = v_target - v;
@@ -153,15 +147,16 @@ static float MotorControlPID(float v_target, float v) {
     static const float kD = 0.1;
     static const float kI = 0.0;
 
-    return clip(0.2 + err * kP - derr * kD + ierr * kI, -1, 1);
+    return clip(config.motor_offset + err * config.motor_kP
+        - derr * config.motor_kD + ierr * config.motor_kI,
+        -100, config.max_throttle) * 0.01;
   } else {
-    static const float kP = 0.5;
-    return clip(err * kP, -1, 1);
+    return clip(err * config.brake_kP, -100, config.max_throttle) * 0.01;
   }
 }
 
-bool DriveController::GetControl(float *throttle_out, float *steering_out,
-    float dt) {
+bool DriveController::GetControl(const DriverConfig &config,
+    float *throttle_out, float *steering_out, float dt) {
   const Eigen::VectorXf &x_ = ekf.GetState();
   float v = x_[0];
   float delta = x_[1];
@@ -178,9 +173,9 @@ bool DriveController::GetControl(float *throttle_out, float *steering_out,
 
   float k1 = exp(ml_1), k2 = exp(ml_2), k3 = exp(ml_3), k4 = exp(ml_4);
 
-  float vmax = SPEED_LIMIT;  // fmin(SPEED_LIMIT, (k1 - k4)/k2);
+  float vmax = config.speed_limit * 0.01;
 
-  // TODO: race line following w/ particle filter localization
+  // TODO(asloane): race line following w/ curvature-tracking localization
   float lane_offset = clip(LANE_OFFSET + kappa * LANEOFFSET_PER_K, -1.0, 1.0);
   float psi_offset = 0;
 
@@ -191,9 +186,13 @@ bool DriveController::GetControl(float *throttle_out, float *steering_out,
   // Alain Micaelli, Claude Samson. Trajectory tracking for unicycle-type and
   // two-steering-wheels mobile robots. [Research Report] RR-2097, INRIA. 1993.
   // <inria-00074575>
+  const float kpy = 0.01 * config.steering_kpy;
+  const float kvy = 0.01 * config.steering_kvy;
 
-  // it's a little backwards though because our steering is reversed w.r.t. curvature
-  float k_target = dx * (-(y_e - lane_offset) * dx * kpy*cpsi - spsi*(-kappa*spsi - kvy*cpsi) + kappa);
+  // it's a little backwards though because our steering is reversed w.r.t.
+  // curvature
+  float k_target = dx * (-(y_e - lane_offset) * dx * kpy*cpsi
+      - spsi*(-kappa*spsi - kvy*cpsi) + kappa);
 
   *steering_out = clip((k_target - srv_b) / srv_a, -1, 1);
   if (*steering_out == -1 || *steering_out == 1) {
@@ -203,19 +202,22 @@ bool DriveController::GetControl(float *throttle_out, float *steering_out,
     vmax = fmin(vmax, w_target / k_limit);
   }
 
-  float v_target = fmin(vmax, sqrtf(TRACTION_LIMIT / fabs(k_target)));
+  const float tlimit = 0.01 * config.traction_limit;
+  float v_target = fmin(vmax, sqrtf(tlimit / fabs(k_target)));
+#if 0
   float a_target = clip(v_target - v, BRAKE_LIMIT, ACCEL_LIMIT) / dt;
   if (a_target > 0) {  // accelerate more gently than braking
     a_target /= 4;
   } else {
     a_target /= 2;  // ???
   }
-  *throttle_out = clip(
-       MotorControlPID(v_target, v),
-       -1, MAX_THROTTLE);
+#endif
+  *throttle_out = MotorControlPID(config, v_target, v);
 
-  printf("steer_target %f delta %f v_target %f v %f a_target %f lateral_a %f/%f v %f y %f psi %f\n",
-      k_target, delta, v_target, v, a_target, v*v*delta, TRACTION_LIMIT, v, y_e, psi_e);
+  printf("steer_target %0.2f delta %0.2f v_target %0.2f v %0.2f "
+      "lateral_a %0.2f/%0.2f v %0.2f y %0.2f psi %0.2f\n",
+      k_target, delta, v_target, v, v*v*delta, 0.01 * config.traction_limit,
+      v, y_e, psi_e);
 
   printf("  throttle %f steer %f\n", *throttle_out, *steering_out);
   return true;

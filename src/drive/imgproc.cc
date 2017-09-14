@@ -15,9 +15,6 @@ static const int ytop = 100;
 // uxrange (-56, 55) uyrange (2, 59) x0 -56 y0 2
 static const int ux0 = -56, uy0 = 2;
 
-// 30 for home, 15 for diyrobocars shiny track
-static const int ACTIV_THRESH = 30;
-
 static const float pixel_scale_m = 0.025;
 
 // (56, 112), (3197, 2)
@@ -88,8 +85,8 @@ int32_t *Reproject(const uint8_t *yuv) {
   return accumbuf;
 }
 
-bool TophatFilter(int32_t *accumbuf, Vector3f *Bout,
-    float *y_cout, Matrix4f *Rkout) {
+bool TophatFilter(int32_t threshold, int32_t *accumbuf,
+    Vector3f *Bout, float *y_cout, Matrix4f *Rkout) {
   // horizontal cumsum
   for (int j = 0; j < uysiz; j++) {
     for (int i = 1; i < uxsiz; i++) {
@@ -121,7 +118,7 @@ bool TophatFilter(int32_t *accumbuf, Vector3f *Bout,
 
       // detected = (0.25*hv[:, :, 0] - 2*hv[:, :, 1] + 0.5*hv[:, :, 2] - 30)
       //int32_t detected = (yd >> 2) - (ud << 1) + (vd >> 1) - 60;
-      int32_t detected = -ud - ACTIV_THRESH;
+      int32_t detected = -ud - threshold;
       if (detected > 0) {
         // add x, y to linear regression
         float pu = pixel_scale_m * (i + ux0 + 3),

@@ -4,6 +4,7 @@
 #include <Eigen/Dense>
 #include <math.h>
 
+#include "drive/config.h"
 #include "drive/ekf.h"
 
 class DriveController {
@@ -11,19 +12,20 @@ class DriveController {
   DriveController();
 
   // do full kalman filter update: prediction and sensor fusion
-  void UpdateState(int32_t *reprojected,
+  void UpdateState(const DriverConfig &config, int32_t *reprojected,
       float throttle_in, float steering_in,
       const Eigen::Vector3f &accel,
       const Eigen::Vector3f &gyro,
       uint8_t servo_pos,
       const uint16_t *wheel_encoders, float dt);
 
-  bool GetControl(float *throttle_out, float *steering_out, float dt);
+  bool GetControl(const DriverConfig &config,
+      float *throttle_out, float *steering_out, float dt);
 
   void ResetState();
 
   // update w/ slope and intercept of line on ground
-  void UpdateCamera(int32_t *reprojected);
+  void UpdateCamera(const DriverConfig &config, int32_t *reprojected);
 
   EKF ekf;
 

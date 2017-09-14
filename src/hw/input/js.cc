@@ -2,6 +2,7 @@
 #include <fcntl.h>
 #include <stdint.h>
 #include <stdio.h>
+#include <string.h>
 #include <unistd.h>
 
 #include "hw/input/js.h"
@@ -9,11 +10,9 @@
 // assumes MOGA 2 controller, doesn't bother to read axis labels or anything
 
 JoystickInput::JoystickInput() {
-  throttle_ = 0;
-  steering_ = 0;
-  steertrim_ = 0;
-  buttons_ = 0;
   fd_ = -1;
+  buttons_ = 0;
+  memset(axes_, 0, sizeof(axes_));
 }
 
 JoystickInput::~JoystickInput() {
@@ -37,15 +36,10 @@ bool JoystickInput::Open() {
   return true;
 }
 
-bool JoystickInput::ReadInput(int *throttle, int *steering, uint16_t *buttons) {
+bool JoystickInput::ReadInput(InputReceiver *receiver) {
   bool newvalue = false;
 
   while (fd_ != -1) {
-    // set saved values
-    *throttle = throttle_;
-    *steering = steering_ + steertrim_;
-    *buttons = buttons_;
-
     uint8_t buf[8];
     int n = read(fd_, buf, 8);
     if (n < 0) {
@@ -67,36 +61,42 @@ bool JoystickInput::ReadInput(int *throttle, int *steering, uint16_t *buttons) {
     uint8_t type = buf[6];
     uint8_t number = buf[7];
     if (type == 0x01) {  // button
-      switch (number) {
-#if 0
-        case 0:  // A, steer trim left
-          steertrim_ -= 100;
-          newvalue = true;
-          break;
-        case 1:  // B, steer trim right
-          steertrim_ += 100;
-          newvalue = true;
-          break;
-#endif
-        default:
-          if (value) {
-            buttons_ |= (1 << number);
-          } else {
-            buttons_ &= ~(1 << number);
-          }
-          newvalue = true;
-          break;
+      value = value ? 1 : 0;
+      int16_t oldvalue = (buttons_ >> number) & 1;
+      static const char *buttonmap = "ABXYLRS789abcdef";
+      if (oldvalue != value) {
+        if (value) {
+          receiver->OnButtonPress(buttonmap[number & 15]);
+        } else {
+          receiver->OnButtonRelease(buttonmap[number & 15]);
+        }
+      }
+      if (value) {
+        buttons_ |= (1 << number);
+      } else {
+        buttons_ &= ~(1 << number);
       }
     } else if (type == 0x02) {  // axis
-      switch (number) {
-        case 1:  // left stick y axis, inverted (up is more throttle)
-          throttle_ = -value;
-          newvalue = true;
-          break;
-        case 2:  // right stick x axis
-          steering_ = value;
-          newvalue = true;
-          break;
+      if (number < 6) {
+        receiver->OnAxisMove(number, value);
+      } else if (number < 8) {  // axes 6 and 7 are d-pad
+        static const char *negdpad = "LU";
+        static const char *posdpad = "RD";
+        if (value != axes_[number]) {
+          if (axes_[number] < -16384) {  // release existing negative direction
+            receiver->OnDPadRelease(negdpad[number - 6]);
+          } else if (axes_[number] > 16384) {  // release existing positive direction
+            receiver->OnDPadRelease(posdpad[number - 6]);
+          }
+
+          axes_[number] = value;
+
+          if (value < -16384) {  // press existing negative direction
+            receiver->OnDPadPress(negdpad[number - 6]);
+          } else if (value > 16384) {  // press existing positive direction
+            receiver->OnDPadPress(posdpad[number - 6]);
+          }
+        }
       }
     }
   }

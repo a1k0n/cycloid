@@ -1,8 +1,6 @@
 #include <fcntl.h>
 #include <fenv.h>
 #include <getopt.h>
-#include <pthread.h>
-#include <semaphore.h>
 #include <signal.h>
 #include <stdio.h>
 #include <string.h>
@@ -10,9 +8,9 @@
 #include <time.h>
 #include <unistd.h>
 
-#include <deque>
-
+#include "drive/config.h"
 #include "drive/controller.h"
+#include "drive/flushthread.h"
 #include "drive/imgproc.h"
 #include "hw/cam/cam.h"
 // #include "hw/car/pca9685.h"
@@ -22,10 +20,13 @@
 #include "hw/input/js.h"
 
 volatile bool done = false;
-int8_t throttle_ = 0, steering_ = 0;
 
-const int PWMCHAN_STEERING = 14;
-const int PWMCHAN_ESC = 15;
+// ugh ugh ugh
+int8_t throttle_ = 0, steering_ = 0;
+int16_t js_throttle_ = 0, js_steering_ = 0;
+
+// const int PWMCHAN_STEERING = 14;
+// const int PWMCHAN_ESC = 15;
 
 void handle_sigint(int signo) { done = true; }
 
@@ -33,112 +34,11 @@ I2C i2c;
 // PCA9685 pca(i2c);
 Teensy teensy(i2c);
 IMU imu(i2c);
+FlushThread flush_thread_;
 Eigen::Vector3f accel_(0, 0, 0), gyro_(0, 0, 0);
 uint8_t servo_pos_ = 110;
 uint16_t wheel_pos_[4] = {0, 0, 0, 0};
 uint16_t wheel_dt_[4] = {0, 0, 0, 0};
-
-// asynchronous flush to sdcard
-struct FlushEntry {
-  int fd_;
-  uint8_t *buf_;
-  size_t len_;
-  size_t unsynced_;
-
-  FlushEntry() { buf_ = NULL; }
-  FlushEntry(int fd, uint8_t *buf, size_t len):
-    fd_(fd), buf_(buf), len_(len) { unsynced_ = 0; }
-
-  void flush() {
-    if (len_ == -1) {
-      fprintf(stderr, "FlushThread: closing fd %d\n", fd_);
-      close(fd_);
-    }
-    if (buf_ != NULL) {
-      if (write(fd_, buf_, len_) != len_) {
-        perror("FlushThread write");
-      }
-      delete[] buf_;
-      buf_ = NULL;
-      unsynced_ += len_;
-      // sync every 1MB
-      // way too expensive! wtf!
-      if (unsynced_ > 1048576) {
-        unsynced_ = 0;
-        fsync(fd_);
-      }
-    }
-  }
-};
-
-class FlushThread {
- public:
-  FlushThread() {
-    pthread_mutex_init(&mutex_, NULL);
-    sem_init(&sem_, 0, 0);
-  }
-
-  ~FlushThread() {
-    // terminate the thread?
-  }
-
-  bool Init() {
-    if (pthread_create(&thread_, NULL, thread_entry, this) != 0) {
-      perror("FlushThread: pthread_create");
-      return false;
-    }
-    return true;
-  }
-
-  void AddEntry(int fd, uint8_t *buf, size_t len) {
-    static int count = 0;
-    pthread_mutex_lock(&mutex_);
-    flush_queue_.push_back(FlushEntry(fd, buf, len));
-    size_t siz = flush_queue_.size();
-    pthread_mutex_unlock(&mutex_);
-    sem_post(&sem_);
-    count++;
-    if (count >= 15) {
-      if (siz > 2) {
-        fprintf(stderr, "[FlushThread %d]\r", siz);
-        fflush(stderr);
-      }
-      count = 0;
-    }
-#if 0
-    int semval;
-    sem_getvalue(&sem_, &semval);
-    fprintf(stderr, "Flusher: qsize %d sem %d\n", flush_queue_.size(), semval);
-#endif
-  }
-
- private:
-  static void* thread_entry(void* arg) {
-    FlushThread *self = reinterpret_cast<FlushThread*>(arg);
-
-    fprintf(stderr, "FlushThread: started\n");
-
-    for (;;) {
-      sem_wait(&self->sem_);
-      pthread_mutex_lock(&self->mutex_);
-      if (!self->flush_queue_.empty()) {
-        FlushEntry e = self->flush_queue_.front();
-        self->flush_queue_.pop_front();
-        pthread_mutex_unlock(&self->mutex_);
-        e.flush();
-      } else {
-        pthread_mutex_unlock(&self->mutex_);
-      }
-    }
-  }
-
-  std::deque<FlushEntry> flush_queue_;
-  pthread_mutex_t mutex_;
-  pthread_t thread_;
-  sem_t sem_;
-};
-
-FlushThread flush_thread_;
 
 class Driver: public CameraReceiver {
  public:
@@ -148,6 +48,9 @@ class Driver: public CameraReceiver {
     frameskip_ = 0;
     autosteer_ = false;
     gettimeofday(&last_t_, NULL);
+    if (config_.Load()) {
+      fprintf(stderr, "Loaded driver configuration\n");
+    }
   }
 
   bool StartRecording(const char *fname, int frameskip) {
@@ -246,14 +149,14 @@ class Driver: public CameraReceiver {
     float u_a = throttle_ / 127.0;
     float u_s = steering_ / 127.0;
     float dt = t.tv_sec - last_t_.tv_sec + (t.tv_usec - last_t_.tv_usec) * 1e-6;
-    controller_.UpdateState(reprojected,
+    controller_.UpdateState(config_, reprojected,
             u_a, u_s,
             accel_, gyro_,
             servo_pos_, wheel_pos_,
             dt);
     last_t_ = t;
 
-    if (autosteer_ && controller_.GetControl(&u_a, &u_s, dt)) {
+    if (autosteer_ && controller_.GetControl(config_, &u_a, &u_s, dt)) {
       steering_ = 127 * u_s;
       throttle_ = 127 * u_a;
       teensy.SetControls(frame_ & 4 ? 1 : 0, throttle_, steering_);
@@ -264,6 +167,7 @@ class Driver: public CameraReceiver {
 
   bool autosteer_;
   DriveController controller_;
+  DriverConfig config_;
   int frame_;
 
  private:
@@ -272,11 +176,170 @@ class Driver: public CameraReceiver {
   struct timeval last_t_;
 };
 
+Driver driver_;
+
+
 static inline float clip(float x, float min, float max) {
   if (x < min) return min;
   if (x > max) return max;
   return x;
 }
+
+class DriverInputReceiver : public InputReceiver {
+ private:
+  static const char *configmenu[];  // initialized below
+  static const int N_CONFIGITEMS;
+
+  int config_item_;
+  DriverConfig *config_;
+  bool x_down_, y_down_;
+
+ public:
+  explicit DriverInputReceiver(DriverConfig *config) {
+    config_ = config;
+    config_item_ = 0;
+    x_down_ = y_down_ = false;
+  }
+
+  virtual void OnDPadPress(char direction) {
+    int16_t *value = ((int16_t*) config_) + config_item_;
+    switch (direction) {
+      case 'U':
+        --config_item_;
+        if (config_item_ < 0)
+          config_item_ = N_CONFIGITEMS - 1;
+        fprintf(stderr, "\n");
+        break;
+      case 'D':
+        ++config_item_;
+        if (config_item_ >= N_CONFIGITEMS)
+          config_item_ = 0;
+        fprintf(stderr, "\n");
+        break;
+      case 'L':
+        if (y_down_) {
+          *value -= 100;
+        } else if (x_down_) {
+          *value -= 10;
+        } else {
+          --*value;
+        }
+        break;
+      case 'R':
+        if (y_down_) {
+          *value += 100;
+        } else if (x_down_) {
+          *value += 10;
+        } else {
+          ++*value;
+        }
+        break;
+    }
+    UpdateDisplay();
+  }
+
+  virtual void OnButtonPress(char button) {
+    struct timeval tv;
+    gettimeofday(&tv, NULL);
+
+    int16_t *value = ((int16_t*) config_) + config_item_;
+
+    switch(button) {
+      case 'S': // start button: start recording
+        if (!driver_.IsRecording()) {
+          char fnamebuf[256];
+          time_t start_time = time(NULL);
+          struct tm start_time_tm;
+          localtime_r(&start_time, &start_time_tm);
+          strftime(fnamebuf, sizeof(fnamebuf), "cycloid-%Y%m%d-%H%M%S.rec",
+              &start_time_tm);
+          if (driver_.StartRecording(fnamebuf, 0)) {
+            fprintf(stderr, "%d.%06d started recording %s\n",
+                tv.tv_sec, tv.tv_usec, fnamebuf);
+          }
+        }
+        break;
+      case 'R':  // right trigger: stop recording
+        if (driver_.IsRecording()) {
+          driver_.StopRecording();
+          fprintf(stderr, "%d.%06d stopped recording\n", tv.tv_sec, tv.tv_usec);
+        }
+        break;
+      case 'L':
+        if (!driver_.autosteer_) {
+          fprintf(stderr, "%d.%06d autodrive ON\n", tv.tv_sec, tv.tv_usec);
+          driver_.autosteer_ = true;
+        }
+        break;
+      case 'B':
+        driver_.controller_.ResetState();
+        fprintf(stderr, "reset kalman filter\n");
+        break;
+      case 'X':
+        x_down_ = true;
+        break;
+      case 'Y':
+        y_down_ = true;
+        break;
+    }
+  }
+
+  virtual void OnButtonRelease(char button) {
+    struct timeval tv;
+    gettimeofday(&tv, NULL);
+
+    switch (button) {
+      case 'L':
+        if (driver_.autosteer_) {
+          driver_.autosteer_ = false;
+          fprintf(stderr, "%d.%06d autodrive OFF\n", tv.tv_sec, tv.tv_usec);
+        }
+        break;
+      case 'X':
+        x_down_ = false;
+        break;
+      case 'Y':
+        y_down_ = false;
+        break;
+    }
+  }
+
+  virtual void OnAxisMove(int axis, int16_t value) {
+    switch (axis) {
+      case 1:  // left stick y axis
+        js_throttle_ = -value;
+        break;
+      case 2:  // right stick x axis
+        js_steering_ = value;
+        break;
+    }
+  }
+
+  void UpdateDisplay() {
+    // hack because all config values are int16_t's in 1/100th steps
+    int16_t value = ((int16_t*) config_)[config_item_];
+    // FIXME: does this work for negative values?
+    fprintf(stderr, "%s %d.%02d\r", configmenu[config_item_],
+        value / 100, value % 100);
+  }
+};
+
+const char *DriverInputReceiver::configmenu[] = {
+  "yellow thresh",
+  "max speed",
+  "max throttle",
+  "traction limit",
+  "steering kP",
+  "steering kD",
+  "brake kP",
+  "motor kP",
+  "motor kI",
+  "motor kD",
+  "motor offset",
+  "lane offset",
+  "lane turn-in"
+};
+const int DriverInputReceiver::N_CONFIGITEMS = sizeof(configmenu) / sizeof(configmenu[0]);
 
 int main(int argc, char *argv[]) {
   signal(SIGINT, handle_sigint);
@@ -284,7 +347,6 @@ int main(int argc, char *argv[]) {
   feenableexcept(FE_INVALID | FE_DIVBYZERO | FE_OVERFLOW | FE_UNDERFLOW);
 
   int fps = 30;
-  int frameskip = 0;
 
   if (!flush_thread_.Init()) {
     return 1;
@@ -324,8 +386,8 @@ int main(int argc, char *argv[]) {
   gettimeofday(&tv, NULL);
   fprintf(stderr, "%d.%06d camera on @%d fps\n", tv.tv_sec, tv.tv_usec, fps);
 
-  Driver driver;
-  if (!Camera::StartRecord(&driver)) {
+  DriverInputReceiver input_receiver(&driver_.config_);
+  if (!Camera::StartRecord(&driver_)) {
     return 1;
   }
 
@@ -335,48 +397,15 @@ int main(int argc, char *argv[]) {
   while (!done) {
     int t = 0, s = 0;
     uint16_t b = 0;
-    if (has_joystick && js.ReadInput(&t, &s, &b)) {
-      gettimeofday(&tv, NULL);
-      if ((b & 0x40) && !driver.IsRecording()) {  // start button: start recording
-        char fnamebuf[256];
-        time_t start_time = time(NULL);
-        struct tm start_time_tm;
-        localtime_r(&start_time, &start_time_tm);
-        strftime(fnamebuf, sizeof(fnamebuf), "cycloid-%Y%m%d-%H%M%S.rec", &start_time_tm);
-        if (driver.StartRecording(fnamebuf, frameskip)) {
-          fprintf(stderr, "%d.%06d started recording %s %d/%d fps\n", tv.tv_sec, tv.tv_usec, fnamebuf, fps, frameskip+1);
-        }
-      }
-      if (b & 0x20 && driver.IsRecording()) {
-        driver.StopRecording();
-        fprintf(stderr, "%d.%06d stopped recording\n", tv.tv_sec, tv.tv_usec);
-      }
-
-      if (b & 0x10) {  // not sure which button this is
-        if (!driver.autosteer_) {
-          fprintf(stderr, "%d.%06d autosteer ON\n", tv.tv_sec, tv.tv_usec);
-          driver.autosteer_ = true;
-        }
-      } else {
-        if (driver.autosteer_) {
-          driver.autosteer_ = false;
-          fprintf(stderr, "%d.%06d autosteer OFF\n", tv.tv_sec, tv.tv_usec);
-        }
-      }
-
-      if (b & 0x01) {
-        driver.controller_.ResetState();
-        fprintf(stderr, "reset kalman filter\n");
-      }
-
-      if (!driver.autosteer_) {
+    if (has_joystick && js.ReadInput(&input_receiver)) {
+      if (!driver_.autosteer_) {
         // really need a better way to get this
-        float steeroffset = driver.controller_.ekf.GetState()[10];
-        steering_ = clip(-127*(s / 32767.0 - steeroffset), -127, 127);
-        throttle_ = clip(127*t / 32767.0, -127, 127);
+        float steeroffset = driver_.controller_.ekf.GetState()[10];
+        steering_ = 127 * clip(js_steering_ / 32767.0 - steeroffset, -1, 1);
+        throttle_ = 127 * clip(js_throttle_ / 32767.0, -1, 1);
         // pca.SetPWM(PWMCHAN_STEERING, steering_);
         // pca.SetPWM(PWMCHAN_ESC, throttle_);
-        teensy.SetControls(driver.frame_ & 16 ? 1 : 0, throttle_, steering_);
+        teensy.SetControls(driver_.frame_ & 16 ? 1 : 0, throttle_, steering_);
       }
     }
     // FIXME: predict step here?

@@ -6,6 +6,8 @@
 
 #include <stdint.h>
 
+#include "./input.h"
+
 class JoystickInput {
  public:
   JoystickInput();
@@ -14,16 +16,15 @@ class JoystickInput {
   bool Open();
 
   // Read latest car input from joystick
-  bool ReadInput(int *throttle, int *steering, uint16_t *buttons);
+  bool ReadInput(InputReceiver *receiver);
 
   int GetFileDescriptor() { return fd_; }
 
  private:
   int fd_;
 
-  int throttle_, steering_;
-  int steertrim_;
   uint16_t buttons_;
+  int16_t axes_[8];
 };
 
 #endif  // HW_INPUT_JS_H_
