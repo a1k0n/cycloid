@@ -15,10 +15,6 @@ using Eigen::Vector3f;
 using Eigen::VectorXf;
 
 
-static const float LANE_OFFSET = 0.0;
-static const float LANEOFFSET_PER_K = 0.15;
-
-
 DriveController::DriveController() {
   ResetState();
 }
@@ -176,7 +172,8 @@ bool DriveController::GetControl(const DriverConfig &config,
   float vmax = config.speed_limit * 0.01;
 
   // TODO(asloane): race line following w/ curvature-tracking localization
-  float lane_offset = clip(LANE_OFFSET + kappa * LANEOFFSET_PER_K, -1.0, 1.0);
+  float lane_offset = clip(config.lane_offset
+      + kappa * config.lane_offset_per_k, -100.0, 100.0) * 0.01;
   float psi_offset = 0;
 
   float cpsi = cos(psi_e - psi_offset),
