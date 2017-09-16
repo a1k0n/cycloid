@@ -13,7 +13,7 @@ bool UIDisplay::Init() {
   // clear screen
   // TODO(asloane): awesome splash screen
   memset(screen_.GetBuffer(), 0, 320*240*2);
-  DrawTextBig("cycloid running", 0, 220, 0x01ff, screen_.GetBuffer());
+  UpdateStatus("cycloid started", 0x01ff);
 
   return true;
 }
@@ -81,3 +81,11 @@ void UIDisplay::UpdateConfig(const char *configmenu[], int nconfigs,
     }
   }
 }
+
+void UIDisplay::UpdateStatus(const char *status, uint16_t color) {
+  uint16_t *buf = screen_.GetBuffer();
+
+  memset(buf + 220*320, 0, 20*320*2);
+  DrawTextBig(status, 0, 220, color, screen_.GetBuffer());
+}
+

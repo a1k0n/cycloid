@@ -13,6 +13,7 @@ class UIDisplay {
       int config_item, const int16_t *config_values);
 
   void UpdateEncoders(uint16_t *wheel_pos);
+  void UpdateStatus(const char *status, uint16_t color = 0xffff);
 
   uint16_t *GetScreenBuffer() { return screen_.GetBuffer(); }
 

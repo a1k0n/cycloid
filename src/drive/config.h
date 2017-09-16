@@ -51,7 +51,7 @@ class DriverConfig {
     if (!fp) {
       return false;
     }
-    fwrite(this, sizeof(this), 1, fp);
+    fwrite(this, sizeof(*this), 1, fp);
     fclose(fp);
     return true;
   }
@@ -62,14 +62,14 @@ class DriverConfig {
       return false;
     }
     fseek(fp, 0, SEEK_END);
-    if (ftell(fp) != sizeof(this)) {
+    if (ftell(fp) != sizeof(*this)) {
       fprintf(stderr, "driverconfig is %d bytes; "
           "config should be %d; ignoring\n", ftell(fp), sizeof(this));
       fclose(fp);
       return true;
     }
     fseek(fp, 0, SEEK_SET);
-    size_t n = fread(this, sizeof(this), 1, fp);
+    size_t n = fread(this, sizeof(*this), 1, fp);
     fclose(fp);
     return n == 1;
   }
