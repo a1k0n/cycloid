@@ -277,8 +277,15 @@ class DriverInputReceiver : public InputReceiver {
         break;
       case 'B':
         driver_.controller_.ResetState();
+        if (config_->Load()) {
+          fprintf(stderr, "config loaded\n");
+        }
         fprintf(stderr, "reset kalman filter\n");
         break;
+      case 'A':
+        if (config_->Save()) {
+          fprintf(stderr, "config saved\n");
+        }
       case 'X':
         x_down_ = true;
         break;
