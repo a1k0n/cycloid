@@ -86,7 +86,8 @@ int32_t *Reproject(const uint8_t *yuv) {
 }
 
 bool TophatFilter(int32_t threshold, int32_t *accumbuf,
-    Vector3f *Bout, float *y_cout, Matrix4f *Rkout) {
+    Vector3f *Bout, float *y_cout, Matrix4f *Rkout,
+    uint8_t *annotatedyuv) {
   // horizontal cumsum
   for (int j = 0; j < uysiz; j++) {
     for (int i = 1; i < uxsiz; i++) {
@@ -120,6 +121,7 @@ bool TophatFilter(int32_t threshold, int32_t *accumbuf,
       //int32_t detected = (yd >> 2) - (ud << 1) + (vd >> 1) - 60;
       int32_t detected = -ud - threshold;
       if (detected > 0) {
+        annotatedyuv[3*(i + uxsiz*j)] = 255;
         // add x, y to linear regression
         float pu = pixel_scale_m * (i + ux0 + 3),
               pv = pixel_scale_m * (j + uy0);

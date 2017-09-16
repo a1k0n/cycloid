@@ -31,12 +31,13 @@ static inline float clip(float x, float min, float max) {
 }
 
 void DriveController::UpdateCamera(const DriverConfig &config,
-    int32_t *reprojected) {
+    int32_t *reprojected, uint8_t *annotated) {
   Vector3f B;
   Matrix4f Rk = Matrix4f::Zero();
   float yc;
 
-  if (!imgproc::TophatFilter(config.yellow_thresh, reprojected, &B, &yc, &Rk)) {
+  if (!imgproc::TophatFilter(config.yellow_thresh, reprojected, &B, &yc, &Rk,
+        annotated)) {
     return;
   }
 
@@ -50,7 +51,8 @@ void DriveController::UpdateCamera(const DriverConfig &config,
 void DriveController::UpdateState(const DriverConfig &config,
     int32_t *reprojected, float throttle_in, float steering_in,
     const Vector3f &accel, const Vector3f &gyro,
-    uint8_t servo_pos, const uint16_t *wheel_encoders, float dt) {
+    uint8_t servo_pos, const uint16_t *wheel_encoders, float dt,
+    uint8_t *annotated) {
   Eigen::VectorXf &x_ = ekf.GetState();
   if (isinf(x_[0]) || isnan(x_[0])) {
     fprintf(stderr, "WARNING: kalman filter diverged to inf/NaN! resetting!\n");
@@ -67,7 +69,7 @@ void DriveController::UpdateState(const DriverConfig &config,
   ekf.Predict(dt, throttle_in, steering_in);
   std::cout << "x after predict " << x_.transpose() << std::endl;
 
-  UpdateCamera(config, reprojected);
+  UpdateCamera(config, reprojected, annotated);
 
   ekf.UpdateIMU(gyro[2]);
   std::cout << "x after IMU (" << gyro[2] << ")" << x_.transpose() << std::endl;

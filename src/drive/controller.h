@@ -17,7 +17,8 @@ class DriveController {
       const Eigen::Vector3f &accel,
       const Eigen::Vector3f &gyro,
       uint8_t servo_pos,
-      const uint16_t *wheel_encoders, float dt);
+      const uint16_t *wheel_encoders, float dt,
+      uint8_t *annotatedyuv);
 
   bool GetControl(const DriverConfig &config,
       float *throttle_out, float *steering_out, float dt);
@@ -25,7 +26,8 @@ class DriveController {
   void ResetState();
 
   // update w/ slope and intercept of line on ground
-  void UpdateCamera(const DriverConfig &config, int32_t *reprojected);
+  void UpdateCamera(const DriverConfig &config, int32_t *reprojected,
+      uint8_t *annotated);
 
   EKF ekf;
 

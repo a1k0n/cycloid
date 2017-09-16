@@ -18,6 +18,7 @@
 #include "hw/gpio/i2c.h"
 #include "hw/imu/imu.h"
 #include "hw/input/js.h"
+#include "ui/display.h"
 
 volatile bool done = false;
 
@@ -34,6 +35,7 @@ I2C i2c;
 // PCA9685 pca(i2c);
 Teensy teensy(i2c);
 IMU imu(i2c);
+UIDisplay display_;
 FlushThread flush_thread_;
 Eigen::Vector3f accel_(0, 0, 0), gyro_(0, 0, 0);
 uint8_t servo_pos_ = 110;
@@ -88,16 +90,17 @@ class Driver: public CameraReceiver {
     gettimeofday(&t, NULL);
     frame_++;
     int32_t *reprojected = imgproc::Reproject(buf);
+    // convert 32-bit buf down to 8 bits for recording
+    const uint32_t imgsiz = imgproc::uxsiz * imgproc::uysiz * 3;
+    uint8_t topview[imgsiz];
+    for (int i = 0; i < imgsiz; i++) {
+      topview[i] = reprojected[i];
+    }
+
     if (IsRecording() && frame_ > frameskip_) {
       frame_ = 0;
       // save reprojected low-res top-down image
-      uint32_t imgsiz = imgproc::uxsiz * imgproc::uysiz * 3;
       uint32_t flushlen = 55 + imgsiz;
-      // convert 32-bit buf down to 8 bits for recording
-      uint8_t topview[imgsiz];
-      for (int i = 0; i < imgsiz; i++) {
-        topview[i] = reprojected[i];
-      }
       // copy our frame, push it onto a stack to be flushed
       // asynchronously to sdcard
       uint8_t *flushbuf = new uint8_t[flushlen];
@@ -145,7 +148,6 @@ class Driver: public CameraReceiver {
       t0 = t;
     }
 
-
     float u_a = throttle_ / 127.0;
     float u_s = steering_ / 127.0;
     float dt = t.tv_sec - last_t_.tv_sec + (t.tv_usec - last_t_.tv_usec) * 1e-6;
@@ -153,8 +155,9 @@ class Driver: public CameraReceiver {
             u_a, u_s,
             accel_, gyro_,
             servo_pos_, wheel_pos_,
-            dt);
+            dt, topview);  // annotate topview and display
     last_t_ = t;
+    display_.UpdateBirdseye(topview, imgproc::uxsiz, imgproc::uysiz);
 
     if (autosteer_ && controller_.GetControl(config_, &u_a, &u_s, dt)) {
       steering_ = 127 * u_s;
@@ -358,6 +361,14 @@ int main(int argc, char *argv[]) {
   JoystickInput js;
 
   if (!i2c.Open()) {
+    fprintf(stderr, "need to enable i2c in raspi-config, probably\n");
+    return 1;
+  }
+
+  if (!display_.Init()) {
+    fprintf(stderr, "run this:\n"
+       "sudo modprobe fbtft_device name=adafruit22a rotate=90\n");
+    // TODO(asloane): support headless mode
     return 1;
   }
 
@@ -365,7 +376,7 @@ int main(int argc, char *argv[]) {
   if (js.Open()) {
     has_joystick = true;
   } else {
-    fprintf(stderr, "joystick not detected!\n");
+    fprintf(stderr, "joystick not detected, but continuing anyway!\n");
   }
 
   teensy.Init();

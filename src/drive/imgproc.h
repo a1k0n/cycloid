@@ -12,7 +12,8 @@ namespace imgproc {
 
   // TophatFilter destroys accumbuf
   bool TophatFilter(int32_t threshold, int32_t *accumbuf,
-      Eigen::Vector3f *Bout, float *y_cout, Eigen::Matrix4f *Rkout);
+      Eigen::Vector3f *Bout, float *y_cout, Eigen::Matrix4f *Rkout,
+      uint8_t *annotatedyuv);
 }  // namespace imgproc
 
 #endif  // DRIVE_IMGPROC_H_
