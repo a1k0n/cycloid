@@ -158,6 +158,7 @@ class Driver: public CameraReceiver {
             dt, topview);  // annotate topview and display
     last_t_ = t;
     display_.UpdateBirdseye(topview, imgproc::uxsiz, imgproc::uysiz);
+    display_.UpdateEncoders(wheel_pos_);
 
     if (autosteer_ && controller_.GetControl(config_, &u_a, &u_s, dt)) {
       steering_ = 127 * u_s;
