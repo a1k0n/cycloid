@@ -2,6 +2,7 @@
 #include <math.h>
 
 #include "ui/display.h"
+#include "ui/drawtext.h"
 #include "ui/yuvrgb565.h"
 
 bool UIDisplay::Init() {
@@ -11,6 +12,7 @@ bool UIDisplay::Init() {
   // clear screen
   // TODO(asloane): awesome splash screen
   memset(screen_.GetBuffer(), 0, 320*240*2);
+  DrawText("cycloid running", 0, 230, 0x01ff, screen_.GetBuffer());
 }
 
 void UIDisplay::UpdateBirdseye(const uint8_t *yuv, int w, int h) {
