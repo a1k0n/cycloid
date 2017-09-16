@@ -203,6 +203,7 @@ class DriverInputReceiver : public InputReceiver {
     config_ = config;
     config_item_ = 0;
     x_down_ = y_down_ = false;
+    UpdateDisplay();
   }
 
   virtual void OnDPadPress(char direction) {
@@ -328,10 +329,12 @@ class DriverInputReceiver : public InputReceiver {
 
   void UpdateDisplay() {
     // hack because all config values are int16_t's in 1/100th steps
-    int16_t value = ((int16_t*) config_)[config_item_];
+    int16_t *values = ((int16_t*) config_);
+    int16_t value = values[config_item_];
     // FIXME: does this work for negative values?
     fprintf(stderr, "%s %d.%02d\r", configmenu[config_item_],
         value / 100, value % 100);
+    display_.UpdateConfig(configmenu, N_CONFIGITEMS, config_item_, values);
   }
 };
 
