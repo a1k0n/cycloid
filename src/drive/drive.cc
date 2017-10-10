@@ -261,6 +261,7 @@ class DriverInputReceiver : public InputReceiver {
           if (driver_.StartRecording(fnamebuf, 0)) {
             fprintf(stderr, "%d.%06d started recording %s\n",
                 tv.tv_sec, tv.tv_usec, fnamebuf);
+            display_.UpdateStatus(fnamebuf, 0xffe0);
           }
         }
         break;
@@ -268,6 +269,7 @@ class DriverInputReceiver : public InputReceiver {
         if (driver_.IsRecording()) {
           driver_.StopRecording();
           fprintf(stderr, "%d.%06d stopped recording\n", tv.tv_sec, tv.tv_usec);
+          display_.UpdateStatus("recording stopped", 0xffff);
         }
         break;
       case 'L':

@@ -141,10 +141,6 @@ static float MotorControlPID(const DriverConfig &config,
 
   printf("pid err %f derr %f ierr %f\n", err, derr, ierr);
   if (err > 0) {
-    static const float kP = 0.5;
-    static const float kD = 0.1;
-    static const float kI = 0.0;
-
     return clip(config.motor_offset + err * config.motor_kP
         - derr * config.motor_kD + ierr * config.motor_kI,
         -100, config.max_throttle) * 0.01;
