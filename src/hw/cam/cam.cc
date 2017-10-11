@@ -112,8 +112,9 @@ bool Camera::Init(int width, int height, int fps) {
   }
 
   // Ensure there are enough buffers to avoid dropping frames
-  if (video_port->buffer_num < 20)
-    video_port->buffer_num = 20;
+  // with later rpi firmware, it seems to always buffer these frames, so avoid this
+  // if (video_port->buffer_num < 2)
+  //   video_port->buffer_num = 2;
 
   status = mmal_component_enable(camera_);
   if (status != MMAL_SUCCESS) {
