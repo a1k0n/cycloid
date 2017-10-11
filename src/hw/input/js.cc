@@ -7,7 +7,7 @@
 
 #include "hw/input/js.h"
 
-// assumes MOGA 2 controller, doesn't bother to read axis labels or anything
+// assumes Wii U Procontroller, doesn't bother to read axis labels or anything
 
 JoystickInput::JoystickInput() {
   fd_ = -1;
@@ -63,13 +63,22 @@ bool JoystickInput::ReadInput(InputReceiver *receiver) {
     newvalue = true;
     if (type == 0x01) {  // button
       value = value ? 1 : 0;
-      int16_t oldvalue = (buttons_ >> number) & 1;
-      static const char *buttonmap = "ABXYLRS789abcdef";
+      uint32_t oldvalue = (buttons_ >> number) & 1;
+      static const char *buttonmap = "BAXYLRlr-+H,.";
       if (oldvalue != value) {
-        if (value) {
-          receiver->OnButtonPress(buttonmap[number & 15]);
-        } else {
-          receiver->OnButtonRelease(buttonmap[number & 15]);
+        if (number < 13) {
+          if (value) {
+            receiver->OnButtonPress(buttonmap[number & 15]);
+          } else {
+            receiver->OnButtonRelease(buttonmap[number & 15]);
+          }
+        } else if (number < 17) {
+          static const char *dpadmap = "UDLR";
+          if (value) {
+            receiver->OnDPadPress(dpadmap[number - 13]);
+          } else {
+            receiver->OnDPadRelease(dpadmap[number - 13]);
+          }
         }
       }
       if (value) {
@@ -78,27 +87,7 @@ bool JoystickInput::ReadInput(InputReceiver *receiver) {
         buttons_ &= ~(1 << number);
       }
     } else if (type == 0x02) {  // axis
-      if (number < 6) {
-        receiver->OnAxisMove(number, value);
-      } else if (number < 8) {  // axes 6 and 7 are d-pad
-        static const char *negdpad = "LU";
-        static const char *posdpad = "RD";
-        if (value != axes_[number]) {
-          if (axes_[number] < -16384) {  // release existing negative direction
-            receiver->OnDPadRelease(negdpad[number - 6]);
-          } else if (axes_[number] > 16384) {  // release existing positive direction
-            receiver->OnDPadRelease(posdpad[number - 6]);
-          }
-
-          axes_[number] = value;
-
-          if (value < -16384) {  // press existing negative direction
-            receiver->OnDPadPress(negdpad[number - 6]);
-          } else if (value > 16384) {  // press existing positive direction
-            receiver->OnDPadPress(posdpad[number - 6]);
-          }
-        }
-      }
+      receiver->OnAxisMove(number, value);
     }
   }
   return newvalue;

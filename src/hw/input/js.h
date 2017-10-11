@@ -23,7 +23,7 @@ class JoystickInput {
  private:
   int fd_;
 
-  uint16_t buttons_;
+  uint32_t buttons_;
   int16_t axes_[8];
 };
 

@@ -250,7 +250,7 @@ class DriverInputReceiver : public InputReceiver {
     int16_t *value = ((int16_t*) config_) + config_item_;
 
     switch(button) {
-      case 'S': // start button: start recording
+      case '+': // start button: start recording
         if (!driver_.IsRecording()) {
           char fnamebuf[256];
           time_t start_time = time(NULL);
@@ -265,7 +265,7 @@ class DriverInputReceiver : public InputReceiver {
           }
         }
         break;
-      case 'R':  // right trigger: stop recording
+      case '-':  // select button: stop recording
         if (driver_.IsRecording()) {
           driver_.StopRecording();
           fprintf(stderr, "%d.%06d stopped recording\n", tv.tv_sec, tv.tv_usec);
