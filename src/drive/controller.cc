@@ -20,7 +20,8 @@ DriveController::DriveController() {
 }
 
 void DriveController::ResetState() {
-  ekf.Reset();
+  ekf_.Reset();
+  localiz_.ResetUnknown();
   firstframe_ = true;
 }
 
@@ -45,7 +46,7 @@ void DriveController::UpdateCamera(const DriverConfig &config,
   // now do the sensor fusion step
 
   float a = B[0], b = B[1], c = B[2];
-  ekf.UpdateCenterline(a, b, c, yc, Rk);
+  ekf_.UpdateCenterline(a, b, c, yc, Rk);
 }
 
 void DriveController::UpdateState(const DriverConfig &config,
@@ -53,7 +54,7 @@ void DriveController::UpdateState(const DriverConfig &config,
     const Vector3f &accel, const Vector3f &gyro,
     uint8_t servo_pos, const uint16_t *wheel_encoders, float dt,
     uint8_t *annotated) {
-  Eigen::VectorXf &x_ = ekf.GetState();
+  Eigen::VectorXf &x_ = ekf_.GetState();
   if (isinf(x_[0]) || isnan(x_[0])) {
     fprintf(stderr, "WARNING: kalman filter diverged to inf/NaN! resetting!\n");
     ResetState();
@@ -66,12 +67,13 @@ void DriveController::UpdateState(const DriverConfig &config,
     firstframe_ = false;
   }
 
-  ekf.Predict(dt, throttle_in, steering_in);
+  ekf_.Predict(dt, throttle_in, steering_in);
   std::cout << "x after predict " << x_.transpose() << std::endl;
+  localiz_.Predict(x_, ekf_.GetCovariance(), dt);
 
   UpdateCamera(config, reprojected, annotated);
 
-  ekf.UpdateIMU(gyro[2]);
+  ekf_.UpdateIMU(gyro[2]);
   std::cout << "x after IMU (" << gyro[2] << ")" << x_.transpose() << std::endl;
 
   // hack: force psi_e forward-facing
@@ -103,14 +105,16 @@ void DriveController::UpdateState(const DriverConfig &config,
   memcpy(last_encoders_, wheel_encoders, 4*sizeof(uint16_t));
   // and do an EKF update if the wheels are moving.
   if (nds > 0) {
-    ekf.UpdateEncoders(ds/(nds * dt), servo_pos);
+    ekf_.UpdateEncoders(ds/(nds * dt), servo_pos);
     std::cout << "x after encoders (" << ds/dt << ") " << x_.transpose() << std::endl;
   } else {
-    ekf.UpdateEncoders(0, servo_pos);
+    ekf_.UpdateEncoders(0, servo_pos);
     std::cout << "x after encoders (" << ds/dt << ") " << x_.transpose() << std::endl;
   }
 
-  std::cout << "P " << ekf.GetCovariance().diagonal().transpose() << std::endl;
+  std::cout << "P " << ekf_.GetCovariance().diagonal().transpose() << std::endl;
+
+  localiz_.Update(ekf_.GetState()[4], 0.002 / ekf_.GetCovariance()(4, 4));
 }
 
 static float MotorControl_model(float accel,
@@ -151,7 +155,7 @@ static float MotorControlPID(const DriverConfig &config,
 
 bool DriveController::GetControl(const DriverConfig &config,
     float *throttle_out, float *steering_out, float dt) {
-  const Eigen::VectorXf &x_ = ekf.GetState();
+  const Eigen::VectorXf &x_ = ekf_.GetState();
   float v = x_[0];
   float delta = x_[1];
   float y_e = x_[2];
@@ -169,10 +173,16 @@ bool DriveController::GetControl(const DriverConfig &config,
 
   float vmax = config.speed_limit * 0.01;
 
-  // TODO(asloane): race line following w/ curvature-tracking localization
+  // race line following
+#if 1
+  float lane_offset = localiz_.GetRacelineOffset();
+  float psi_offset = localiz_.GetRacelineAngle();
+  kappa = localiz_.GetRacelineCurvature();
+#else
   float lane_offset = clip(config.lane_offset
       + kappa * config.lane_offset_per_k, -100.0, 100.0) * 0.01;
   float psi_offset = 0;
+#endif
 
   float cpsi = cos(psi_e - psi_offset),
         spsi = sin(psi_e - psi_offset);

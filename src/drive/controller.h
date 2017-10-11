@@ -6,6 +6,7 @@
 
 #include "drive/config.h"
 #include "drive/ekf.h"
+#include "drive/localize.h"
 
 class DriveController {
  public:
@@ -29,7 +30,8 @@ class DriveController {
   void UpdateCamera(const DriverConfig &config, int32_t *reprojected,
       uint8_t *annotated);
 
-  EKF ekf;
+  EKF ekf_;
+  MapLocalizer localiz_;
 
   bool firstframe_;
   uint16_t last_encoders_[4];

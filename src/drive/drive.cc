@@ -160,6 +160,20 @@ class Driver: public CameraReceiver {
     display_.UpdateBirdseye(topview, imgproc::uxsiz, imgproc::uysiz);
     display_.UpdateEncoders(wheel_pos_);
 
+    // hack: display localization status
+    {
+      uint16_t *dsp = display_.GetScreenBuffer();
+      const Eigen::VectorXf &p = controller_.localiz_.GetS();
+      for (int i = 0; i < 96; i++) {
+        for (int j = 0; j <= 20; j++) {
+          int y = 100 - j;
+          dsp[224 + i + y*320] = 0;
+        }
+        int y = 100 - 20*p[i];
+        dsp[224 + i + y*320] = 0xffff;
+      }
+    }
+
     if (autosteer_ && controller_.GetControl(config_, &u_a, &u_s, dt)) {
       steering_ = 127 * u_s;
       throttle_ = 127 * u_a;
@@ -271,6 +285,10 @@ class DriverInputReceiver : public InputReceiver {
           fprintf(stderr, "%d.%06d stopped recording\n", tv.tv_sec, tv.tv_usec);
           display_.UpdateStatus("recording stopped", 0xffff);
         }
+        break;
+      case 'H':  // home button: init to start line
+        driver_.controller_.localiz_.ResetToStart();
+        display_.UpdateStatus("starting line", 0x07e0);
         break;
       case 'L':
         if (!driver_.autosteer_) {
@@ -429,7 +447,7 @@ int main(int argc, char *argv[]) {
     if (has_joystick && js.ReadInput(&input_receiver)) {
       if (!driver_.autosteer_) {
         // really need a better way to get this
-        float steeroffset = driver_.controller_.ekf.GetState()[10];
+        float steeroffset = driver_.controller_.ekf_.GetState()[10];
         steering_ = -127 * clip(js_steering_ / 32767.0 - steeroffset, -1, 1);
         throttle_ = 127 * clip(js_throttle_ / 32767.0, -1, 1);
         // pca.SetPWM(PWMCHAN_STEERING, steering_);
