@@ -174,10 +174,12 @@ bool DriveController::GetControl(const DriverConfig &config,
   float vmax = config.speed_limit * 0.01;
 
   // race line following
-#if 1
+#if 0
+  // this doesn't work well enough, i'm scrapping the idea
   float lane_offset = localiz_.GetRacelineOffset();
-  float psi_offset = localiz_.GetRacelineAngle();
+  float psi_offset = 0;  // localiz_.GetRacelineAngle();
   kappa = localiz_.GetRacelineCurvature();
+  vmax = fmin(vmax, localiz_.GetRacelineVelocity());
 #else
   float lane_offset = clip(config.lane_offset
       + kappa * config.lane_offset_per_k, -100.0, 100.0) * 0.01;
