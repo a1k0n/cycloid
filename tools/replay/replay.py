@@ -1,8 +1,10 @@
-import numpy as np
-import struct
-import imgproc
 import cv2
+import numpy as np
+
 import ekf
+import imgproc
+import recordreader
+import localize
 
 np.set_printoptions(suppress=True)
 
@@ -93,24 +95,19 @@ def replay(fname, f):
 
     LL_center, LL_imu, LL_encoders = 0, 0, 0
 
+    Sdist = np.zeros(localize.KMAP_ENTRIES)
+    Sdist[0] = 1  # but only if we start at the start line
+
     while True:
-        imgsiz = imgproc.bucketcount.shape[0] * imgproc.bucketcount.shape[1] * 3
-        framesiz = 55 + imgsiz
-        buf = f.read(framesiz)
-        if len(buf) < framesiz:
+        ok, record = recordreader.read_frame(f)
+        (tstamp, throttle, steering, accel, gyro, servo,
+         wheels, periods, frame) = record
+        if not ok:
             break
-        header = struct.unpack("=IIIbbffffffBHHHHHHHH", buf[:55])
-        tstamp = header[1] + header[2] / 1000000.
-        throttle, steering = header[3:5]
-        accel = np.float32(header[5:8])
-        gyro = np.float32(header[8:11])
-        servo = header[11]
-        wheels = np.uint16(header[12:16])
-        periods = np.uint16(header[16:20])
-        frame = np.frombuffer(buf[55:], np.uint8).reshape(
-            (imgproc.bucketcount.shape[0], imgproc.bucketcount.shape[1], 3))
+
         bgr = cv2.cvtColor(frame, cv2.COLOR_YUV2BGR)
-        bgrbig = cv2.resize(bgr[::-1], None, fx=8, fy=8, interpolation=cv2.INTER_NEAREST)
+        bgrbig = cv2.resize(bgr[::-1], None, fx=8, fy=8,
+                            interpolation=cv2.INTER_NEAREST)
         frame = np.int32(frame)
         print 'frame.shape', frame.shape
         cv2.imshow("frame", bgrbig)
@@ -124,10 +121,12 @@ def replay(fname, f):
 
         x0, P0 = np.copy(x), np.copy(P)
 
-        t = (last_throttle + 2*throttle) / 3.0
+        t = (0.7*last_throttle + 0.3*throttle)
         s = last_steering
-        #x, P = ekf.predict(x, P, dt, throttle / 127.0, steering / 127.0)
+        if Sdist is not None:
+            Sdist = localize.predict(Sdist, x, P, dt)
         x, P = ekf.predict(x, P, dt, t / 127.0, s / 127.0)
+
         last_throttle, last_steering = throttle, steering
         print 'x_predict\n', x
         xpred, Ppred = np.copy(x), np.copy(P)
@@ -158,6 +157,21 @@ def replay(fname, f):
 
         print 'LL', LL_center, LL_imu, LL_encoders
 
+        print 'k', x[4], 1.0 / P[4, 4]
+        if Sdist is None:
+            # Sdist = np.zeros(localize.KMAP_ENTRIES)
+            # Sdist[0] = 1
+            Sdist = localize.prob_s_given_k(x[4], 0.02 / P[4, 4])
+        else:
+            Sdist *= localize.prob_s_given_k(x[4], 0.02 / P[4, 4])
+            s = np.sum(Sdist)
+            print 'localization likelihood', s
+            if s == 0:
+                Sdist = np.ones(len(Sdist)) / len(Sdist)
+                print 'localization: no probability mass, reset'
+            else:
+                Sdist /= s
+
         timg = cv2.resize(
             th[::-1],
             (320, int(320 * th.shape[0] / th.shape[1])),
@@ -186,6 +200,18 @@ def replay(fname, f):
         vidframe[frame.shape[0]:, 320:, 0] = timg
         vidframe[frame.shape[0]:, 320:, 1] = timg
         vidframe[frame.shape[0]:, 320:, 2] = timg
+
+        for i in range(len(Sdist)- 1):
+            y1 = int(220 - localize.kmap[0, i + 1] * 20)
+            y0 = int(220 - localize.kmap[0, i] * 20)
+            cv2.line(vidframe, (100+i, y0), (101+i, y1), (128, 255, 0), 1)
+
+        for i in range(len(Sdist)- 1):
+            y1 = int(220 - Sdist[i + 1] * 100)
+            y0 = int(220 - Sdist[i] * 100)
+            cv2.line(vidframe, (100+i, y0), (101+i, y1), (255, 255, 255), 1)
+
+        localize.drawstate(x, Sdist)
 
         vidscale = timg.shape[1] / th.shape[1]
 
@@ -234,6 +260,9 @@ def replay(fname, f):
         except np.linalg.linalg.LinAlgError:
             pass
 
+        print 'x5   ', x[:5]
+        print 'Prec5', 1.0 / np.diag(P[:5, :5])
+
         vidout.write(vidframe)
         cv2.imshow('f', vidframe)
         k = cv2.waitKey()
@@ -247,7 +276,7 @@ def replay(fname, f):
             statelist.pop()
             encoderlist.pop()
             tlist.pop()
-            f.seek(-framesiz*2, 1)
+            f.seek(-recordreader.framesiz*2, 1)
             frameno -= 2
         else:
             statelist.append((x0, P0))

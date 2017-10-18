@@ -102,9 +102,23 @@ void MapLocalizer::Predict(const Eigen::VectorXf &x,
   p_s_[0] += dsf * ps_new[MAP_NPOINTS-1];
 }
 
-void MapLocalizer::Update(float k, float prec) {
+void MapLocalizer::Update(float ds, float k, float prec) {
   Eigen::Map<const VectorXf> tk(track_k, MAP_NPOINTS);
-  Eigen::VectorXf l = -(tk.array() - k).square() * prec;
+
+  if (ds < 0) {
+    // how could that happen anyway?
+    ds = 0;
+  }
+  ds *= MAP_ENTRIES_PER_METER;
+  int dsi = floorf(ds);
+  float dsf = ds - dsi;
+  // Rotate tk by dsi / dsf
+  Eigen::VectorXf tkrot(MAP_NPOINTS);
+  tkrot.head(MAP_NPOINTS - dsi) = tk.tail(MAP_NPOINTS - dsi);
+  tkrot.tail(dsi) = tk.head(dsi);
+  // TODO(asloane): handle dsf
+
+  Eigen::VectorXf l = -(tkrot.array() - k).square() * prec;
   l = (l.array() - l.maxCoeff()).exp() * p_s_.array();
 
   float s = l.sum();

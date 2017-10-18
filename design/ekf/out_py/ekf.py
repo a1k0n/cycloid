@@ -16,96 +16,89 @@ def DiracDelta(x, v=1):
 
 def initial_state():
     x = np.float32(
-        [0.0, 0.0, 0.0, 0.0, 0.0, 1.70000004768372, 0.300000011920929, -2.70000004768372, -2.29999995231628, -1.60000002384186, 0.200000002980232, 4.00000000000000, -35.0000000000000, 125.000000000000, 0.0]
+        [0.0, 0.0, 0.0, 0.0, 0.0, 3.00000000000000, 0.769999980926514, -0.699999988079071, -1.39999997615814, 0.200000002980232, 3.79999995231628, -35.0000000000000, 125.000000000000, 0.0]
     )
     P = np.diag(
-        [1.00000011116208e-6, 0.0100000007078052, 4.00000000000000, 1.00000000000000, 0.160000011324883, 16.0000000000000, 16.0000000000000, 16.0000000000000, 16.0000000000000, 0.250000000000000, 0.250000000000000, 0.250000000000000, 10000.0000000000, 10000.0000000000, 1.00000000000000]
+        [4.00000000000000, 0.0100000007078052, 4.00000000000000, 1.00000000000000, 0.160000011324883, 0.0400000028312206, 0.0400000028312206, 0.0400000028312206, 0.250000000000000, 0.250000000000000, 0.250000000000000, 10000.0000000000, 10000.0000000000, 1.00000000000000]
     )
 
     return x, P
 
 
 def predict(x, P, Delta_t, u_M, u_delta):
-    (v, delta, y_e, psi_e, kappa, ml_1, ml_2, ml_3, ml_4, srv_a, srv_b, srv_r, srvfb_a, srvfb_b, o_g) = x
+    (v, delta, y_e, psi_e, kappa, ml_1, ml_2, ml_3, srv_a, srv_b, srv_r, srvfb_a, srvfb_b, o_g) = x
 
-    tmp0 = exp(ml_4)
-    tmp1 = Abs(u_M)
-    tmp2 = tmp1*exp(ml_2)
-    tmp3 = tmp2*v
-    tmp4 = tmp1*exp(ml_1)*Heaviside(u_M)
-    tmp5 = exp(ml_3)
-    tmp6 = -v
-    tmp7 = tmp6 + 0.2
-    tmp8 = tmp5*Heaviside(tmp7)
-    tmp9 = Heaviside(-Delta_t*(-tmp0 - tmp3 + tmp4 - tmp8) - v)
-    tmp10 = -Delta_t*(tmp0 + tmp3 - tmp4 + tmp8)
-    tmp11 = Heaviside(tmp10 + v)
-    tmp12 = Delta_t*tmp11
-    tmp13 = tmp12*(tmp2 - tmp5*DiracDelta(tmp7))
-    tmp14 = -delta + srv_a*u_delta + srv_b
-    tmp15 = Delta_t*srv_r
-    tmp16 = Abs(tmp14)
-    tmp17 = Min(tmp15, tmp16)
-    tmp18 = sign(tmp14)
-    tmp19 = 2*tmp17*DiracDelta(tmp14) + tmp18**2*Heaviside(tmp15 - tmp16)
-    tmp20 = sin(psi_e)
-    tmp21 = Delta_t*(tmp13/2 + tmp9/2 - 1)
-    tmp22 = cos(psi_e)
-    tmp23 = Max(tmp10, tmp6)
-    tmp24 = Delta_t*(tmp23/2 + v)
-    tmp25 = tmp22*tmp24
-    tmp26 = Delta_t**2
-    tmp27 = tmp11*tmp20*tmp26/2
-    tmp28 = kappa*y_e
-    tmp29 = tmp28 - 1
-    tmp30 = 1/tmp29
-    tmp31 = kappa*tmp30
-    tmp32 = delta + tmp22*tmp31
-    tmp33 = tmp20*tmp24
-    tmp34 = tmp11*tmp26*tmp32/2
-    tmp35 = 0.2*v + 1.0e-5
+    tmp0 = exp(ml_3)
+    tmp1 = tmp0*v
+    tmp2 = Abs(u_M)
+    tmp3 = tmp2*exp(ml_2)
+    tmp4 = tmp3*v
+    tmp5 = tmp2*exp(ml_1)*Heaviside(u_M)
+    tmp6 = Heaviside(-Delta_t*(-tmp1 - tmp4 + tmp5) - v)
+    tmp7 = -Delta_t*(tmp1 + tmp4 - tmp5)
+    tmp8 = Heaviside(tmp7 + v)
+    tmp9 = Delta_t*tmp8
+    tmp10 = tmp9*(tmp0 + tmp3)
+    tmp11 = -delta + srv_a*u_delta + srv_b
+    tmp12 = Delta_t*srv_r
+    tmp13 = Abs(tmp11)
+    tmp14 = Min(tmp12, tmp13)
+    tmp15 = sign(tmp11)
+    tmp16 = 2*tmp14*DiracDelta(tmp11) + tmp15**2*Heaviside(tmp12 - tmp13)
+    tmp17 = sin(psi_e)
+    tmp18 = Delta_t*(tmp10/2 + tmp6/2 - 1)
+    tmp19 = cos(psi_e)
+    tmp20 = Max(tmp7, -v)
+    tmp21 = Delta_t*(tmp20/2 + v)
+    tmp22 = tmp19*tmp21
+    tmp23 = Delta_t**2
+    tmp24 = tmp17*tmp23*tmp8/2
+    tmp25 = kappa*y_e
+    tmp26 = tmp25 - 1
+    tmp27 = 1/tmp26
+    tmp28 = kappa*tmp27
+    tmp29 = delta + tmp19*tmp28
+    tmp30 = tmp17*tmp21
+    tmp31 = tmp23*tmp29*tmp8/2
 
-    F = np.eye(15)
-    F[0, 0] += -tmp13 - tmp9
-    F[0, 5] += tmp12*tmp4
-    F[0, 6] += -tmp12*tmp3
-    F[0, 7] += -tmp12*tmp8
-    F[0, 8] += -tmp0*tmp12
-    F[1, 1] += -tmp19
-    F[1, 9] += tmp19*u_delta
-    F[1, 10] += tmp19
-    F[1, 11] += Delta_t*tmp18*Heaviside(-tmp15 + tmp16)
-    F[2, 0] += tmp20*tmp21
-    F[2, 3] += -tmp25
-    F[2, 5] += -tmp27*tmp4
-    F[2, 6] += tmp27*tmp3
-    F[2, 7] += tmp27*tmp8
-    F[2, 8] += tmp0*tmp27
-    F[3, 0] += tmp21*tmp32
-    F[3, 1] += -tmp24
-    F[3, 2] += kappa**2*tmp25/tmp29**2
-    F[3, 3] += tmp31*tmp33
-    F[3, 4] += tmp25*tmp30*(tmp28*tmp30 - 1)
-    F[3, 5] += -tmp34*tmp4
-    F[3, 6] += tmp3*tmp34
-    F[3, 7] += tmp34*tmp8
-    F[3, 8] += tmp0*tmp34
-    Q = np.float32([ 4, 0.490000000000000, pow(tmp35, 2), pow(tmp35, 2), pow(tmp35, 2), 0, 0, 0, 0, 0, 0, 0, 0, 0, 0])
-    x[0] += tmp23
-    x[1] += tmp17*tmp18
-    x[2] += -tmp33
-    x[3] += -tmp24*tmp32
+    F = np.eye(14)
+    F[0, 0] += -tmp10 - tmp6
+    F[0, 5] += tmp5*tmp9
+    F[0, 6] += -tmp4*tmp9
+    F[0, 7] += -tmp1*tmp9
+    F[1, 1] += -tmp16
+    F[1, 8] += tmp16*u_delta
+    F[1, 9] += tmp16
+    F[1, 10] += Delta_t*tmp15*Heaviside(-tmp12 + tmp13)
+    F[2, 0] += tmp17*tmp18
+    F[2, 3] += -tmp22
+    F[2, 5] += -tmp24*tmp5
+    F[2, 6] += tmp24*tmp4
+    F[2, 7] += tmp1*tmp24
+    F[3, 0] += tmp18*tmp29
+    F[3, 1] += -tmp21
+    F[3, 2] += kappa**2*tmp22/tmp26**2
+    F[3, 3] += tmp28*tmp30
+    F[3, 4] += tmp22*tmp27*(tmp25*tmp27 - 1)
+    F[3, 5] += -tmp31*tmp5
+    F[3, 6] += tmp31*tmp4
+    F[3, 7] += tmp1*tmp31
+    Q = np.float32([ 0.490000000000000, 0.490000000000000, pow(0.1*v + 0.001, 2), pow(0.15*v + 0.001, 2), pow(0.75*v + 0.001, 2), 0.0100000000000000, 0.0100000000000000, 0.0100000000000000, 0, 0, 0, 0, 0, 1.00000000000000e-6])
+    x[0] += tmp20
+    x[1] += tmp14*tmp15
+    x[2] += -tmp30
+    x[3] += -tmp21*tmp29
 
     P = np.dot(F, np.dot(P, F.T)) + Delta_t * np.diag(Q)
     return x, P
 
 
 def step(x, u, Delta_t):
-    (v, delta, y_e, psi_e, kappa, ml_1, ml_2, ml_3, ml_4, srv_a, srv_b, srv_r, srvfb_a, srvfb_b, o_g) = x
+    (v, delta, y_e, psi_e, kappa, ml_1, ml_2, ml_3, srv_a, srv_b, srv_r, srvfb_a, srvfb_b, o_g) = x
     (u_M, u_delta) = u
 
-    tmp0 = -v
-    tmp1 = exp(ml_4)
+    tmp0 = exp(ml_3)
+    tmp1 = tmp0*v
     tmp2 = exp(ml_2)
     tmp3 = Abs(u_M)
     tmp4 = tmp2*tmp3
@@ -114,73 +107,67 @@ def step(x, u, Delta_t):
     tmp7 = exp(ml_1)
     tmp8 = tmp3*tmp7
     tmp9 = tmp6*tmp8
-    tmp10 = exp(ml_3)
-    tmp11 = tmp0 + 0.2
-    tmp12 = tmp10*Heaviside(tmp11)
-    tmp13 = -Delta_t*(tmp1 + tmp12 + tmp5 - tmp9)
-    tmp14 = Max(tmp0, tmp13)
-    tmp15 = -delta + srv_a*u_delta + srv_b
-    tmp16 = sign(tmp15)
-    tmp17 = Delta_t*srv_r
-    tmp18 = Abs(tmp15)
-    tmp19 = Min(tmp17, tmp18)
-    tmp20 = sin(psi_e)
-    tmp21 = Delta_t*(tmp14/2 + v)
-    tmp22 = tmp20*tmp21
-    tmp23 = cos(psi_e)
-    tmp24 = kappa*y_e
-    tmp25 = tmp24 - 1
-    tmp26 = 1/tmp25
-    tmp27 = kappa*tmp26
-    tmp28 = delta + tmp23*tmp27
-    tmp29 = Heaviside(-Delta_t*(-tmp1 - tmp12 - tmp5 + tmp9) - v)
-    tmp30 = Heaviside(tmp13 + v)
-    tmp31 = Delta_t*tmp30
-    tmp32 = tmp31*(-tmp10*DiracDelta(tmp11) + tmp4)
-    tmp33 = tmp16**2*Heaviside(tmp17 - tmp18) + 2*tmp19*DiracDelta(tmp15)
-    tmp34 = Delta_t*(tmp29/2 + tmp32/2 - 1)
-    tmp35 = tmp21*tmp23
-    tmp36 = Delta_t**2
-    tmp37 = tmp20*tmp30*tmp36/2
-    tmp38 = tmp28*tmp30*tmp36/2
-    tmp39 = sign(u_M)
-    tmp40 = -tmp2*tmp39*v + tmp39*tmp6*tmp7 + tmp8*DiracDelta(u_M)
+    tmp10 = -Delta_t*(tmp1 + tmp5 - tmp9)
+    tmp11 = Max(tmp10, -v)
+    tmp12 = -delta + srv_a*u_delta + srv_b
+    tmp13 = sign(tmp12)
+    tmp14 = Delta_t*srv_r
+    tmp15 = Abs(tmp12)
+    tmp16 = Min(tmp14, tmp15)
+    tmp17 = sin(psi_e)
+    tmp18 = Delta_t*(tmp11/2 + v)
+    tmp19 = tmp17*tmp18
+    tmp20 = cos(psi_e)
+    tmp21 = kappa*y_e
+    tmp22 = tmp21 - 1
+    tmp23 = 1/tmp22
+    tmp24 = kappa*tmp23
+    tmp25 = delta + tmp20*tmp24
+    tmp26 = Heaviside(-Delta_t*(-tmp1 - tmp5 + tmp9) - v)
+    tmp27 = Heaviside(tmp10 + v)
+    tmp28 = Delta_t*tmp27
+    tmp29 = tmp28*(tmp0 + tmp4)
+    tmp30 = tmp13**2*Heaviside(tmp14 - tmp15) + 2*tmp16*DiracDelta(tmp12)
+    tmp31 = Delta_t*(tmp26/2 + tmp29/2 - 1)
+    tmp32 = tmp18*tmp20
+    tmp33 = Delta_t**2
+    tmp34 = tmp17*tmp27*tmp33/2
+    tmp35 = tmp25*tmp27*tmp33/2
+    tmp36 = sign(u_M)
+    tmp37 = -tmp2*tmp36*v + tmp36*tmp6*tmp7 + tmp8*DiracDelta(u_M)
 
-    F = np.eye(15)
-    F[0, 0] += -tmp29 - tmp32
-    F[0, 5] += tmp31*tmp9
-    F[0, 6] += -tmp31*tmp5
-    F[0, 7] += -tmp12*tmp31
-    F[0, 8] += -tmp1*tmp31
-    F[1, 1] += -tmp33
-    F[1, 9] += tmp33*u_delta
-    F[1, 10] += tmp33
-    F[1, 11] += Delta_t*tmp16*Heaviside(-tmp17 + tmp18)
-    F[2, 0] += tmp20*tmp34
-    F[2, 3] += -tmp35
-    F[2, 5] += -tmp37*tmp9
-    F[2, 6] += tmp37*tmp5
-    F[2, 7] += tmp12*tmp37
-    F[2, 8] += tmp1*tmp37
-    F[3, 0] += tmp28*tmp34
-    F[3, 1] += -tmp21
-    F[3, 2] += kappa**2*tmp35/tmp25**2
-    F[3, 3] += tmp22*tmp27
-    F[3, 4] += tmp26*tmp35*(tmp24*tmp26 - 1)
-    F[3, 5] += -tmp38*tmp9
-    F[3, 6] += tmp38*tmp5
-    F[3, 7] += tmp12*tmp38
-    F[3, 8] += tmp1*tmp38
+    F = np.eye(14)
+    F[0, 0] += -tmp26 - tmp29
+    F[0, 5] += tmp28*tmp9
+    F[0, 6] += -tmp28*tmp5
+    F[0, 7] += -tmp1*tmp28
+    F[1, 1] += -tmp30
+    F[1, 8] += tmp30*u_delta
+    F[1, 9] += tmp30
+    F[1, 10] += Delta_t*tmp13*Heaviside(-tmp14 + tmp15)
+    F[2, 0] += tmp17*tmp31
+    F[2, 3] += -tmp32
+    F[2, 5] += -tmp34*tmp9
+    F[2, 6] += tmp34*tmp5
+    F[2, 7] += tmp1*tmp34
+    F[3, 0] += tmp25*tmp31
+    F[3, 1] += -tmp18
+    F[3, 2] += kappa**2*tmp32/tmp22**2
+    F[3, 3] += tmp19*tmp24
+    F[3, 4] += tmp23*tmp32*(tmp21*tmp23 - 1)
+    F[3, 5] += -tmp35*tmp9
+    F[3, 6] += tmp35*tmp5
+    F[3, 7] += tmp1*tmp35
 
-    J = np.zeros((15, 2))
-    J[0, 0] = tmp31*tmp40
-    J[1, 1] = srv_a*tmp33
-    J[2, 0] = -tmp37*tmp40
-    J[3, 0] = -tmp38*tmp40
-    x[0] += tmp14
-    x[1] += tmp16*tmp19
-    x[2] += -tmp22
-    x[3] += -tmp21*tmp28
+    J = np.zeros((14, 2))
+    J[0, 0] = tmp28*tmp37
+    J[1, 1] = srv_a*tmp30
+    J[2, 0] = -tmp34*tmp37
+    J[3, 0] = -tmp35*tmp37
+    x[0] += tmp11
+    x[1] += tmp13*tmp16
+    x[2] += -tmp19
+    x[3] += -tmp18*tmp25
     return x, F, J
 
 
@@ -188,30 +175,34 @@ def update_centerline(x, P, a, b, c, y_c, Rk):
     y_e = x[2]
     psi_e = x[3]
     kappa = x[4]
-    tmp0 = a*y_c
-    tmp1 = b + 2*tmp0
-    tmp2 = tmp1**2 + 1
-    tmp3 = 1/sqrt(tmp2)
-    tmp4 = a*y_c**2 + b*y_c + c - tmp1*y_c
-    tmp5 = 2*tmp2**(-1.5)
-    tmp6 = 1/tmp2
-    tmp7 = 2*tmp6
-    tmp8 = tmp1*tmp4
-    tmp9 = 2*a
-    tmp10 = tmp2**(-2.5)
-    tmp11 = 12.0*tmp1*tmp10
+    tmp0 = y_c**2
+    tmp1 = a*tmp0 - c
+    tmp2 = a*y_c
+    tmp3 = a**2
+    tmp4 = b**2 + 4*b*tmp2 + 4*tmp0*tmp3 + 1
+    tmp5 = 1/sqrt(tmp4)
+    tmp6 = b + 2*tmp2
+    tmp7 = tmp6**2 + 1
+    tmp8 = 2*tmp7**(-1.5)
+    tmp9 = tmp1*tmp6
+    tmp10 = tmp9/tmp4
+    tmp11 = 2*a
+    tmp12 = 1/tmp7
+    tmp13 = 2*tmp12
+    tmp14 = tmp7**(-2.5)
+    tmp15 = 12.0*tmp14*tmp6
 
     yk = np.float32(
-        [-tmp3*tmp4 - y_e, -psi_e + atan(tmp1), a*tmp5 - kappa])
+        [tmp1*tmp5 - y_e, -psi_e + atan(tmp6), a*tmp8 - kappa])
 
     Hk = np.float32([
-        [0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
-        [0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
-        [0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]])
+        [0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+        [0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+        [0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0]])
     Mk = np.float32([
-        [tmp3*y_c*(tmp7*tmp8 + y_c), tmp8/tmp2**(3/2), -tmp3, tmp3*tmp9*(tmp6*tmp8 + y_c)],
-        [tmp7*y_c, tmp6, 0, a*tmp7],
-        [-tmp0*tmp11 + tmp5, -tmp10*tmp9*(3.0*b + 6.0*tmp0), 0, -a**2*tmp11]])
+        [tmp5*y_c*(-2*tmp10 + y_c), -tmp9/tmp4**(3/2), -tmp5, tmp11*tmp5*(-tmp10 + y_c)],
+        [tmp13*y_c, tmp12, 0, a*tmp13],
+        [-tmp15*tmp2 + tmp8, -tmp11*tmp14*(3.0*b + 6.0*tmp2), 0, -tmp15*tmp3]])
     Rk = np.dot(Mk, np.dot(Rk, Mk.T))
 
     S = np.dot(Hk, np.dot(P, Hk.T)) + Rk
@@ -227,13 +218,13 @@ def update_centerline(x, P, a, b, c, y_c, Rk):
 def update_IMU(x, P, g_z):
     v = x[0]
     delta = x[1]
-    o_g = x[14]
+    o_g = x[13]
 
     yk = np.float32(
         [delta*v + g_z - o_g])
 
     Hk = np.float32([
-        [-delta, -v, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1]])
+        [-delta, -v, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1]])
 
     Rk = np.diag([
         0.0100000000000000])
@@ -251,15 +242,15 @@ def update_IMU(x, P, g_z):
 def update_encoders(x, P, dsdt, fb_delta):
     v = x[0]
     delta = x[1]
-    srvfb_a = x[12]
-    srvfb_b = x[13]
+    srvfb_a = x[11]
+    srvfb_b = x[12]
 
     yk = np.float32(
         [dsdt - 63.0316606304536*v, -delta*srvfb_a + fb_delta - srvfb_b])
 
     Hk = np.float32([
-        [63.0316606304536, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
-        [0, srvfb_a, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, delta, 1, 0]])
+        [63.0316606304536, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+        [0, srvfb_a, 0, 0, 0, 0, 0, 0, 0, 0, 0, delta, 1, 0]])
 
     Rk = np.diag([
         14400, 49])

@@ -16,7 +16,7 @@ class DriverConfig {
   int16_t steering_kpy;  // PID curve following proportional const
   int16_t steering_kvy;  // derivative const
 
-  int16_t brake_kP;
+  int16_t brake_kP;  // NOTUSED FIXME
   int16_t motor_kP;  // PID control of motor
   int16_t motor_kI;
   int16_t motor_kD;
@@ -36,11 +36,11 @@ class DriverConfig {
     steering_kpy = 1.0 * 100;
     steering_kvy = 2.0 * 100;
 
-    brake_kP = 0.5 * 100;
-    motor_kP = 0.5 * 100;
-    motor_kI = 0.0 * 100;
-    motor_kD = 0.1 * 100;
-    motor_offset = 0.2 * 100;
+    brake_kP = 0.5 * 100;  // NOTUSED FIXME
+    motor_kP = 2.0 * 100;
+    motor_kI = 0.0 * 100;  // NOTUSED FIXME
+    motor_kD = 0.0 * 100;  // NOTUSED FIXME
+    motor_offset = 13;
 
     lane_offset = 0.0 * 100;
     lane_offset_per_k = 0.15 * 100;

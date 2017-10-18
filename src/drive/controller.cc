@@ -47,6 +47,12 @@ void DriveController::UpdateCamera(const DriverConfig &config,
 
   float a = B[0], b = B[1], c = B[2];
   ekf_.UpdateCenterline(a, b, c, yc, Rk);
+
+  const Eigen::VectorXf &x = ekf_.GetState();
+  float psie = x[3];
+  float kappa = x[4];
+  float ds = yc * cos(psie);
+  localiz_.Update(ds, kappa, 0.002 / ekf_.GetCovariance()(4, 4));
 }
 
 void DriveController::UpdateState(const DriverConfig &config,
@@ -113,10 +119,36 @@ void DriveController::UpdateState(const DriverConfig &config,
   }
 
   std::cout << "P " << ekf_.GetCovariance().diagonal().transpose() << std::endl;
-
-  localiz_.Update(ekf_.GetState()[4], 0.002 / ekf_.GetCovariance()(4, 4));
 }
 
+/*
+ * def motorcontrol(k1, k2, k3, v, a):
+    u_V = v > 0 and a > -k3 * v
+    u_DC = (a + k3 * v) / (u_V * k1 - v * k2)
+    dc = u_DC * (2*u_V - 1)
+    if a > 0 and dc < 0.13:
+        return 0.13  # account for dead zone
+    return dc
+*/
+
+static float MotorControl_model(const DriverConfig &config,
+    float v_target,
+    float k1, float k2, float k3, float v) {
+  float accel = clip(config.motor_kP * (v_target - v), -7, 7);
+  // voltage (1 or 0)
+  float V = v > 0 && accel > -k3 * v ? 1 : 0;
+  // duty cycle
+  float DC = clip(
+      (accel + k3 * v) / (V*k1 - k2*v),
+      0, config.max_throttle * 0.01);
+  const float deadzone_min = config.motor_offset * 0.01;
+  if (accel > 0 && DC < deadzone_min) {
+    DC = deadzone_min;
+  }
+  return V == 1 ? DC : -DC;
+}
+
+#if 0
 static float MotorControl_model(float accel,
     float k1, float k2, float k3, float k4,
     float v) {
@@ -152,6 +184,7 @@ static float MotorControlPID(const DriverConfig &config,
     return clip(err * config.brake_kP, -100, config.max_throttle) * 0.01;
   }
 }
+#endif
 
 bool DriveController::GetControl(const DriverConfig &config,
     float *throttle_out, float *steering_out, float dt) {
@@ -164,21 +197,22 @@ bool DriveController::GetControl(const DriverConfig &config,
   float ml_1 = x_[5];
   float ml_2 = x_[6];
   float ml_3 = x_[7];
-  float ml_4 = x_[8];
-  float srv_a = x_[9];
-  float srv_b = x_[10];
-  float srv_r = x_[11];
+  float srv_a = x_[8];
+  float srv_b = x_[9];
+  float srv_r = x_[10];
 
-  float k1 = exp(ml_1), k2 = exp(ml_2), k3 = exp(ml_3), k4 = exp(ml_4);
+  float k1 = exp(ml_1), k2 = exp(ml_2), k3 = exp(ml_3);
 
   float vmax = config.speed_limit * 0.01;
 
   // race line following
-#if 0
+#if 1
   // this doesn't work well enough, i'm scrapping the idea
-  float lane_offset = localiz_.GetRacelineOffset();
-  float psi_offset = 0;  // localiz_.GetRacelineAngle();
-  kappa = localiz_.GetRacelineCurvature();
+  // float lane_offset = localiz_.GetRacelineOffset();
+  // float psi_offset = localiz_.GetRacelineAngle();
+  float lane_offset = 0;
+  float psi_offset = 0;
+  // kappa = localiz_.GetRacelineCurvature();
   vmax = fmin(vmax, localiz_.GetRacelineVelocity());
 #else
   float lane_offset = clip(config.lane_offset
@@ -218,8 +252,11 @@ bool DriveController::GetControl(const DriverConfig &config,
   } else {
     a_target /= 2;  // ???
   }
-#endif
+#elsif 0
   *throttle_out = MotorControlPID(config, v_target, v);
+#else
+  *throttle_out = MotorControl_model(config, v_target, k1, k2, k3, v);
+#endif
 
   printf("steer_target %0.2f delta %0.2f v_target %0.2f v %0.2f "
       "lateral_a %0.2f/%0.2f v %0.2f y %0.2f psi %0.2f\n",

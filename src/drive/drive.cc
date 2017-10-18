@@ -20,6 +20,10 @@
 #include "hw/input/js.h"
 #include "ui/display.h"
 
+// #undef this to disable camera, just to record w/ raspivid while
+// driving around w/ controller
+#define CAMERA 1
+
 volatile bool done = false;
 
 // ugh ugh ugh
@@ -391,8 +395,10 @@ int main(int argc, char *argv[]) {
     return 1;
   }
 
+#ifdef CAMERA
   if (!Camera::Init(640, 480, fps))
     return 1;
+#endif
 
   JoystickInput js;
 
@@ -434,12 +440,14 @@ int main(int argc, char *argv[]) {
   fprintf(stderr, "%d.%06d camera on @%d fps\n", tv.tv_sec, tv.tv_usec, fps);
 
   DriverInputReceiver input_receiver(&driver_.config_);
+#ifdef CAMERA
   if (!Camera::StartRecord(&driver_)) {
     return 1;
   }
 
   gettimeofday(&tv, NULL);
   fprintf(stderr, "%d.%06d started camera\n", tv.tv_sec, tv.tv_usec);
+#endif
 
   while (!done) {
     int t = 0, s = 0;
@@ -447,7 +455,7 @@ int main(int argc, char *argv[]) {
     if (has_joystick && js.ReadInput(&input_receiver)) {
       if (!driver_.autosteer_) {
         // really need a better way to get this
-        float steeroffset = driver_.controller_.ekf_.GetState()[10];
+        float steeroffset = driver_.controller_.ekf_.GetState()[9];
         steering_ = -127 * clip(js_steering_ / 32767.0 - steeroffset, -1, 1);
         throttle_ = 127 * clip(js_throttle_ / 32767.0, -1, 1);
         // pca.SetPWM(PWMCHAN_STEERING, steering_);
@@ -465,5 +473,7 @@ int main(int argc, char *argv[]) {
     usleep(1000);
   }
 
+#ifdef CAMERA
   Camera::StopRecord();
+#endif
 }

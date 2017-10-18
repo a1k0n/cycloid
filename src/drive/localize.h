@@ -18,7 +18,7 @@ class MapLocalizer {
      float Delta_t);
 
   // Update distribution of s given curvature measurement / precision
-  void Update(float k, float prec);
+  void Update(float ds, float k, float prec);
 
   // Get target trajectory given current location estimate
   float GetRacelineVelocity() const;

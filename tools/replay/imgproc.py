@@ -54,7 +54,7 @@ def tophat(m):
 
     # detected = (0.25*hv[:, :, 0] - 2*hv[:, :, 1] + 0.5*hv[:, :, 2] - 30)
 
-    detected = -hv - 30
+    detected = -hv - 18
     # detected = -hv - 20
     
 

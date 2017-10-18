@@ -30,7 +30,7 @@ int main(int argc, char **argv) {
 #endif
 
   // and make a measurement
-  l.Update(-0.3, 10);
+  l.Update(3.4, -0.3, 10);
   std::cout << l.GetS().transpose() << std::endl;
 
   std::cout << "v: " << l.GetRacelineVelocity() << std::endl;

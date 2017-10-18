@@ -7,8 +7,6 @@ np.set_printoptions(suppress=True)
 
 
 def replay_LL(fname, f):
-    vidout = None
-
     x, P = ekf.initial_state()
     t0 = None
     dt = 1.0 / 30
@@ -16,9 +14,6 @@ def replay_LL(fname, f):
     wheels_last = None
     frameno = 0
 
-    statelist = []
-    encoderlist = []
-    tlist = []
     last_throttle = 0
     last_steering = 0
 
@@ -55,8 +50,8 @@ def replay_LL(fname, f):
 
         if t0 is not None:
             dt = tstamp - t0
-
-        x0, P0 = np.copy(x), np.copy(P)
+            print 'dt', dt
+        t0 = tstamp
 
         t = (last_throttle + 2*throttle) / 3.0
         s = last_steering
@@ -64,10 +59,8 @@ def replay_LL(fname, f):
         x, P = ekf.predict(x, P, dt, t / 127.0, s / 127.0)
         last_throttle, last_steering = throttle, steering
         # print 'x_predict\n', x
-        xpred, Ppred = np.copy(x), np.copy(P)
 
         hv, th, B, yc, Rk = imgproc.detect_centerline(frame[:, :, 1])
-
 
         LL_center, LL_imu, LL_encoders = 0, 0, 0
 
@@ -82,6 +75,7 @@ def replay_LL(fname, f):
 
         # print 'wheels', wheels, 'periods', periods
         if wheels_last is not None:
+            # wait WHAT? this isn't what i'm doing in the car..
             ds = np.sum(wheels - wheels_last) / 4.0
             if ds != 0:
                 x, P, LL_encoders = ekf.update_encoders(x, P, ds/dt, float(servo))
@@ -95,7 +89,11 @@ def replay_LL(fname, f):
         print >>likelihood, LL_center, LL_imu, LL_encoders
         v, delta, ye, psie, kappa = x[:5]
         s_coord += dt * v / (1 - kappa * ye)
-        print >>trackcurv, s_coord, kappa
+        # we should get our error estimate on s also..
+        if B is not None:
+            # measurement was taken ds meters in front of the car
+            ds = yc * np.cos(x[2])
+            print >>trackcurv, s_coord + ds, kappa, np.sqrt(P[4, 4])
 
         # gyrozs.append(gyro[2])
         # print 'gyro', gyro[2], 'mean', np.mean(gyrozs), 'std', np.std(gyrozs)
