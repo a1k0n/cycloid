@@ -36,8 +36,8 @@ class DriverConfig {
     steering_kpy = 1.0 * 100;
     steering_kvy = 2.0 * 100;
 
-    brake_kP = 0.5 * 100;  // NOTUSED FIXME
-    motor_kP = 2.0 * 100;
+    brake_kP = 7.50 * 100;
+    motor_kP = 4.00 * 100;
     motor_kI = 0.0 * 100;  // NOTUSED FIXME
     motor_kD = 0.0 * 100;  // NOTUSED FIXME
     motor_offset = 13;

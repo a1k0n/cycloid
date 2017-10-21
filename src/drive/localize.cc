@@ -8,34 +8,31 @@ using Eigen::MatrixXf;
 
 // FIXME(asloane): maps are hardcoded for now; will want to make them loadable
 
-#define HOME_TRACK 1
+#define TRACK "oakland"
 
-#ifdef HOME_TRACK
 // for track at home
-static const int MAP_NPOINTS = 96;
-static const float MAP_ENTRIES_PER_METER = 100.0 / 19.8059962878;
-
-static const float track_k[MAP_NPOINTS] = {
-#include "home_track_k.txt"
+static const float track_k[] = {
+#include "track_k.txt"
 };
 
+static const int MAP_NPOINTS = sizeof(track_k) / sizeof(track_k[0]);
+static const float MAP_ENTRIES_PER_METER = 100.0 / 19.8059962878;
+
 static const float raceline_k[MAP_NPOINTS] = {
-#include "home_raceline_k.txt"
+#include "raceline_k.txt"
 };
 
 static const float raceline_y[MAP_NPOINTS] = {
-#include "home_raceline_y.txt"
+#include "raceline_y.txt"
 };
 
 static const float raceline_psi[MAP_NPOINTS] = {
-#include "home_raceline_psi.txt"
+#include "raceline_psi.txt"
 };
 
 static const float raceline_v[MAP_NPOINTS] = {
-#include "home_raceline_v.txt"
+#include "raceline_v.txt"
 };
-
-#endif
 
 MapLocalizer::MapLocalizer(): p_s_(MAP_NPOINTS) {
   ResetUnknown();
@@ -114,15 +111,17 @@ void MapLocalizer::Update(float ds, float k, float prec) {
   float dsf = ds - dsi;
   // Rotate tk by dsi / dsf
   Eigen::VectorXf tkrot(MAP_NPOINTS);
-  tkrot.head(MAP_NPOINTS - dsi) = tk.tail(MAP_NPOINTS - dsi);
-  tkrot.tail(dsi) = tk.head(dsi);
+  // tkrot.head(MAP_NPOINTS - dsi) = tk.tail(MAP_NPOINTS - dsi);
+  // tkrot.tail(dsi) = tk.head(dsi);
+  tkrot.head(dsi) = tk.tail(dsi);
+  tkrot.tail(MAP_NPOINTS - dsi) = tk.head(MAP_NPOINTS - dsi);
   // TODO(asloane): handle dsf
 
   Eigen::VectorXf l = -(tkrot.array() - k).square() * prec;
   l = (l.array() - l.maxCoeff()).exp() * p_s_.array();
 
   float s = l.sum();
-  if (s == 0) {
+  if (s == 0 || l.minCoeff() < 0) {
     ResetUnknown();
     return;
   }

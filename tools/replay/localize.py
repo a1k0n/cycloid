@@ -2,12 +2,14 @@ import numpy as np
 import scipy.linalg
 import cv2
 
+TRACK = "../../src/drive/oakland"
+
 # curvature map learned from the track
 KMAP_ENTRIES_PER_METER = 5
-kmap = np.loadtxt("kmap.txt").T
-KMAP_ENTRIES = len(kmap[0])
-trackx = np.loadtxt("track_x.txt", comments=",").reshape((-1, 2))
-tracku = np.loadtxt("track_u.txt", comments=",").reshape((-1, 2))
+kmap = np.loadtxt(TRACK + "_track_k.txt", comments=",")
+KMAP_ENTRIES = len(kmap)
+trackx = np.loadtxt(TRACK + "_track_x.txt", comments=",").reshape((-1, 2))
+tracku = np.loadtxt(TRACK + "_track_u.txt", comments=",").reshape((-1, 2))
 
 
 def prob_s_given_k(k, prec):
@@ -15,7 +17,7 @@ def prob_s_given_k(k, prec):
     # this is seat of the pants, not sure if it's right.
     # l = kmap[1] * np.exp(-(kmap[0] - k)**2 * (kmap[1] * prec))
     # do i want to include kmap's precision? i am not sure
-    l = -(kmap[0] - k)**2 * prec
+    l = -(kmap - k)**2 * prec
     l -= np.max(l)
     l = np.exp(l)
     s = np.sum(l)
@@ -130,7 +132,7 @@ vidout = None  # hack hack hack
 def drawstate(x, Sdist):
     global vidout
     scale = 15
-    offset = 0
+    offset = 200
     v, delta, ye, psi_e, kappa = x[:5]
     img = np.zeros((400, 640, 3), np.uint8)
     img[:, :, 1] = 255   # green screen

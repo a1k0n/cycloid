@@ -155,6 +155,7 @@ class Driver: public CameraReceiver {
     float u_a = throttle_ / 127.0;
     float u_s = steering_ / 127.0;
     float dt = t.tv_sec - last_t_.tv_sec + (t.tv_usec - last_t_.tv_usec) * 1e-6;
+    // float dt = 1.0 / 30;
     controller_.UpdateState(config_, reprojected,
             u_a, u_s,
             accel_, gyro_,
@@ -162,10 +163,9 @@ class Driver: public CameraReceiver {
             dt, topview);  // annotate topview and display
     last_t_ = t;
     display_.UpdateBirdseye(topview, imgproc::uxsiz, imgproc::uysiz);
-    display_.UpdateEncoders(wheel_pos_);
 
     // hack: display localization status
-    {
+    if (0) {
       uint16_t *dsp = display_.GetScreenBuffer();
       const Eigen::VectorXf &p = controller_.localiz_.GetS();
       for (int i = 0; i < 96; i++) {
@@ -177,6 +177,13 @@ class Driver: public CameraReceiver {
         dsp[224 + i + y*320] = 0xffff;
       }
     }
+
+    {
+      const Eigen::VectorXf &x_ = controller_.ekf_.GetState();
+      display_.UpdateStateEstimate(x_[0], x_[1], x_[2], x_[3], x_[4]);
+      display_.UpdateLocalization(controller_.localiz_.GetS(), x_[2]);
+    }
+    display_.UpdateEncoders(wheel_pos_);
 
     if (autosteer_ && controller_.GetControl(config_, &u_a, &u_s, dt)) {
       steering_ = 127 * u_s;
@@ -389,7 +396,7 @@ int main(int argc, char *argv[]) {
 
   feenableexcept(FE_INVALID | FE_DIVBYZERO | FE_OVERFLOW | FE_UNDERFLOW);
 
-  int fps = 30;
+  int fps = 60;
 
   if (!flush_thread_.Init()) {
     return 1;
@@ -455,7 +462,7 @@ int main(int argc, char *argv[]) {
     if (has_joystick && js.ReadInput(&input_receiver)) {
       if (!driver_.autosteer_) {
         // really need a better way to get this
-        float steeroffset = driver_.controller_.ekf_.GetState()[9];
+        float steeroffset = driver_.controller_.ekf_.GetState()[10];
         steering_ = -127 * clip(js_steering_ / 32767.0 - steeroffset, -1, 1);
         throttle_ = 127 * clip(js_throttle_ / 32767.0, -1, 1);
         // pca.SetPWM(PWMCHAN_STEERING, steering_);

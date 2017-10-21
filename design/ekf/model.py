@@ -19,11 +19,12 @@ sp.init_printing()
  ) = sp.symbols("v, delta, y_e, psi_e, kappa", real=True)
 
 (ml_1, ml_2, ml_3,  # log of brushed DC motor model constants
+ ml_4,              # log of static friction constant
  srv_a, srv_b, srv_r,  # servo response model; delta -> srv_a * control + srv_b
                        # at rate srv_r
  srvfb_a, srvfb_b,  # servo feedback measurement = srvfb_a * delta + srvfb_b
  o_g  # gyroscope offset; gyro measures v * delta + o_g
- ) = sp.symbols("ml_1, ml_2, ml_3, srv_a, srv_b, srv_r, srvfb_a, srvfb_b, o_g",
+ ) = sp.symbols("ml_1, ml_2, ml_3, ml_4, srv_a, srv_b, srv_r, srvfb_a, srvfb_b, o_g",
                 real=True)
 
 # dt, steering input, motor input
@@ -35,7 +36,7 @@ sp.init_printing()
 
 # state vector x is all of the above
 X = sp.Matrix([v, delta, y_e, psi_e, kappa,
-               ml_1, ml_2, ml_3,
+               ml_1, ml_2, ml_3, ml_4,
                srv_a, srv_b, srv_r, srvfb_a, srvfb_b, o_g])
 
 print "state variables:"
@@ -43,21 +44,16 @@ sp.pprint(X.T)
 
 ekfgen = codegen.EKFGen(X)
 
-# [ 16488.1912919    3101.96113328 -38375.6189576 ]
-# [ 16209.12647275   3192.14009973 -38327.66821225]
-# [ 15849.81135393   3161.38822721 -38329.55155154]
-
-
 # Define a default initial state and covariance
 x0 = np.float32([
     # v, delta, y_e, psi_e, kappa
     0, 0, 0, 0, 0,
     # ml_1 (log m/s^2)
-    3,
-    # ml_2 (log 1/s back-EMF)
-    0.77,
-    # ml_3 (log 1/s friction)
-    -0.7,
+    2.7,
+    # ml_2 (log 1/s)
+    1.05, 
+    # ml_3, ml_4 (log m/s^2 static frictional deceleration)
+    2.0, -0.65,
     # srv_a, srv_b, srv_r,
     -1.4, 0.2, 3.8,
     # srvfb_a, srvfb_b
@@ -68,9 +64,9 @@ x0 = np.float32([
 P0 = np.float32([
     # v, delta, y_e, psi_e, kappa
     # assume we start stationary
-    2., 0.1, 2, 1, 0.4,
-    # ml_1, ml_2, ml_3
-    0.2, 0.2, 0.2,
+    0.001, 0.1, 2, 1, 0.4,
+    # ml_1, ml_2, ml_3, ml_4
+    0.2, 0.2, 4, 0.5,
     # srv_a, srv_b, srv_r
     0.5, 0.5, 0.5,
     # srvfb_a, srvfb_b
@@ -117,11 +113,14 @@ ekfgen.open("out_cc", "out_py", sp.Matrix(x0), sp.Matrix(P0))
 # k2: 1/s  (EMF decay time constant)
 # k3: m/s^2  (coulomb friction, minimum torque to get moving)
 # k4: m/s^2  (dynamic friction)
-k1, k2, k3 = sp.exp(ml_1), sp.exp(ml_2), sp.exp(ml_3)
+k1, k2, k3, k4 = sp.exp(ml_1), sp.exp(ml_2), sp.exp(ml_3), sp.exp(ml_4)
 
 u_DC = sp.Abs(u_M)
 u_V = sp.Heaviside(u_M)  # 1 if u_M > 0, else 0
-dv = Delta_t*(u_V * u_DC * k1 - u_DC * v * k2 - v * k3)
+# we also have a static friction coefficient which tries to make the velocity
+# exactly 0, up to the friction limit
+k3 = k3 * sp.Heaviside(0.2 - v)  # k3 applies only when v < 0.2
+dv = Delta_t*(u_V * u_DC * k1 - u_DC * v * k2 - k3 - k4)
 dv = sp.Max(dv, -v)  # velocity cannot go negative
 av = v + dv / 2  # average velocity during the timestep
 
@@ -153,6 +152,7 @@ f = sp.Matrix([
     ml_1,
     ml_2,
     ml_3,
+    ml_4,
     srv_a,
     srv_b,
     srv_r,
@@ -164,14 +164,13 @@ f = sp.Matrix([
 print "state transition: x +="
 sp.pprint(f - X)
 
-
 # Our prediction error AKA process noise is kinda seat of the pants, but tuned
 # on real runs by maximizing the subsequent measurement likelihood:
 Q = sp.Matrix([
     # v, delta, y_e, psi_e, kappa
-    0.7, 0.7, 0.1*v + 1e-3, 0.15*v + 1e-3, 0.75*v + 1e-3,
-    # ml_1, ml_2, ml_3
-    0.1, 0.1, 0.1,
+    2, 0.7, 0.1*v + 1e-3, 0.15*v + 1e-3, 0.75*v + 1e-3,
+    # ml_1, ml_2, ml_3, ml_4
+    0, 0, 0, 0,
     # srv_a, srv_b, srv_r
     0, 0, 0,
     # srvfb_a, srvfb_b
@@ -212,7 +211,7 @@ def centerline_derivation():
     # if curvature is low, assume we have a straight line; project our
     # regression centerpoint onto the unit normal vector to determine distance
     # to centerline, and tan(psi_e) = dx/dy = dx/1
-    ye_linear_est = sp.simplify((N.T * pc)[0] / Nnorm)
+    ye_linear_est = (N.T * pc)[0] / Nnorm
     tanpsi_linear_est = dx
 
     # if curvature is nonzero, we're tracing a circle:

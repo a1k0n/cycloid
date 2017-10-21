@@ -13,9 +13,6 @@ namespace imgproc {
 
 static const int ytop = 100;
 // uxrange (-56, 55) uyrange (2, 59) x0 -56 y0 2
-static const int ux0 = -56, uy0 = 2;
-
-static const float pixel_scale_m = 0.025;
 
 // (56, 112), (3197, 2)
 static const float bucketcount[uxsiz * uysiz] = {
@@ -121,7 +118,7 @@ bool TophatFilter(int32_t threshold, int32_t *accumbuf,
       //int32_t detected = (yd >> 2) - (ud << 1) + (vd >> 1) - 60;
       int32_t detected = -ud - threshold;
       if (detected > 0) {
-        annotatedyuv[3*(i + uxsiz*j)] = 255;
+        annotatedyuv[3*(i + uxsiz*j + 3)] = 255;
         // add x, y to linear regression
         float pu = pixel_scale_m * (i + ux0 + 3),
               pv = pixel_scale_m * (j + uy0);

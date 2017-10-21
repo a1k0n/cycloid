@@ -31,6 +31,8 @@ static inline float clip(float x, float min, float max) {
   return x;
 }
 
+//extern float __centerline_R_hack;
+
 void DriveController::UpdateCamera(const DriverConfig &config,
     int32_t *reprojected, uint8_t *annotated) {
   Vector3f B;
@@ -49,10 +51,40 @@ void DriveController::UpdateCamera(const DriverConfig &config,
   ekf_.UpdateCenterline(a, b, c, yc, Rk);
 
   const Eigen::VectorXf &x = ekf_.GetState();
+  float ye = x[2];
   float psie = x[3];
   float kappa = x[4];
-  float ds = yc * cos(psie);
-  localiz_.Update(ds, kappa, 0.002 / ekf_.GetCovariance()(4, 4));
+  float ds = yc * cos(psie) + 0;  // lookahead distance; make config?
+  localiz_.Update(ds, kappa, 0.01 / ekf_.GetCovariance()(4, 4));
+  // localiz_.Update(ds, kappa, 0.01 / __centerline_R_hack);
+
+  float roff = localiz_.GetRacelineOffset();
+  float rphi = localiz_.GetRacelineAngle();
+  float rtan = -tan(rphi - psie);
+  // update annotated display with centerline state, raceline curve
+  // mx = pixel_scale_m * (px + ux0)  -> x, y in meters given x, y in pixels
+  // my = pixel_scale_m * (py + uy0)
+  // px = mx / pixel_scale_m - ux0  -> vice versa
+  // py = my / pixel_scale_m - uy0
+  for (int py = 0; py < imgproc::uysiz; py++) {
+    float my = imgproc::pixel_scale_m * (py + imgproc::uy0);
+    float mx = a*my*my + b*my + c;
+    int px = mx * (1.0/imgproc::pixel_scale_m) - imgproc::ux0;
+    if (px >= 0 && px < imgproc::uxsiz) {
+      annotated[(px + py*imgproc::uxsiz)*3] = 128;
+      annotated[(px + py*imgproc::uxsiz)*3 + 1] = 0;
+      annotated[(px + py*imgproc::uxsiz)*3 + 2] = 0;
+    }
+
+    // get the raceline position here
+    mx = roff - ye + rtan * my;  // y offset
+    px = mx * (1.0/imgproc::pixel_scale_m) - imgproc::ux0;
+    if (px >= 0 && px < imgproc::uxsiz) {
+      annotated[(px + py*imgproc::uxsiz)*3] = 128;
+      annotated[(px + py*imgproc::uxsiz)*3 + 1] = 255;
+      annotated[(px + py*imgproc::uxsiz)*3 + 2] = 255;
+    }
+  }
 }
 
 void DriveController::UpdateState(const DriverConfig &config,
@@ -134,9 +166,11 @@ void DriveController::UpdateState(const DriverConfig &config,
 static float MotorControl_model(const DriverConfig &config,
     float v_target,
     float k1, float k2, float k3, float v) {
-  float accel = clip(config.motor_kP * (v_target - v), -7, 7);
+  float kP = (v_target >= v ? config.motor_kP : config.brake_kP) * 0.01;
+  float accel = clip(kP * (v_target - v), -7, 7);
   // voltage (1 or 0)
-  float V = v > 0 && accel > -k3 * v ? 1 : 0;
+  // v > 0 ????
+  float V = accel > -k3 * v ? 1 : 0;
   // duty cycle
   float DC = clip(
       (accel + k3 * v) / (V*k1 - k2*v),
@@ -148,7 +182,6 @@ static float MotorControl_model(const DriverConfig &config,
   return V == 1 ? DC : -DC;
 }
 
-#if 0
 static float MotorControl_model(float accel,
     float k1, float k2, float k3, float k4,
     float v) {
@@ -165,6 +198,7 @@ static float MotorControl_model(float accel,
   return V == 1 ? DC : -DC;
 }
 
+#if 1
 static float MotorControlPID(const DriverConfig &config,
     float v_target, float v) {
   static float last_err = 0;
@@ -197,22 +231,23 @@ bool DriveController::GetControl(const DriverConfig &config,
   float ml_1 = x_[5];
   float ml_2 = x_[6];
   float ml_3 = x_[7];
-  float srv_a = x_[8];
-  float srv_b = x_[9];
-  float srv_r = x_[10];
+  float ml_4 = x_[8];
+  float srv_a = x_[9];
+  float srv_b = x_[10];
+  float srv_r = x_[11];
 
   float k1 = exp(ml_1), k2 = exp(ml_2), k3 = exp(ml_3);
 
   float vmax = config.speed_limit * 0.01;
 
   // race line following
-#if 1
+#if 0
   // this doesn't work well enough, i'm scrapping the idea
-  // float lane_offset = localiz_.GetRacelineOffset();
-  // float psi_offset = localiz_.GetRacelineAngle();
-  float lane_offset = 0;
-  float psi_offset = 0;
-  // kappa = localiz_.GetRacelineCurvature();
+  float lane_offset = localiz_.GetRacelineOffset();
+  float psi_offset = localiz_.GetRacelineAngle();
+  // float lane_offset = 0;
+  // float psi_offset = 0;
+  kappa = localiz_.GetRacelineCurvature();
   vmax = fmin(vmax, localiz_.GetRacelineVelocity());
 #else
   float lane_offset = clip(config.lane_offset
@@ -222,6 +257,7 @@ bool DriveController::GetControl(const DriverConfig &config,
 
   float cpsi = cos(psi_e - psi_offset),
         spsi = sin(psi_e - psi_offset);
+  // float dx = cpsi / (1.0 - kappa*(y_e - lane_offset));
   float dx = cpsi / (1.0 - kappa*y_e);
 
   // Alain Micaelli, Claude Samson. Trajectory tracking for unicycle-type and
@@ -252,10 +288,10 @@ bool DriveController::GetControl(const DriverConfig &config,
   } else {
     a_target /= 2;  // ???
   }
-#elsif 0
-  *throttle_out = MotorControlPID(config, v_target, v);
 #else
-  *throttle_out = MotorControl_model(config, v_target, k1, k2, k3, v);
+  *throttle_out = MotorControlPID(config, v_target, v);
+//#else
+//  *throttle_out = MotorControl_model(config, v_target, k1, k2, k3, v);
 #endif
 
   printf("steer_target %0.2f delta %0.2f v_target %0.2f v %0.2f "

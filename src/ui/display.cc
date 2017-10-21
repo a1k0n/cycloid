@@ -6,6 +6,16 @@
 #include "ui/drawtext.h"
 #include "ui/yuvrgb565.h"
 
+static const float trackx[] = {
+#include "../drive/track_x.txt"
+};
+
+static const float tracku[] = {
+#include "../drive/track_u.txt"
+};
+
+static const int TRACKLEN = sizeof(trackx) / sizeof(trackx[0]) / 2;
+
 bool UIDisplay::Init() {
   if (!screen_.Open()) {
     return false;
@@ -20,21 +30,17 @@ bool UIDisplay::Init() {
 
 void UIDisplay::UpdateBirdseye(const uint8_t *yuv, int w, int h) {
   // show in upper left corner, i guess
-  BlitYUVtoRGB565x2(yuv, w, h, 0, 0, screen_.GetBuffer());
+  // also show it upside down with a series of horizontal blits
+  for (int j = 0; j < h; j++) {
+    BlitYUVtoRGB565x2(yuv + j*w*3, w, 1, 0, 2*(h-j-1), screen_.GetBuffer());
+  }
   // also want to draw activations and state estimate on here somehow...?
 }
 
 void UIDisplay::UpdateEncoders(uint16_t *wheel_pos) {
   uint16_t *buf = screen_.GetBuffer();
 
-  // 5-pixel radius for each wheel,
-  //
-  // x. .x
-  // .. ..
-  //
-  // .. ..
-  // x. .x
-
+  // 5-pixel radius for each wheel
   static const uint16_t gray = (3<<11) + (7<<5) + (3);
   for (int i = 0; i < 40; i++) {
     memset(buf + i*320 + 320-40, 0, 40*2);
@@ -86,6 +92,48 @@ void UIDisplay::UpdateStatus(const char *status, uint16_t color) {
   uint16_t *buf = screen_.GetBuffer();
 
   memset(buf + 220*320, 0, 20*320*2);
-  DrawTextBig(status, 0, 220, color, screen_.GetBuffer());
+  DrawTextBig(status, 0, 220, color, buf);
 }
 
+void UIDisplay::UpdateStateEstimate(float v, float delta, float y,
+      float psi, float kappa) {
+  // drop this just under the birdseye view
+  uint16_t *buf = screen_.GetBuffer();
+  memset(buf + 112*320, 0, 10*320*2);
+  char strbuf[100];
+  snprintf(strbuf, sizeof(strbuf), "v%+0.1f d%+0.1f y%+0.2f, o%+0.2f k%+0.2f",
+      v, delta, y, psi, kappa);
+  DrawText(strbuf, 0, 112, 0xffff, buf);
+}
+
+void UIDisplay::UpdateLocalization(const Eigen::VectorXf &prob, float ye) {
+  uint16_t *buf = screen_.GetBuffer();
+
+  const float scale = 5;  // px/meter
+  const float cx = 272;
+  const float cy = 56;
+  float pmax = prob.maxCoeff();
+  for (int j = 0; j < 112; j++) {
+    memset(buf + 224 + j*320, 0, (320-224)*2);
+  }
+  for (int i = 0; i < TRACKLEN; i++) {
+    int x = cx + scale * trackx[2*i];
+    int y = cy + scale * trackx[2*i + 1];
+    if (x < 320 && x > 0 && y > 0 && y < 112) {
+      buf[x + y*320] = 0xffff;
+    }
+
+    float p = prob[i] / pmax;
+    if (prob[i] > 0.01) {
+      int x = cx + scale * trackx[2*i] + ye*tracku[2*i];
+      int y = cy + scale * trackx[2*i + 1] + ye*tracku[2*i + 1];
+      if (x < 319 && x > 1 && y > 1 && y < 111) {
+        uint16_t c = 0xffff * p;
+        buf[x + y*320 + 1] = c;
+        buf[x + y*320 - 1] = c;
+        buf[x + y*320 + 320] = c;
+        buf[x + y*320 - 320] = c;
+      }
+    }
+  }
+}

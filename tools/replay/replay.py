@@ -201,12 +201,12 @@ def replay(fname, f):
         vidframe[frame.shape[0]:, 320:, 1] = timg
         vidframe[frame.shape[0]:, 320:, 2] = timg
 
-        for i in range(len(Sdist)- 1):
-            y1 = int(220 - localize.kmap[0, i + 1] * 20)
-            y0 = int(220 - localize.kmap[0, i] * 20)
+        for i in range(len(Sdist)-1):
+            y1 = int(220 - localize.kmap[i + 1] * 20)
+            y0 = int(220 - localize.kmap[i] * 20)
             cv2.line(vidframe, (100+i, y0), (101+i, y1), (128, 255, 0), 1)
 
-        for i in range(len(Sdist)- 1):
+        for i in range(len(Sdist)-1):
             y1 = int(220 - Sdist[i + 1] * 100)
             y0 = int(220 - Sdist[i] * 100)
             cv2.line(vidframe, (100+i, y0), (101+i, y1), (255, 255, 255), 1)
