@@ -95,6 +95,7 @@ bool TophatFilter(int32_t threshold, int32_t *accumbuf,
   }
 
   // horizontal convolution w/ [-1, -1, 2, 2, -1, -1]
+  // horizontal convolution w/ [-1, -1, -1, 2, 2, 2, -1, -1, -1]
   Matrix3f regXTX = Matrix3f::Zero();
   Vector3f regXTy = Vector3f::Zero();
   double regyTy = 0;
@@ -103,13 +104,17 @@ bool TophatFilter(int32_t threshold, int32_t *accumbuf,
   int regN = 0;
 
   for (int j = 0; j < uysiz; j++) {
-    for (int i = 0; i < uxsiz-7; i++) {
+    //for (int i = 0; i < uxsiz-7; i++) {
+    for (int i = 0; i < uxsiz-10; i++) {
       int32_t yd =
         -(accumbuf[3*(j*uxsiz + i + 6)] - accumbuf[3*(j*uxsiz + i)])
         + 3*(accumbuf[3*(j*uxsiz + i + 4)] - accumbuf[3*(j*uxsiz + i + 2)]);
+      //int32_t ud =
+      //  -(accumbuf[3*(j*uxsiz + i + 6) + 1] - accumbuf[3*(j*uxsiz + i) + 1])
+      //  + 3*(accumbuf[3*(j*uxsiz + i + 4) + 1] - accumbuf[3*(j*uxsiz + i + 2) + 1]);
       int32_t ud =
-        -(accumbuf[3*(j*uxsiz + i + 6) + 1] - accumbuf[3*(j*uxsiz + i) + 1])
-        + 3*(accumbuf[3*(j*uxsiz + i + 4) + 1] - accumbuf[3*(j*uxsiz + i + 2) + 1]);
+        -(accumbuf[3*(j*uxsiz + i + 10) + 1] - accumbuf[3*(j*uxsiz + i) + 1])
+        + 3*(accumbuf[3*(j*uxsiz + i + 6) + 1] - accumbuf[3*(j*uxsiz + i + 3) + 1]);
       int32_t vd =
         -(accumbuf[3*(j*uxsiz + i + 6) + 2] - accumbuf[3*(j*uxsiz + i) + 2])
         + 3*(accumbuf[3*(j*uxsiz + i + 4) + 2] - accumbuf[3*(j*uxsiz + i + 2) + 2]);
