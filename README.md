@@ -16,7 +16,7 @@ aftermarket 2S lipo battery.
  - MPU-9250 9-DoF IMU (about $3 on eBay)
  - LM2596S DC-DC buck converter (about $1 on eBay)
  - Custom PCB connecting everything together -- see `hw/pcb/`
- - Moga 2 Bluetooth game controller
+ - Wii U Pro controller (connected via bluetooth)
 
 Besides the RC car, there are three 3D-printed parts to mount the camera to the
 front bumper support, a "base plate" which carries all the PCBs and a "servo
