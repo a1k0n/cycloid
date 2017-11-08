@@ -12,9 +12,7 @@ using Eigen::Vector3f;
 namespace imgproc {
 
 static const int ytop = 100;
-// uxrange (-56, 55) uyrange (2, 59) x0 -56 y0 2
 
-// (56, 112), (3197, 2)
 static const float bucketcount[uxsiz * uysiz] = {
 #include "bucketcount.txt"
 };
@@ -122,7 +120,7 @@ bool TophatFilter(int32_t threshold, int32_t *accumbuf,
       // detected = (0.25*hv[:, :, 0] - 2*hv[:, :, 1] + 0.5*hv[:, :, 2] - 30)
       //int32_t detected = (yd >> 2) - (ud << 1) + (vd >> 1) - 60;
       int32_t detected = -ud - threshold;
-      if (detected > 0) {
+      if (detected > 0 && bucketcount[j*uxsiz + i] && bucketcount[j*uxsiz + i + 9]) {
         annotatedyuv[3*(i + uxsiz*j + 3)] = 255;
         // add x, y to linear regression
         float pu = pixel_scale_m * (i + ux0 + 3),
