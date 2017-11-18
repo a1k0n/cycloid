@@ -104,7 +104,11 @@ class Driver: public CameraReceiver {
     if (IsRecording() && frame_ > frameskip_) {
       frame_ = 0;
       // save reprojected low-res top-down image
+#ifdef LOG_TOPVIEW
       uint32_t flushlen = 55 + imgsiz;
+#else
+      uint32_t flushlen = 55 + length;
+#endif
       // copy our frame, push it onto a stack to be flushed
       // asynchronously to sdcard
       uint8_t *flushbuf = new uint8_t[flushlen];
@@ -122,7 +126,12 @@ class Driver: public CameraReceiver {
       memcpy(flushbuf+38, &servo_pos_, 1);
       memcpy(flushbuf+39, wheel_pos_, 2*4);
       memcpy(flushbuf+47, wheel_dt_, 2*4);
+#ifdef LOG_TOPVIEW
       memcpy(flushbuf+55, topview, imgsiz);
+#else
+      // write the whole 640x480 buffer
+      memcpy(flushbuf+55, buf, length);
+#endif
 
       struct timeval t1;
       gettimeofday(&t1, NULL);
@@ -396,7 +405,7 @@ int main(int argc, char *argv[]) {
 
   feenableexcept(FE_INVALID | FE_DIVBYZERO | FE_OVERFLOW | FE_UNDERFLOW);
 
-  int fps = 60;
+  int fps = 30;
 
   if (!flush_thread_.Init()) {
     return 1;

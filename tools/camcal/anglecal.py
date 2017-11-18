@@ -12,7 +12,8 @@ new_camera_matrix = np.array([
 
 
 def cal(jpg):
-    anglex, anglez = -0.037, -0.009
+    # anglex, anglez = -0.037, -0.009
+    anglex, anglez = -0.119, -0.0096
     while True:
         Rdown = cv2.Rodrigues(np.float32([-np.pi/2 + anglex, 0, anglez]))[0]
         udm1, udm2 = cv2.fisheye.initUndistortRectifyMap(

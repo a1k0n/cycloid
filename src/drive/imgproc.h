@@ -3,11 +3,13 @@
 
 #include <Eigen/Dense>
 
+// maps saved, output is 113 x 58
+// uxrange (-58, 55) uyrange (2, 60) x0 -58 y0 2
 namespace imgproc {
   // size determined by tools/mapgen
-  static const int uxsiz = 112, uysiz = 56;
+  static const int uxsiz = 113, uysiz = 58;
   static const float pixel_scale_m = 0.025;
-  static const int ux0 = -56, uy0 = 2;
+  static const int ux0 = -58, uy0 = 2;
 
   // Returns a statically allocated object; not thread-safe
   int32_t *Reproject(const uint8_t *yuv);

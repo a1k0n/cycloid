@@ -243,11 +243,11 @@ bool DriveController::GetControl(const DriverConfig &config,
   // race line following
 #if 0
   // this doesn't work well enough, i'm scrapping the idea
-  float lane_offset = localiz_.GetRacelineOffset();
-  float psi_offset = localiz_.GetRacelineAngle();
-  // float lane_offset = 0;
-  // float psi_offset = 0;
-  kappa = localiz_.GetRacelineCurvature();
+  // float lane_offset = localiz_.GetRacelineOffset();
+  // float psi_offset = localiz_.GetRacelineAngle();
+  float lane_offset = 0;
+  float psi_offset = 0;
+  // kappa = localiz_.GetRacelineCurvature();
   vmax = fmin(vmax, localiz_.GetRacelineVelocity());
 #else
   float lane_offset = clip(config.lane_offset
@@ -257,8 +257,8 @@ bool DriveController::GetControl(const DriverConfig &config,
 
   float cpsi = cos(psi_e - psi_offset),
         spsi = sin(psi_e - psi_offset);
-  // float dx = cpsi / (1.0 - kappa*(y_e - lane_offset));
-  float dx = cpsi / (1.0 - kappa*y_e);
+  float dx = cpsi / (1.0 - kappa*(y_e - lane_offset));
+  // float dx = cpsi / (1.0 - kappa*y_e);
 
   // Alain Micaelli, Claude Samson. Trajectory tracking for unicycle-type and
   // two-steering-wheels mobile robots. [Research Report] RR-2097, INRIA. 1993.

@@ -23,6 +23,24 @@ def generate_maps():
         np.mgrid[:320, :240].T.astype(np.float32),
         camera_matrix, dist_coeffs)
 
+    f = camera_mm_scale / pixel_scale_mm
+    imgsiz = (128, 64)
+    new_camera_matrix = np.array([
+        [-f, 0, imgsiz[0] / 2],
+        [0, f, imgsiz[1]],
+        [0, 0, 1]], np.float32)
+
+    udmapfx, udmapfy = cv2.fisheye.initUndistortRectifyMap(
+        camera_matrix, dist_coeffs, Rdown, new_camera_matrix,
+        imgsiz, cv2.CV_32FC1)
+    udmap1, udmap2 = cv2.fisheye.initUndistortRectifyMap(
+        camera_matrix, dist_coeffs, Rdown, new_camera_matrix,
+        imgsiz, cv2.CV_16SC2)
+
+    np.save("udmapf", np.stack([udmapfx, udmapfy]))
+    np.save("udmap1", udmap1)
+    np.save("udmap2", udmap2)
+
     ytop = 100
     udplane = np.dot(np.concatenate(
         [undistort_map, np.ones((240, 320, 1))], axis=2), Rdown.T)[ytop:]
@@ -41,7 +59,7 @@ def generate_maps():
     udmask = (udplane[:, :, 1] > 2) & (
         (udplane[:, :, 0]**2 + udplane[:, :, 1]**2) < 60**2)
 
-    udplane = np.int8(udplane.T * udmask.T).T
+    udplane = np.int8(np.floor(udplane.T) * udmask.T).T
 
     uxrange = min(udplane[udmask, 0]), max(udplane[udmask, 0]) + 1
     uyrange = min(udplane[udmask, 1]), max(udplane[udmask, 1]) + 1
