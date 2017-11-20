@@ -384,6 +384,9 @@ class DriverInputReceiver : public InputReceiver {
 };
 
 const char *DriverInputReceiver::configmenu[] = {
+  "y scale",
+  "u scale",
+  "v scale",
   "yellow thresh",
   "max speed",
   "max throttle",

@@ -39,8 +39,7 @@ void DriveController::UpdateCamera(const DriverConfig &config,
   Matrix4f Rk = Matrix4f::Zero();
   float yc;
 
-  if (!imgproc::TophatFilter(config.yellow_thresh, reprojected, &B, &yc, &Rk,
-        annotated)) {
+  if (!imgproc::TophatFilter(config, reprojected, &B, &yc, &Rk, annotated)) {
     return;
   }
 

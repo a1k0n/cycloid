@@ -5,6 +5,9 @@
 // can be changed via commandline or controller
 class DriverConfig {
  public:
+  int16_t y_scale;
+  int16_t u_scale;
+  int16_t v_scale;
   int16_t yellow_thresh;
 
   // all these int16_ts are 1/100th scale
@@ -27,6 +30,9 @@ class DriverConfig {
 
   DriverConfig() {
     // Default values
+    y_scale = 0;
+    u_scale = -100;
+    v_scale = 0;
     yellow_thresh = 30;
 
     speed_limit = 3.0 * 100;

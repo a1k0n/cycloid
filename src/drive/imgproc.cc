@@ -80,7 +80,7 @@ int32_t *Reproject(const uint8_t *yuv) {
   return accumbuf;
 }
 
-bool TophatFilter(int32_t threshold, int32_t *accumbuf,
+bool TophatFilter(const DriverConfig &config, int32_t *accumbuf,
     Vector3f *Bout, float *y_cout, Matrix4f *Rkout,
     uint8_t *annotatedyuv) {
   // horizontal cumsum
@@ -102,24 +102,36 @@ bool TophatFilter(int32_t threshold, int32_t *accumbuf,
   int regN = 0;
 
   for (int j = 0; j < uysiz; j++) {
-    //for (int i = 0; i < uxsiz-7; i++) {
+#if 0  // 3-wide
     for (int i = 0; i < uxsiz-10; i++) {
       int32_t yd =
-        -(accumbuf[3*(j*uxsiz + i + 6)] - accumbuf[3*(j*uxsiz + i)])
-        + 3*(accumbuf[3*(j*uxsiz + i + 4)] - accumbuf[3*(j*uxsiz + i + 2)]);
-      //int32_t ud =
-      //  -(accumbuf[3*(j*uxsiz + i + 6) + 1] - accumbuf[3*(j*uxsiz + i) + 1])
-      //  + 3*(accumbuf[3*(j*uxsiz + i + 4) + 1] - accumbuf[3*(j*uxsiz + i + 2) + 1]);
+        -(accumbuf[3*(j*uxsiz + i + 10)] - accumbuf[3*(j*uxsiz + i)])
+        + 3*(accumbuf[3*(j*uxsiz + i + 6)] - accumbuf[3*(j*uxsiz + i + 3)]);
       int32_t ud =
         -(accumbuf[3*(j*uxsiz + i + 10) + 1] - accumbuf[3*(j*uxsiz + i) + 1])
         + 3*(accumbuf[3*(j*uxsiz + i + 6) + 1] - accumbuf[3*(j*uxsiz + i + 3) + 1]);
       int32_t vd =
+        -(accumbuf[3*(j*uxsiz + i + 10) + 2] - accumbuf[3*(j*uxsiz + i) + 2])
+        + 3*(accumbuf[3*(j*uxsiz + i + 6) + 2] - accumbuf[3*(j*uxsiz + i + 3) + 2]);
+#else  // 2-wide
+    for (int i = 0; i < uxsiz-7; i++) {
+      int32_t yd =
+        -(accumbuf[3*(j*uxsiz + i + 6)] - accumbuf[3*(j*uxsiz + i)])
+        + 3*(accumbuf[3*(j*uxsiz + i + 4)] - accumbuf[3*(j*uxsiz + i + 2)]);
+      int32_t ud =
+        -(accumbuf[3*(j*uxsiz + i + 6) + 1] - accumbuf[3*(j*uxsiz + i) + 1])
+        + 3*(accumbuf[3*(j*uxsiz + i + 4) + 1] - accumbuf[3*(j*uxsiz + i + 2) + 1]);
+      int32_t vd =
         -(accumbuf[3*(j*uxsiz + i + 6) + 2] - accumbuf[3*(j*uxsiz + i) + 2])
         + 3*(accumbuf[3*(j*uxsiz + i + 4) + 2] - accumbuf[3*(j*uxsiz + i + 2) + 2]);
+#endif
 
       // detected = (0.25*hv[:, :, 0] - 2*hv[:, :, 1] + 0.5*hv[:, :, 2] - 30)
       //int32_t detected = (yd >> 2) - (ud << 1) + (vd >> 1) - 60;
-      int32_t detected = -ud - threshold;
+      float detected = config.y_scale * yd * 0.01
+        + config.u_scale * ud * 0.01
+        + config.v_scale * vd * 0.01
+        - config.yellow_thresh;
       if (detected > 0 && bucketcount[j*uxsiz + i] && bucketcount[j*uxsiz + i + 9]) {
         annotatedyuv[3*(i + uxsiz*j + 3)] = 255;
         // add x, y to linear regression

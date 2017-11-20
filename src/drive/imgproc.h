@@ -2,6 +2,7 @@
 #define DRIVE_IMGPROC_H_
 
 #include <Eigen/Dense>
+#include "drive/config.h"
 
 // maps saved, output is 113 x 58
 // uxrange (-58, 55) uyrange (2, 60) x0 -58 y0 2
@@ -15,7 +16,7 @@ namespace imgproc {
   int32_t *Reproject(const uint8_t *yuv);
 
   // TophatFilter destroys accumbuf
-  bool TophatFilter(int32_t threshold, int32_t *accumbuf,
+  bool TophatFilter(const DriverConfig &config, int32_t *accumbuf,
       Eigen::Vector3f *Bout, float *y_cout, Eigen::Matrix4f *Rkout,
       uint8_t *annotatedyuv);
 }  // namespace imgproc
