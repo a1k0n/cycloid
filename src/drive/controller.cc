@@ -13,6 +13,20 @@ using Eigen::Vector2f;
 using Eigen::Vector3f;
 using Eigen::VectorXf;
 
+const float V_ALPHA = 0.1;
+
+// circumference of tire (meters) / number of encoder ticks
+const float V_SCALE = 0.04;  // 40cm circumference, 10 ticks
+
+// TODO: move all these to config
+const float BW_v = 2*M_PI*2;  // velocity control bandwidth (configurable)
+const float BW_w = 2*M_PI*0.5;  // yaw rate control bandwidth (configurable)
+
+const float BW_SRV = 2*M_PI*4;  // servo closed loop response bandwidth (measured)
+
+const float M_K1 = 120.;  // DC motor response constants (measured)
+const float M_K2 = 5.6;
+const float M_K3 = 0.5;
 
 DriveController::DriveController() {
   ResetState();
@@ -20,6 +34,10 @@ DriveController::DriveController() {
 
 void DriveController::ResetState() {
   firstframe_ = true;
+  velocity_ = 0;
+  w_ = 0;
+  ierr_v_ = 0;
+  ierr_w_ = 0;
 }
 
 static inline float clip(float x, float min, float max) {
@@ -49,53 +67,71 @@ void DriveController::UpdateState(const DriverConfig &config,
   memcpy(last_encoders_, wheel_encoders, 4*sizeof(uint16_t));
 
   // update velocity estimate through crude filter
-  velocity_ *= 0.9;
+  velocity_ *= (1 - V_ALPHA);
   if (nds > 0) {
-    velocity_ += 0.1 * ds/(nds * dt);
+    velocity_ += V_ALPHA * V_SCALE * ds/(nds * dt);
   }
-}
 
-static float MotorControl_model(const DriverConfig &config,
-    float v_target,
-    float k1, float k2, float k3, float v) {
-  float kP = (v_target >= v ? config.motor_kP : config.brake_kP) * 0.01;
-  float accel = clip(kP * (v_target - v), -7, 7);
-  // voltage (1 or 0)
-  // v > 0 ????
-  float V = accel > -k3 * v ? 1 : 0;
-  // duty cycle
-  float DC = clip(
-      (accel + k3 * v) / (V*k1 - k2*v),
-      0, config.max_throttle * 0.01);
-  const float deadzone_min = config.motor_offset * 0.01;
-  if (accel > 0 && DC < deadzone_min) {
-    DC = deadzone_min;
-  }
-  return V == 1 ? DC : -DC;
-}
-
-static float MotorControl_model(float accel,
-    float k1, float k2, float k3, float k4,
-    float v) {
-  if (v < 0.2) {
-    k4 += k3;  // add static friction onto dynamic friction
-  }
-  float a_thresh = -k4;
-  // voltage (1 or 0)
-  float V = accel > a_thresh ? 1 : 0;
-  // duty cycle
-  float DC = clip(
-      (accel + k4) / (V*k1 - k2*v),
-      0, 1);
-  return V == 1 ? DC : -DC;
+  w_ = gyro[2];
 }
 
 bool DriveController::GetControl(const DriverConfig &config,
-    float throttle_in, float steering_in,
+      float throttle_in, float steering_in,
     float *throttle_out, float *steering_out, float dt) {
 
-  *throttle_out = throttle_in;
-  *steering_out = steering_in;
+  // okay, let's control for yaw rate!
+  // throttle_in controls vmax (w.r.t. the configured value)
+  // steering_in controls desired curvature
+
+  // if we're braking or coasting, just control that manually
+  if (throttle_in <= 0) {
+    *throttle_out = throttle_in;
+    *steering_out = -steering_in;  // yaw is backwards
+    return true;
+  }
+
+  // max curvature is 1m radius
+  float k = -steering_in * 1;
+
+  float vmax = throttle_in * config.speed_limit * 0.01;
+  float kmin = config.traction_limit * 0.01 / (vmax*vmax);
+
+  float target_v = vmax;
+  if (fabs(k) > kmin) {  // any curvature more than this will reduce speed
+    target_v = sqrt(config.traction_limit * 0.01 / fabs(k));
+  }
+
+  // use average of target velocity and current velocity to determine target yaw rate
+  float target_w = k*(velocity_ + target_v)*0.5;
+
+  float err_v = velocity_ - target_v;
+  float err_w = w_ - target_w;
+
+  *steering_out = clip(-BW_w/target_v * (ierr_w_ + err_w / BW_SRV), -1, 1);
+  printf("w control: w=%f/%f err_w=%f ierr_w=%f out=%f\n",
+      w_, target_w, err_w, ierr_w_, *steering_out);
+
+  float Kp = BW_v / (M_K1 - M_K2*velocity_);
+  float Ki = M_K3;
+  *throttle_out = clip(-Kp*(err_v + Ki*ierr_v_), 0, 1);
+  if (*throttle_out == 0 && velocity_ > 0) {  // handle braking
+    // alternate control law
+    float Kp2 = BW_v / (-M_K2*velocity_);
+    *throttle_out = clip(Kp2*(err_v + Ki*ierr_v_), -1, 0);
+    // printf("v brake: v=%f/%f Kp=%f Ki=%f err_v=%f ierr_v=%f out=%f\n",
+    //     velocity_, target_v, Kp, Ki, err_v, ierr_v_, *throttle_out);
+  } else {
+    // printf("v control: v=%f/%f Kp=%f Ki=%f err_v=%f ierr_v=%f out=%f\n",
+    //     velocity_, target_v, Kp, Ki, err_v, ierr_v_, *throttle_out);
+  }
+
+  ierr_v_ += dt*err_v;
+  if ((*steering_out > -1 && *steering_out < 1) ||
+      (err_w > 0 && ierr_w_ < 0) || (err_w < 0 && ierr_w_ > 0)) {
+    // don't windup integrator if we're maxed out
+    ierr_w_ += dt*err_w;
+    ierr_w_ += dt*err_w;
+  }
 
   return true;
 }

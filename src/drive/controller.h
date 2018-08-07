@@ -30,6 +30,7 @@ class DriveController {
 
   // controller state
   float velocity_;  // forward velocity
+  float w_;  // yaw rate
   float ierr_v_;  // integration error for velocity
   float ierr_w_;  // integration error for yaw rate
 };
