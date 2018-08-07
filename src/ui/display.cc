@@ -6,16 +6,6 @@
 #include "ui/drawtext.h"
 #include "ui/yuvrgb565.h"
 
-static const float trackx[] = {
-#include "../drive/track_x.txt"
-};
-
-static const float tracku[] = {
-#include "../drive/track_u.txt"
-};
-
-static const int TRACKLEN = sizeof(trackx) / sizeof(trackx[0]) / 2;
-
 bool UIDisplay::Init() {
   if (!screen_.Open()) {
     return false;
@@ -106,34 +96,3 @@ void UIDisplay::UpdateStateEstimate(float v, float delta, float y,
   DrawText(strbuf, 0, 112, 0xffff, buf);
 }
 
-void UIDisplay::UpdateLocalization(const Eigen::VectorXf &prob, float ye) {
-  uint16_t *buf = screen_.GetBuffer();
-
-  const float scale = 5;  // px/meter
-  const float cx = 272;
-  const float cy = 56;
-  float pmax = prob.maxCoeff();
-  for (int j = 0; j < 112; j++) {
-    memset(buf + 224 + j*320, 0, (320-224)*2);
-  }
-  for (int i = 0; i < TRACKLEN; i++) {
-    int x = cx + scale * trackx[2*i];
-    int y = cy + scale * trackx[2*i + 1];
-    if (x < 320 && x > 0 && y > 0 && y < 112) {
-      buf[x + y*320] = 0xffff;
-    }
-
-    float p = prob[i] / pmax;
-    if (prob[i] > 0.01) {
-      int x = cx + scale * trackx[2*i] + ye*tracku[2*i];
-      int y = cy + scale * trackx[2*i + 1] + ye*tracku[2*i + 1];
-      if (x < 319 && x > 1 && y > 1 && y < 111) {
-        uint16_t c = 0xffff * p;
-        buf[x + y*320 + 1] = c;
-        buf[x + y*320 - 1] = c;
-        buf[x + y*320 + 320] = c;
-        buf[x + y*320 - 320] = c;
-      }
-    }
-  }
-}

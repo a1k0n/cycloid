@@ -9,7 +9,6 @@
 #include "drive/config.h"
 #include "drive/controller.h"
 #include "drive/flushthread.h"
-#include "drive/imgproc.h"
 #include "hw/cam/cam.h"
 // #include "hw/car/pca9685.h"
 #include "hw/car/teensy.h"
@@ -90,22 +89,10 @@ class Driver: public CameraReceiver {
     struct timeval t;
     gettimeofday(&t, NULL);
     frame_++;
-    int32_t *reprojected = imgproc::Reproject(buf);
-    // convert 32-bit buf down to 8 bits for recording
-    const uint32_t imgsiz = imgproc::uxsiz * imgproc::uysiz * 3;
-    uint8_t topview[imgsiz];
-    for (int i = 0; i < imgsiz; i++) {
-      topview[i] = reprojected[i];
-    }
 
     if (IsRecording() && frame_ > frameskip_) {
       frame_ = 0;
-      // save reprojected low-res top-down image
-#ifdef LOG_TOPVIEW
-      uint32_t flushlen = 55 + imgsiz;
-#else
       uint32_t flushlen = 55 + length;
-#endif
       // copy our frame, push it onto a stack to be flushed
       // asynchronously to sdcard
       uint8_t *flushbuf = new uint8_t[flushlen];
@@ -123,12 +110,8 @@ class Driver: public CameraReceiver {
       memcpy(flushbuf+38, &servo_pos_, 1);
       memcpy(flushbuf+39, wheel_pos_, 2*4);
       memcpy(flushbuf+47, wheel_dt_, 2*4);
-#ifdef LOG_TOPVIEW
-      memcpy(flushbuf+55, topview, imgsiz);
-#else
       // write the whole 640x480 buffer
       memcpy(flushbuf+55, buf, length);
-#endif
 
       struct timeval t1;
       gettimeofday(&t1, NULL);
@@ -162,37 +145,17 @@ class Driver: public CameraReceiver {
     float u_s = steering_ / 127.0;
     float dt = t.tv_sec - last_t_.tv_sec + (t.tv_usec - last_t_.tv_usec) * 1e-6;
     // float dt = 1.0 / 30;
-    controller_.UpdateState(config_, reprojected,
+    controller_.UpdateState(config_,
             u_a, u_s,
             accel_, gyro_,
             servo_pos_, wheel_pos_,
-            dt, topview);  // annotate topview and display
+            dt);
     last_t_ = t;
-    display_.UpdateBirdseye(topview, imgproc::uxsiz, imgproc::uysiz);
 
-    // hack: display localization status
-#if 0
-      uint16_t *dsp = display_.GetScreenBuffer();
-      const Eigen::VectorXf &p = controller_.localiz_.GetS();
-      for (int i = 0; i < 96; i++) {
-        for (int j = 0; j <= 20; j++) {
-          int y = 100 - j;
-          dsp[224 + i + y*320] = 0;
-        }
-        int y = 100 - 20*p[i];
-        dsp[224 + i + y*320] = 0xffff;
-      }
-    }
-#endif
-
-    {
-      const Eigen::VectorXf &x_ = controller_.ekf_.GetState();
-      display_.UpdateStateEstimate(x_[0], x_[1], x_[2], x_[3], x_[4]);
-      // display_.UpdateLocalization(controller_.localiz_.GetS(), x_[2]);
-    }
     display_.UpdateEncoders(wheel_pos_);
 
-    if (autosteer_ && controller_.GetControl(config_, &u_a, &u_s, dt)) {
+    if (controller_.GetControl(config_, js_throttle_ / 32767.0,
+          js_steering_ / 32767.0, &u_a, &u_s, dt)) {
       steering_ = 127 * u_s;
       throttle_ = 127 * u_a;
       teensy.SetControls(frame_ & 4 ? 1 : 0, throttle_, steering_);
@@ -470,15 +433,7 @@ int main(int argc, char *argv[]) {
     int t = 0, s = 0;
     uint16_t b = 0;
     if (has_joystick && js.ReadInput(&input_receiver)) {
-      if (!driver_.autosteer_) {
-        // really need a better way to get this
-        float steeroffset = driver_.controller_.ekf_.GetState()[10];
-        steering_ = -127 * clip(js_steering_ / 32767.0 - steeroffset, -1, 1);
-        throttle_ = 127 * clip(js_throttle_ / 32767.0, -1, 1);
-        // pca.SetPWM(PWMCHAN_STEERING, steering_);
-        // pca.SetPWM(PWMCHAN_ESC, throttle_);
-        teensy.SetControls(driver_.frame_ & 16 ? 1 : 0, throttle_, steering_);
-      }
+      // nothing to do here
     }
     // FIXME: predict step here?
     {

@@ -18,8 +18,6 @@ class UIDisplay {
   void UpdateEncoders(uint16_t *wheel_pos);
   void UpdateStatus(const char *status, uint16_t color = 0xffff);
 
-  void UpdateLocalization(const Eigen::VectorXf &prob, float ye);
-
   uint16_t *GetScreenBuffer() { return screen_.GetBuffer(); }
 
  private:

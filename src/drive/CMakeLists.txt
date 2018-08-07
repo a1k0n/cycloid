@@ -1,4 +1,4 @@
-add_executable(drive drive.cc imgproc.cc controller.cc ekf.cc)
+add_executable(drive drive.cc controller.cc)
 # localize.cc
 target_link_libraries(drive car cam mmal input gpio imu ui lcd)
 
