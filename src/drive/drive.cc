@@ -5,8 +5,6 @@
 #include <stdio.h>
 #include <string.h>
 #include <sys/time.h>
-#include <time.h>
-#include <unistd.h>
 
 #include "drive/config.h"
 #include "drive/controller.h"
@@ -15,7 +13,6 @@
 #include "hw/cam/cam.h"
 // #include "hw/car/pca9685.h"
 #include "hw/car/teensy.h"
-#include "hw/gpio/i2c.h"
 #include "hw/imu/imu.h"
 #include "hw/input/js.h"
 #include "ui/display.h"
@@ -174,7 +171,7 @@ class Driver: public CameraReceiver {
     display_.UpdateBirdseye(topview, imgproc::uxsiz, imgproc::uysiz);
 
     // hack: display localization status
-    if (0) {
+#if 0
       uint16_t *dsp = display_.GetScreenBuffer();
       const Eigen::VectorXf &p = controller_.localiz_.GetS();
       for (int i = 0; i < 96; i++) {
@@ -186,11 +183,12 @@ class Driver: public CameraReceiver {
         dsp[224 + i + y*320] = 0xffff;
       }
     }
+#endif
 
     {
       const Eigen::VectorXf &x_ = controller_.ekf_.GetState();
       display_.UpdateStateEstimate(x_[0], x_[1], x_[2], x_[3], x_[4]);
-      display_.UpdateLocalization(controller_.localiz_.GetS(), x_[2]);
+      // display_.UpdateLocalization(controller_.localiz_.GetS(), x_[2]);
     }
     display_.UpdateEncoders(wheel_pos_);
 
@@ -307,7 +305,7 @@ class DriverInputReceiver : public InputReceiver {
         }
         break;
       case 'H':  // home button: init to start line
-        driver_.controller_.localiz_.ResetToStart();
+        // driver_.controller_.localiz_.ResetToStart();
         display_.UpdateStatus("starting line", 0x07e0);
         break;
       case 'L':

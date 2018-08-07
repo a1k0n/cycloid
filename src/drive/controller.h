@@ -6,7 +6,7 @@
 
 #include "drive/config.h"
 #include "drive/ekf.h"
-#include "drive/localize.h"
+// #include "drive/localize.h"
 
 class DriveController {
  public:
@@ -31,7 +31,7 @@ class DriveController {
       uint8_t *annotated);
 
   EKF ekf_;
-  MapLocalizer localiz_;
+  // MapLocalizer localiz_;
 
   bool firstframe_;
   uint16_t last_encoders_[4];

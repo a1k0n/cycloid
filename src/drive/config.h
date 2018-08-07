@@ -1,6 +1,9 @@
 #ifndef DRIVE_CONFIG_H_
 #define DRIVE_CONFIG_H_
 
+#include <cstdint>
+#include <cstdio>
+
 // Dynamic configuration variables
 // can be changed via commandline or controller
 class DriverConfig {

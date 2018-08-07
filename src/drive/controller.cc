@@ -21,7 +21,7 @@ DriveController::DriveController() {
 
 void DriveController::ResetState() {
   ekf_.Reset();
-  localiz_.ResetUnknown();
+  // localiz_.ResetUnknown();
   firstframe_ = true;
 }
 
@@ -54,12 +54,12 @@ void DriveController::UpdateCamera(const DriverConfig &config,
   float psie = x[3];
   float kappa = x[4];
   float ds = yc * cos(psie) + 0;  // lookahead distance; make config?
-  localiz_.Update(ds, kappa, 0.01 / ekf_.GetCovariance()(4, 4));
+  // localiz_.Update(ds, kappa, 0.01 / ekf_.GetCovariance()(4, 4));
   // localiz_.Update(ds, kappa, 0.01 / __centerline_R_hack);
 
-  float roff = localiz_.GetRacelineOffset();
-  float rphi = localiz_.GetRacelineAngle();
-  float rtan = -tan(rphi - psie);
+  // float roff = localiz_.GetRacelineOffset();
+  // float rphi = localiz_.GetRacelineAngle();
+  // float rtan = -tan(rphi - psie);
   // update annotated display with centerline state, raceline curve
   // mx = pixel_scale_m * (px + ux0)  -> x, y in meters given x, y in pixels
   // my = pixel_scale_m * (py + uy0)
@@ -75,6 +75,7 @@ void DriveController::UpdateCamera(const DriverConfig &config,
       annotated[(px + py*imgproc::uxsiz)*3 + 2] = 0;
     }
 
+#if 0
     // get the raceline position here
     mx = roff - ye + rtan * my;  // y offset
     px = mx * (1.0/imgproc::pixel_scale_m) - imgproc::ux0;
@@ -83,6 +84,7 @@ void DriveController::UpdateCamera(const DriverConfig &config,
       annotated[(px + py*imgproc::uxsiz)*3 + 1] = 255;
       annotated[(px + py*imgproc::uxsiz)*3 + 2] = 255;
     }
+#endif
   }
 }
 
@@ -106,7 +108,7 @@ void DriveController::UpdateState(const DriverConfig &config,
 
   ekf_.Predict(dt, throttle_in, steering_in);
   std::cout << "x after predict " << x_.transpose() << std::endl;
-  localiz_.Predict(x_, ekf_.GetCovariance(), dt);
+  // localiz_.Predict(x_, ekf_.GetCovariance(), dt);
 
   UpdateCamera(config, reprojected, annotated);
 
