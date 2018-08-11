@@ -10,11 +10,14 @@ def main(data, seed):
     Np = 1000
     X = np.zeros((3, Np))
     last_wheels = data[0][0][6]
-    dt = 1.0 / 30
+    tstamp = data[0][0][0] - 1.0 / 30
 
     totalL = 0
 
     for d in data:
+        ts = d[0][0]
+        dt = tstamp - ts
+        tstamp = ts
         gyro = d[0][4][2]
         dw = d[0][6] - last_wheels
         last_wheels = d[0][6]
@@ -25,7 +28,9 @@ def main(data, seed):
             # mark the cone on the original view
             zz = np.arctan(z[0])
             j, LL = pf.likeliest_lm(X, pf.L, zz)
-            totalL += np.max(LL)
+            # score the upper quartile of particles
+            # tradeoff between exploration and exploitation here
+            totalL += np.sum(np.sort(LL)[-10:])
             # resample the particles based on their landmark likelihood
             X = pf.resample_particles(X, LL)
 
@@ -40,5 +45,6 @@ if __name__ == '__main__':
         Ls.append(main(data, seed))
 
     print np.mean(Ls), 'std', np.std(Ls)
-    print '2-std score', np.mean(Ls) + 2*np.std(Ls)
+    print 'score for angular', pf.NOISE_ANGULAR, 'longitudinal', pf.NOISE_LONG, 'lateral', pf.NOISE_LAT, 'landmark selectivity', pf.LM_SELECTIVITY
+    print '2-std score', np.mean(Ls) - 2*np.std(Ls)
     print 'worst case', np.min(Ls)

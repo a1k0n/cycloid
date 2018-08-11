@@ -25,17 +25,22 @@ L0[:, 1] -= 389
 a = 0.875  # fudge factor for scale w.r.t. ticks
 L = L0*a
 
+NOISE_ANGULAR = 0.4
+NOISE_LONG = 20
+NOISE_LAT = 1
+LM_SELECTIVITY = 250
+
 
 def step(X, dt, encoder_dx, gyro_dtheta):
     N = X.shape[1]
     theta0 = X[2]
-    theta1 = theta0 + gyro_dtheta*dt + np.random.randn(N) * 0.25 * dt
+    theta1 = theta0 + gyro_dtheta*dt + np.random.randn(N) * NOISE_ANGULAR * dt
 
     S = np.sin((theta0 + theta1) * 0.5)
     C = np.cos((theta0 + theta1) * 0.5)
 
-    dx = encoder_dx + np.random.randn(N)*30*dt
-    dy = np.random.randn(N) * 1 * dt
+    dx = encoder_dx + np.random.randn(N) * NOISE_LONG * dt
+    dy = np.random.randn(N) * NOISE_LAT * dt
 
     X[0] += dx*C - dy*S
     X[1] += dx*S + dy*C
@@ -58,9 +63,10 @@ def likeliest_lm(X, L, l):
     # this subtraction could be problematic but only for landmarks behind us
 
     # 40 found by tuning total likelihoods
-    LL = -40*(np.arctan2(y, z) - l)**2
+    LL = -LM_SELECTIVITY*(np.arctan2(y, z) - l)**2
 
     # normalize probabilities just for tuning
+    LL -= np.max(LL)
     LL -= np.log(np.sum(np.exp(LL)))
 
     j = np.argmax(LL, axis=0)
@@ -87,8 +93,8 @@ def main(data, f):
 
     Np = 1000
     X = np.zeros((3, Np))
+    tstamp = data[0][0][0] - 1.0 / 30
     last_wheels = data[0][0][6]
-    dt = 1.0 / 30
 
     done = False
     i = 0
@@ -102,6 +108,11 @@ def main(data, f):
             break
         d = data[i]
 
+        ts = d[0][0]
+        dt = ts - tstamp
+        if dt > 0.1:
+            print 'WARNING: frame', i, 'has a', dt, 'second gap'
+        tstamp = ts
         gyro = d[0][4][2]
         dw = d[0][6] - last_wheels
         last_wheels = d[0][6]
