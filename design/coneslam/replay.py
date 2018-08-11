@@ -5,6 +5,8 @@ import recordreader
 import pickle
 
 
+VIDEO = False
+
 np.set_printoptions(suppress=True)
 data = pickle.load(open("20180804-194415.cones.pickle"))
 prelabels = None
@@ -32,7 +34,7 @@ L = L0*a
 
 def main():
     f = open("home20180804/cycloid-20180804-194415.rec")
-    bg = cv2.imread("/Users/asloane/Desktop/Screen Shot 2018-08-04 at 1.25.19 PM.png")
+    bg = cv2.imread("satview.png")
 
     camera_matrix = np.load("../../tools/camcal/camera_matrix.npy")
     dist_coeffs = np.load("../../tools/camcal/dist_coeffs.npy")
@@ -45,8 +47,9 @@ def main():
 
     done = False
     i = 0
-    vidout = cv2.VideoWriter("replay.h264", cv2.VideoWriter_fourcc(
-        'X', '2', '6', '4'), 30, (bg.shape[1], bg.shape[0]), True)
+    if VIDEO:
+        vidout = cv2.VideoWriter("replay.h264", cv2.VideoWriter_fourcc(
+            'X', '2', '6', '4'), 30, (bg.shape[1], bg.shape[0]), True)
     while not done and i < len(data):
         ok, frame = recordreader.read_frame(f)
         if not ok:
@@ -67,7 +70,7 @@ def main():
         dx, dy = 20*np.cos(x[2]), 20*np.sin(x[2])
         U, V, _ = np.linalg.svd(P[:2, :2])
         axes = np.sqrt(V) * 0.5
-        angle = np.arctan2(U[0, 0], U[0, 1]) * 180 / np.pi
+        angle = np.arctan2(U[0, 1], U[0, 0]) * 180 / np.pi
         # print axes, angle, T[i, 2]
         cv2.ellipse(mapview, (123+int(x0), 475-int(y0)), (int(axes[0]), int(axes[1])),
                     angle, 0, 360, (0, 0, 220), 1)
@@ -98,16 +101,17 @@ def main():
             ll = ll/a
             cv2.line(mapview, (123+int(x0), 475-int(y0)), (123+int(ll[0]), 475-int(ll[1])), (0,255,0), 1)
 
-        # cv2.imshow("raw", bgr)
-
-        mapview[:240, 160:480] = bgr[::2, ::2]
         cv2.putText(mapview, "%d" % i, (20, 30), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 255, 255), 2, cv2.LINE_AA)
 
-        vidout.write(mapview)
-        #cv2.imshow("map", mapview)
-        #k = cv2.waitKey(1)
-        #if k == ord('q'):
-        #    break
+        if VIDEO:
+            mapview[:240, 160:480] = bgr[::2, ::2]
+            vidout.write(mapview)
+        else:
+            cv2.imshow("raw", bgr)
+            cv2.imshow("map", mapview)
+            k = cv2.waitKey(1)
+            if k == ord('q'):
+                break
 
         i += 1
 
