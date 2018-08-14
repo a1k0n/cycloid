@@ -146,9 +146,9 @@ def main(data, f):
     L[0] = 400
     L[2] = 1000**2
     L[4] = 1000**2
-    L[:2, 7] = (L0.T*a)[:, 7, None]
-    L[2, 7] = 0.001  # anchor the first seen cone location
-    L[4, 7] = 0.001
+    L[:2, 0] = (L0.T*a)[:, 7, None]
+    L[2, 0] = 0.001  # anchor the first seen cone location
+    L[4, 0] = 0.001
     tstamp = data[0][0][0] - 1.0 / 30
     last_wheels = data[0][0][6]
 

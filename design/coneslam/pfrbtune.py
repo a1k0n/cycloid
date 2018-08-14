@@ -10,11 +10,13 @@ def main(data, seed):
     Np = 1000
     X = np.zeros((3, Np))
     L = np.zeros((5, pfrb.NUM_CONES, Np))
-    L[:2] = (pfrb.L0.T*pfrb.a)[:, :, None]
-    L[2] = 100**2
-    L[4] = 100**2
-    L[2, 7] = 0.1  # anchor the first seen cone location
-    L[4, 7] = 0.1
+    L[0] = 400
+    L[2] = 1000**2
+    L[4] = 1000**2
+    L[:2, 0] = (pfrb.L0.T*pfrb.a)[:, 7, None]
+    L[2, 0] = 0.001  # anchor the first seen cone location
+    L[4, 0] = 0.001
+
     last_wheels = data[0][0][6]
     tstamp = data[0][0][0] - 1.0 / 30
 

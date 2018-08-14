@@ -6,6 +6,7 @@ import cv2
 import recordreader
 
 
+VIDEO = False
 np.set_printoptions(suppress=True)
 
 # relative landmark locations, with unknown scale -- pixel measurements
@@ -53,11 +54,11 @@ def likeliest_lm(X, L, l):
     # we need to check Np x Nl combinations
 
     # dxy[l, :, p] is the relative position between particle p and landmark l
-    dxy = -(X[:2] - L[:, :, None])
+    dxy = L[:, :, None] - X[:2]
     S, C = np.sin(X[2]), np.cos(X[2])
     # rotate each landmark into each particle's frame (y, z)
-    y = dxy[:, 0]*S - dxy[:, 1]*C
     z = dxy[:, 0]*C + dxy[:, 1]*S
+    y = dxy[:, 0]*S - dxy[:, 1]*C
     # get the relative angle
     # FIXME: do this without arctans, just dot projections
     # this subtraction could be problematic but only for landmarks behind us
@@ -84,14 +85,13 @@ def resample_particles(X, LL):
 
 def main(data, f):
     np.random.seed(1)
-    VIDEO = False
     bg = cv2.imread("satview.png")
 
     camera_matrix = np.load("../../tools/camcal/camera_matrix.npy")
     dist_coeffs = np.load("../../tools/camcal/dist_coeffs.npy")
     camera_matrix[:2] /= 4.  # for 640x480
 
-    Np = 1000
+    Np = 300
     X = np.zeros((3, Np))
     tstamp = data[0][0][0] - 1.0 / 30
     last_wheels = data[0][0][6]
