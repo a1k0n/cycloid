@@ -8,8 +8,7 @@ import recordreader
 from numpy import sin, cos, arctan2 as atan2, pi, log
 
 
-VIDEO = False
-np.set_printoptions(suppress=True)
+VIDEO = True
 
 # first experiment with unknown landmarks: we know the *number* of landmarks,
 # so initially just put all landmarks at the origin with a huge stddev; they'll
@@ -20,7 +19,12 @@ NUM_CONES = 8
 NOISE_ANGULAR = 0.4
 NOISE_LONG = 20
 NOISE_LAT = 1
-NOISE_BEARING = 0.06
+NOISE_BEARING = 0.4
+
+NEW_LM_THRESH = -3
+NEW_LM_DIST = 300
+NEW_LM_COV = 600**2
+
 a = 0.875  # image scale factor
 L0 = np.array([
     [0, 0],
@@ -88,7 +92,14 @@ def pf_update(X, L, l_px, r):
     # get the maximum likelihood
     i = np.argmax(LL, axis=0)
     j = np.arange(Np)
+    # if the best we can do is still bad, make a new landmark
+    newlms = LL[i, j] <= NEW_LM_THRESH
+    oldlms = LL[i, j] > NEW_LM_THRESH
+
     LL = LL[i, j]
+    i = i[oldlms]
+    j = j[oldlms]
+
     y_k = k8[i, j]
     S = k14[i, j]
     H1 = k12[i, j]
@@ -111,6 +122,17 @@ def pf_update(X, L, l_px, r):
     L[2, i, j] = -k1*k2 - k6*p11
     L[3, i, j] = -k2*k4 - k6*p12
     L[4, i, j] = -k3*k5 - p22*(H2*k5 - 1)
+
+    # new landmark position / covariance
+    if np.any(newlms):
+        newlmi = np.argmax(L[0, :, newlms] == -1000, axis=1)
+        L[0, newlmi, newlms] = p_x[newlms] + cos(theta[newlms]-l_px)*NEW_LM_DIST
+        L[1, newlmi, newlms] = p_y[newlms] + sin(theta[newlms]-l_px)*NEW_LM_DIST
+        L[2, newlmi, newlms] = NEW_LM_COV
+        L[3, newlmi, newlms] = 0
+        L[4, newlmi, newlms] = NEW_LM_COV
+        print "%d particles creating new landmark @ %f %f" % (
+            len(newlmi), np.mean(L[0, newlmi, newlms]), np.mean(L[1, newlmi, newlms]))
 
     return LL
 
@@ -143,12 +165,12 @@ def main(data, f):
 
     X = np.zeros((3, NUM_PARTICLES))
     L = np.zeros((5, NUM_CONES, NUM_PARTICLES))
-    L[0] = 400
-    L[2] = 1000**2
-    L[4] = 1000**2
-    L[:2, 0] = (L0.T*a)[:, 7, None]
-    L[2, 0] = 0.001  # anchor the first seen cone location
-    L[4, 0] = 0.001
+    L[0] = -1000
+    L[2] = 0
+    L[4] = 0
+    L[:2, 6:8] = (L0.T*a)[:, 6:8, None]
+    L[2, 6:8] = 0.1  # anchor the first seen cone location
+    L[4, 6:8] = 0.1
     tstamp = data[0][0][0] - 1.0 / 30
     last_wheels = data[0][0][6]
 
@@ -247,7 +269,11 @@ def main(data, f):
 
 
 if __name__ == '__main__':
-    data = pickle.load(open("20180804-194415.cones.pickle"))
-    f = open("home20180804/cycloid-20180804-194415.rec")
+    np.set_printoptions(suppress=True)
+
+    #data = pickle.load(open("20180804-194415.cones.pickle"))
+    #f = open("home20180804/cycloid-20180804-194415.rec")
+    data = pickle.load(open("20180804-194750.cones.pickle"))
+    f = open("home20180804/cycloid-20180804-194750.rec")
     main(data, f)
     f.close()

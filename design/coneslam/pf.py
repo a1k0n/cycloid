@@ -29,7 +29,7 @@ L = L0*a
 NOISE_ANGULAR = 0.4
 NOISE_LONG = 20
 NOISE_LAT = 1
-LM_SELECTIVITY = 250
+LM_SELECTIVITY = 20  # 250
 
 
 def step(X, dt, encoder_dx, gyro_dtheta):
@@ -91,8 +91,11 @@ def main(data, f):
     dist_coeffs = np.load("../../tools/camcal/dist_coeffs.npy")
     camera_matrix[:2] /= 4.  # for 640x480
 
-    Np = 300
+    Np = 1000
     X = np.zeros((3, Np))
+    X[:2] = 800 * np.random.rand(2, Np)
+    X[1] -= 400
+    X[2] = np.random.rand(Np) * 0.2 - 0.1
     tstamp = data[0][0][0] - 1.0 / 30
     last_wheels = data[0][0][6]
 
@@ -184,7 +187,9 @@ def main(data, f):
 
 
 if __name__ == '__main__':
-    data = pickle.load(open("20180804-194415.cones.pickle"))
-    f = open("home20180804/cycloid-20180804-194415.rec")
+    #data = pickle.load(open("20180804-194625.cones.pickle"))
+    #f = open("home20180804/cycloid-20180804-194625.rec")
+    data = pickle.load(open("20180804-194304.cones.pickle"))
+    f = open("home20180804/cycloid-20180804-194304.rec")
     main(data, f)
     f.close()
