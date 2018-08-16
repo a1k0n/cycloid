@@ -5,6 +5,8 @@
 
 namespace coneslam {
 
+const int conedetect_vpy = 207;
+
 // scan horizon of input 640x480 YUV image for orange cones, write
 // bearing angle to each cone in bearing_out[:nout], return number found
 // also tilt the input according to gyroz

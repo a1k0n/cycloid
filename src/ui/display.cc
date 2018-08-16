@@ -2,6 +2,7 @@
 #include <string.h>
 #include <math.h>
 
+#include "coneslam/imgproc.h"
 #include "ui/display.h"
 #include "ui/drawtext.h"
 #include "ui/yuvrgb565.h"
@@ -37,10 +38,35 @@ void UIDisplay::UpdateEncoders(uint16_t *wheel_pos) {
   }
   for (int i = 0; i < 4; i++) {
     int x = 319 - 5 - 11*(i & 1);
-    int y = 5 + 11*(i & 2);
+    int y = 12 + 5 + 11*(i & 2);
     x += 5 * sin((wheel_pos[i] & 31) * 2 * M_PI / 32.0);
     y += 5 * cos((wheel_pos[i] & 31) * 2 * M_PI / 32.0);
     buf[y*320 + x] = 65535;
+    buf[y*320 + x+1] = 65535;
+    buf[y*320 + x-1] = 65535;
+    buf[y*320 + x+320] = 65535;
+    buf[y*320 + x-320] = 65535;
+  }
+}
+
+void UIDisplay::UpdateConeView(const uint8_t *yuv, int ncones, int *conesx) {
+  uint16_t *buf = screen_.GetBuffer();
+
+  for (int j = 0; j < 12; j++) {
+    int y0 = coneslam::conedetect_vpy/2 - 4 + j;
+    const uint8_t *y = yuv + y0*640*2;
+    const uint8_t *u = yuv + 640*480 + y0*320;
+    const uint8_t *v = yuv + 640*600 + y0*320;
+    for (int i = 0; i < 320; i++) {
+      buf[j*320 + i] = YUVtoRGB565(y[i], u[i], v[i]);
+    }
+  }
+
+  // draw cyan lines where cones were detected
+  for (int i = 0; i < ncones; i++) {
+    for (int j = 2; j < 10; j++) {
+      buf[j*320+conesx[i]] = 0x07ff;
+    }
   }
 }
 

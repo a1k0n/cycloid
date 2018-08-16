@@ -6,6 +6,7 @@
 #include <string.h>
 #include <sys/time.h>
 
+#include "coneslam/imgproc.h"
 #include "drive/config.h"
 #include "drive/controller.h"
 #include "drive/flushthread.h"
@@ -144,7 +145,6 @@ class Driver: public CameraReceiver {
     float u_a = throttle_ / 127.0;
     float u_s = steering_ / 127.0;
     float dt = t.tv_sec - last_t_.tv_sec + (t.tv_usec - last_t_.tv_usec) * 1e-6;
-    // float dt = 1.0 / 30;
     controller_.UpdateState(config_,
             u_a, u_s,
             accel_, gyro_,
@@ -152,7 +152,12 @@ class Driver: public CameraReceiver {
             dt);
     last_t_ = t;
 
+    int conesx[10];
+    float conestheta[10];
+    int ncones = coneslam::FindCones(buf, gyro_[2], 10, conesx, conestheta);
     display_.UpdateEncoders(wheel_pos_);
+    display_.UpdateConeView(buf, ncones, conesx);
+    // TODO(asloane): coneslam.UpdateLM(conestheta...)
 
     if (controller_.GetControl(config_, js_throttle_ / 32767.0,
           js_steering_ / 32767.0, &u_a, &u_s, dt)) {

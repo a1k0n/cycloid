@@ -42,10 +42,10 @@ int FindCones(const uint8_t *yuvimg, float gyroz, int nout,
 
   // now spread them out for non-maximal suppression
   for (int j = 0; j < 5; j++) {
-    for (int i = 0; i < 320-9; i++) {
+    for (int i = 0; i < 320-11; i++) {
       A[i] |= A[i+1];
     }
-    for (int i = 320-9; i > 0; i--) {
+    for (int i = 320-11; i > 0; i--) {
       A[i] |= A[i-1];
     }
   }

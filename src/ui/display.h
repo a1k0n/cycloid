@@ -12,6 +12,8 @@ class UIDisplay {
   void UpdateStateEstimate(float v, float delta, float y,
       float psi, float kappa);
 
+  void UpdateConeView(const uint8_t *yuv, int ncones, int *conesx);
+
   void UpdateConfig(const char *configmenu[], int nconfigs,
       int config_item, const int16_t *config_values);
 
