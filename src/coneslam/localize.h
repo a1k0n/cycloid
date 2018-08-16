@@ -1,7 +1,7 @@
 #ifndef CONESLAM_LOCALIZE_H_
 #define CONESLAM_LOCALIZE_H_
 
-namespace ConeSLAM {
+namespace coneslam {
 
 #include <stdlib.h>
 
@@ -20,14 +20,20 @@ class Localizer {
   explicit Localizer(int n_particles) {
     n_particles_ = n_particles;
     particles_ = new Particle[n_particles];
+    n_landmarks_ = 0;
+    landmarks_ = NULL;
     Reset();
   }
+
+  ~Localizer();
 
   bool LoadLandmarks(const char *filename);
 
   void Reset();
 
+  // predict after encoder / gyro measurement
   void Predict(float ds, float w, float dt);
+  // update after landmark measurement
   void UpdateLM(float lm_bearing);
 
   bool GetLocationEstimate(Particle *mean);
@@ -40,6 +46,6 @@ class Localizer {
   Landmark *landmarks_;
 };
 
-}  // namespace ConeSLAM
+}  // namespace coneslam
 
 #endif  // CONESLAM_LOCALIZE_H_
