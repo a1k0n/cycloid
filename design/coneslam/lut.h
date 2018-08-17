@@ -1,4 +1,4 @@
-const int conedetect_vpy = 207;
+// const int conedetect_vpy = 207;
 const float conedetect_turn_slope = 7.500000;
 const int conedetect_y_offset = -88;
 const int conedetect_width= 4;
