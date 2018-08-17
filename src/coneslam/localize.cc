@@ -8,7 +8,6 @@ namespace coneslam {
 const float NOISE_ANGULAR = 0.4;
 const float NOISE_LONG = 20;
 const float NOISE_LAT = 1;
-const float LM_SELECTIVITY = 20;
 
 static double randn() {
   // #include <random> doesn't work in my ARM cross-compiler so I'm just
@@ -74,7 +73,7 @@ void Localizer::Predict(float ds, float w, float dt) {
   }
 }
 
-void Localizer::UpdateLM(float lm_bearing) {
+void Localizer::UpdateLM(float lm_bearing, float precision) {
   float *LL;
   LL = new float[n_particles_];
   float LLmax = -1e6;
@@ -95,7 +94,7 @@ void Localizer::UpdateLM(float lm_bearing) {
       float z = dx*C + dy*S,
             y = dx*S - dy*C;
       float diff = atan2f(y, z) - lm_bearing;
-      float L = -LM_SELECTIVITY*diff*diff;
+      float L = -precision*diff*diff;
 #ifdef PF_DEBUG
       printf("[%d]%f %f ", j, diff, L);
 #endif

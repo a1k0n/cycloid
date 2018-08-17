@@ -7,6 +7,7 @@
 #include <sys/time.h>
 
 #include "coneslam/imgproc.h"
+#include "coneslam/localize.h"
 #include "drive/config.h"
 #include "drive/controller.h"
 #include "drive/flushthread.h"
@@ -20,6 +21,8 @@
 // #undef this to disable camera, just to record w/ raspivid while
 // driving around w/ controller
 #define CAMERA 1
+
+const int NUM_PARTICLES = 300;
 
 volatile bool done = false;
 
@@ -45,7 +48,7 @@ uint16_t wheel_dt_[4] = {0, 0, 0, 0};
 
 class Driver: public CameraReceiver {
  public:
-  Driver() {
+  Driver(coneslam::Localizer *loc) {
     output_fd_ = -1;
     frame_ = 0;
     frameskip_ = 0;
@@ -54,6 +57,8 @@ class Driver: public CameraReceiver {
     if (config_.Load()) {
       fprintf(stderr, "Loaded driver configuration\n");
     }
+    localizer_ = loc;
+    firstframe_ = true;
   }
 
   bool StartRecording(const char *fname, int frameskip) {
@@ -142,22 +147,44 @@ class Driver: public CameraReceiver {
       t0 = t;
     }
 
+    float dt = t.tv_sec - last_t_.tv_sec + (t.tv_usec - last_t_.tv_usec) * 1e-6;
+
+    if (firstframe_) {
+      memcpy(last_encoders_, wheel_pos_, 4*sizeof(uint16_t));
+      firstframe_ = false;
+    }
+    uint16_t wheel_delta[4];
+    for (int i = 0; i < 4; i++) {
+      wheel_delta[i] = wheel_pos_[i] - last_encoders_[i];
+    }
+    memcpy(last_encoders_, wheel_pos_, 4*sizeof(uint16_t));
+
+    // predict using front wheel distance
+    float ds = 0.5 * (wheel_delta[0] + wheel_delta[1]);
+    int conesx[10];
+    float conestheta[10];
+    int ncones = coneslam::FindCones(buf, config_.cone_thresh,
+        gyro_[2], 10, conesx, conestheta);
+
+    if (ds > 0) {  // only do coneslam updates while we're moving
+      localizer_->Predict(ds, gyro_[2], dt);
+      for (int i = 0; i < ncones; i++) {
+        localizer_->UpdateLM(conestheta[i], config_.lm_precision * 0.1);
+      }
+    }
+
+    display_.UpdateConeView(buf, ncones, conesx);
+    display_.UpdateEncoders(wheel_pos_);
+    display_.UpdateParticleView(localizer_);
+
     float u_a = throttle_ / 127.0;
     float u_s = steering_ / 127.0;
-    float dt = t.tv_sec - last_t_.tv_sec + (t.tv_usec - last_t_.tv_usec) * 1e-6;
     controller_.UpdateState(config_,
             u_a, u_s,
             accel_, gyro_,
-            servo_pos_, wheel_pos_,
+            servo_pos_, wheel_delta,
             dt);
     last_t_ = t;
-
-    int conesx[10];
-    float conestheta[10];
-    int ncones = coneslam::FindCones(buf, gyro_[2], 10, conesx, conestheta);
-    display_.UpdateEncoders(wheel_pos_);
-    display_.UpdateConeView(buf, ncones, conesx);
-    // TODO(asloane): coneslam.UpdateLM(conestheta...)
 
     if (controller_.GetControl(config_, js_throttle_ / 32767.0,
           js_steering_ / 32767.0, &u_a, &u_s, dt)) {
@@ -174,13 +201,18 @@ class Driver: public CameraReceiver {
   DriverConfig config_;
   int frame_;
 
+  bool firstframe_;
+  uint16_t last_encoders_[4];
+
  private:
   int output_fd_;
   int frameskip_;
   struct timeval last_t_;
+  coneslam::Localizer *localizer_;
 };
 
-Driver driver_;
+coneslam::Localizer localizer_(NUM_PARTICLES);
+Driver driver_(&localizer_);
 
 
 static inline float clip(float x, float min, float max) {
@@ -273,7 +305,7 @@ class DriverInputReceiver : public InputReceiver {
         }
         break;
       case 'H':  // home button: init to start line
-        // driver_.controller_.localiz_.ResetToStart();
+        localizer_.Reset();
         display_.UpdateStatus("starting line", 0x07e0);
         break;
       case 'L':
@@ -350,22 +382,14 @@ class DriverInputReceiver : public InputReceiver {
 };
 
 const char *DriverInputReceiver::configmenu[] = {
-  "y scale",
-  "u scale",
-  "v scale",
-  "yellow thresh",
+  "cone thresh",
   "max speed",
-  "max throttle",
   "traction limit",
   "steering kP",
   "steering kD",
-  "brake kP",
-  "motor kP",
-  "motor kI",
-  "motor kD",
-  "motor offset",
-  "lane offset",
-  "lane turn-in"
+  "motor bw",
+  "yaw rate bw",
+  "cone precision",
 };
 const int DriverInputReceiver::N_CONFIGITEMS = sizeof(configmenu) / sizeof(configmenu[0]);
 
@@ -396,6 +420,11 @@ int main(int argc, char *argv[]) {
     fprintf(stderr, "run this:\n"
        "sudo modprobe fbtft_device name=adafruit22a rotate=90\n");
     // TODO(asloane): support headless mode
+    return 1;
+  }
+
+  if (!localizer_.LoadLandmarks("lm.txt")) {
+    fprintf(stderr, "if no landmarks yet, just echo 0 >lm.txt and rerun\n");
     return 1;
   }
 

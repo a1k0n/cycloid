@@ -3,12 +3,9 @@
 
 namespace coneslam {
 
-// TODO(asloane): configurable threshold
-const int THRESHOLD = 100;
-
 #include "coneslam/lut.h"
 
-int FindCones(const uint8_t *yuvimg, float gyroz, int nout,
+int FindCones(const uint8_t *yuvimg, int thresh, float gyroz, int nout,
     int *x_out, float *bearing_out) {
   int32_t accumbuf[321];
   if (gyroz > 1.9) gyroz = 1.9;
@@ -37,7 +34,7 @@ int FindCones(const uint8_t *yuvimg, float gyroz, int nout,
     // convolve with -1, -1, -1, 2, 2, 2, -1, -1, -1
     int a = 3*(accumbuf[i + 6] - accumbuf[i + 3])
       - (accumbuf[i + 9] - accumbuf[i]);
-    A[i] = a > THRESHOLD;
+    A[i] = a > thresh;
   }
 
   // now spread them out for non-maximal suppression

@@ -3,6 +3,7 @@
 
 #include <Eigen/Dense>
 #include "hw/lcd/fbdev.h"
+#include "coneslam/localize.h"
 
 class UIDisplay {
  public:
@@ -13,6 +14,8 @@ class UIDisplay {
       float psi, float kappa);
 
   void UpdateConeView(const uint8_t *yuv, int ncones, int *conesx);
+
+  void UpdateParticleView(const coneslam::Localizer *l);
 
   void UpdateConfig(const char *configmenu[], int nconfigs,
       int config_item, const int16_t *config_values);

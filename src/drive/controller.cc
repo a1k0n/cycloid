@@ -1,28 +1,18 @@
 #include <math.h>
 #include <stdint.h>
 #include <stdio.h>
-#include <iostream>
 
 #include "drive/controller.h"
 
-using Eigen::Matrix2f;
-using Eigen::Matrix3f;
-using Eigen::Matrix4f;
-using Eigen::MatrixXf;
-using Eigen::Vector2f;
 using Eigen::Vector3f;
-using Eigen::VectorXf;
 
 const float V_ALPHA = 0.1;
 
 // circumference of tire (meters) / number of encoder ticks
 const float V_SCALE = 0.04;  // 40cm circumference, 10 ticks
 
-// TODO(asloane): move all these to config
-const float BW_v = 2*M_PI*2;  // velocity control bandwidth (configurable)
-const float BW_w = 2*M_PI*0.5;  // yaw rate control bandwidth (configurable)
-
-const float BW_SRV = 2*M_PI*4;  // servo closed loop response bandwidth (measured)
+// servo closed loop response bandwidth (measured)
+const float BW_SRV = 2*M_PI*4;
 
 // FIXME(asloane): aren't these based on encoder ticks, not velocity?
 const float M_K1 = 120.;  // DC motor response constants (measured)
@@ -34,7 +24,6 @@ DriveController::DriveController() {
 }
 
 void DriveController::ResetState() {
-  firstframe_ = true;
   velocity_ = 0;
   w_ = 0;
   ierr_v_ = 0;
@@ -50,22 +39,16 @@ static inline float clip(float x, float min, float max) {
 void DriveController::UpdateState(const DriverConfig &config,
     float throttle_in, float steering_in,
     const Vector3f &accel, const Vector3f &gyro,
-    uint8_t servo_pos, const uint16_t *wheel_encoders, float dt) {
-
-  if (firstframe_) {
-    memcpy(last_encoders_, wheel_encoders, 4*sizeof(uint16_t));
-    firstframe_ = false;
-  }
+    uint8_t servo_pos, const uint16_t *wheel_delta, float dt) {
 
   // average ds among wheel encoders which are actually moving
   float ds = 0, nds = 0;
-  for (int i = 0; i < 4; i++) {  // only use rear encoders
-    if (wheel_encoders[i] != last_encoders_[i]) {
-      ds += (uint16_t) (wheel_encoders[i] - last_encoders_[i]);
+  for (int i = 0; i < 4; i++) {
+    if (wheel_delta[i] != 0) {
+      ds += wheel_delta[i];
       nds += 1;
     }
   }
-  memcpy(last_encoders_, wheel_encoders, 4*sizeof(uint16_t));
 
   // update velocity estimate through crude filter
   velocity_ *= (1 - V_ALPHA);
@@ -109,10 +92,12 @@ bool DriveController::GetControl(const DriverConfig &config,
   float err_v = velocity_ - target_v;
   float err_w = w_ - target_w;
 
+  float BW_w = 2*M_PI*0.01*config.yaw_bw;
   *steering_out = clip(-BW_w/target_v * (ierr_w_ + err_w / BW_SRV), -1, 1);
-  printf("w control: w=%f/%f err_w=%f ierr_w=%f out=%f\n",
-      w_, target_w, err_w, ierr_w_, *steering_out);
+  // printf("w control: w=%f/%f err_w=%f ierr_w=%f out=%f\n",
+  //     w_, target_w, err_w, ierr_w_, *steering_out);
 
+  float BW_v = 2*M_PI*0.01*config.motor_bw;
   float Kp = BW_v / (M_K1 - M_K2*velocity_);
   float Ki = M_K3;
   *throttle_out = clip(-Kp*(err_v + Ki*ierr_v_), 0, 1);

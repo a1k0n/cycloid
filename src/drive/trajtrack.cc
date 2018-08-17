@@ -7,6 +7,9 @@ bool TrajectoryTracker::LoadTrack(const char *fname) {
     perror(fname);
     return false;
   }
+
+
+
   fclose(fp);
   return true;
 }

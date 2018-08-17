@@ -1,9 +1,9 @@
 #ifndef CONESLAM_LOCALIZE_H_
 #define CONESLAM_LOCALIZE_H_
 
-namespace coneslam {
-
 #include <stdlib.h>
+
+namespace coneslam {
 
 struct Particle {
   float x, y, theta;
@@ -34,9 +34,15 @@ class Localizer {
   // predict after encoder / gyro measurement
   void Predict(float ds, float w, float dt);
   // update after landmark measurement
-  void UpdateLM(float lm_bearing);
+  void UpdateLM(float lm_bearing, float precision);
 
   bool GetLocationEstimate(Particle *mean);
+
+  const Landmark *GetLandmarks() const { return landmarks_; }
+  int NumLandmarks() const { return n_landmarks_; }
+
+  const Particle *GetParticles() const { return particles_; }
+  int NumParticles() const { return n_particles_; }
 
  private:
   int n_particles_;

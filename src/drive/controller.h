@@ -24,10 +24,7 @@ class DriveController {
 
   void ResetState();
 
-  bool firstframe_;
-  uint16_t last_encoders_[4];
  private:
-
   // controller state
   float velocity_;  // forward velocity
   float w_;  // yaw rate

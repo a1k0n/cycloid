@@ -32,40 +32,97 @@ void UIDisplay::UpdateEncoders(uint16_t *wheel_pos) {
   uint16_t *buf = screen_.GetBuffer();
 
   // 5-pixel radius for each wheel
-  static const uint16_t gray = (3<<11) + (7<<5) + (3);
-  for (int i = 0; i < 40; i++) {
-    memset(buf + i*320 + 320-40, 0, 40*2);
-  }
+  // for (int i = 0; i < 40; i++) {
+  //   memset(buf + i*320 + 320-40, 0, 40*2);
+  // }
   for (int i = 0; i < 4; i++) {
-    int x = 319 - 5 - 11*(i & 1);
+    int x = 317 - 5 - 11*(i & 1);
     int y = 12 + 5 + 11*(i & 2);
     x += 5 * sin((wheel_pos[i] & 31) * 2 * M_PI / 32.0);
     y += 5 * cos((wheel_pos[i] & 31) * 2 * M_PI / 32.0);
     buf[y*320 + x] = 65535;
     buf[y*320 + x+1] = 65535;
     buf[y*320 + x-1] = 65535;
+    buf[y*320 + x-2] = 0;
     buf[y*320 + x+320] = 65535;
+    buf[y*320 + x+319] = 0;
     buf[y*320 + x-320] = 65535;
+    buf[y*320 + x-321] = 0;
   }
 }
 
 void UIDisplay::UpdateConeView(const uint8_t *yuv, int ncones, int *conesx) {
   uint16_t *buf = screen_.GetBuffer();
 
-  for (int j = 0; j < 12; j++) {
-    int y0 = coneslam::conedetect_vpy/2 - 4 + j;
+  for (int j = 0; j < 112; j++) {
+    int y0 = coneslam::conedetect_vpy/2 - 92 + j;
     const uint8_t *y = yuv + y0*640*2;
     const uint8_t *u = yuv + 640*480 + y0*320;
     const uint8_t *v = yuv + 640*600 + y0*320;
     for (int i = 0; i < 320; i++) {
-      buf[j*320 + i] = YUVtoRGB565(y[i], u[i], v[i]);
+      buf[j*320 + i] = YUVtoRGB565(y[i*2], u[i], v[i]);
     }
   }
 
   // draw cyan lines where cones were detected
   for (int i = 0; i < ncones; i++) {
+    int x = conesx[i] / 2;
     for (int j = 2; j < 10; j++) {
-      buf[j*320+conesx[i]] = 0x07ff;
+      buf[j*320 + 90*320 + x] = 0x07ff;
+      if (x < 319) {
+        buf[j*320 + 90*320 + x+1] = 0x07ff;
+      }
+      if (x > 0) {
+        buf[j*320 + 90*320 + x-1] = 0x07ff;
+      }
+    }
+  }
+}
+
+void UIDisplay::UpdateParticleView(const coneslam::Localizer *l) {
+  // first determine our offsets and scale; what is the min/max landmark
+  // location
+  float minx = 0, miny = 0, maxx = 0, maxy = 0;
+  for (int i = 0; i < l->NumLandmarks(); i++) {
+    const coneslam::Landmark &lm = l->GetLandmarks()[i];
+    bool first = i == 0;
+    if (first || lm.x < minx) minx = lm.x;
+    if (first || lm.y < miny) miny = lm.y;
+    if (first || lm.x > maxx) maxx = lm.x;
+    if (first || lm.y > maxy) maxy = lm.y;
+  }
+  // now determine our coordinate system to scale to a 320x112 display with
+  // margin on the edges
+  float scale = 80.0 / (maxy - miny);
+  float y0 = 56 + 0.5 * (maxy + miny) * scale;
+  float x0 = 160 - 0.5 * (maxx + minx) * scale;
+
+  static const uint16_t orange = (31<<11) + (30<<5) + (0);
+  uint16_t *buf = screen_.GetBuffer();
+  for (int i = 0; i < l->NumLandmarks(); i++) {
+    const coneslam::Landmark &lm = l->GetLandmarks()[i];
+    // draw an orange dot
+    int x = x0 + scale * lm.x;
+    int y = y0 - scale * lm.y;
+    if (x >= 2 && x < 318 && y >= 2 && y < 110) {
+      buf[320*y + x - 1] = orange;
+      buf[320*y + x] = orange;
+      buf[320*y + x + 1] = orange;
+      buf[320*y + x + 2] = orange;
+      buf[320*y + x + 320] = orange;
+      buf[320*y + x + 321] = orange;
+      buf[320*y + x - 320] = orange;
+      buf[320*y + x - 319] = orange;
+    }
+  }
+
+  static const uint16_t yellow = (31<<11) + (63<<5) + (0);
+  for (int i = 0; i < l->NumParticles(); i++) {
+    const coneslam::Particle &p = l->GetParticles()[i];
+    int x = x0 + scale * p.x;
+    int y = y0 - scale * p.y;
+    if (x >= 0 && x < 320 && y >= 0 && y < 112) {
+      buf[320*y + x] = yellow;
     }
   }
 }
