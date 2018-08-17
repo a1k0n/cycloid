@@ -175,7 +175,15 @@ class Driver: public CameraReceiver {
 
     display_.UpdateConeView(buf, ncones, conesx);
     display_.UpdateEncoders(wheel_pos_);
-    display_.UpdateParticleView(localizer_);
+    {
+      coneslam::Particle meanp;
+      localizer_->GetLocationEstimate(&meanp);
+      float cx, cy, nx, ny, k, t;
+      controller_.GetTracker()->GetTarget(meanp.x, meanp.y,
+          &cx, &cy, &nx, &ny, &k, &t);
+
+      display_.UpdateParticleView(localizer_, cx, cy, nx, ny);
+    }
 
     float u_a = throttle_ / 127.0;
     float u_s = steering_ / 127.0;

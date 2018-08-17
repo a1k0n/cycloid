@@ -13,6 +13,8 @@ struct TrajectoryPoint {
 class TrajectoryTracker {
  public:
   TrajectoryTracker();
+  ~TrajectoryTracker();
+
   bool LoadTrack(const char *fname);
 
   // lineposition is 0..1; can be used to slow down before the next turn

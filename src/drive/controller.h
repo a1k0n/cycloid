@@ -5,6 +5,7 @@
 #include <math.h>
 
 #include "drive/config.h"
+#include "drive/trajtrack.h"
 
 class DriveController {
  public:
@@ -24,12 +25,15 @@ class DriveController {
 
   void ResetState();
 
+  TrajectoryTracker *GetTracker() { return &track_; }
+
  private:
   // controller state
   float velocity_;  // forward velocity
   float w_;  // yaw rate
   float ierr_v_;  // integration error for velocity
   float ierr_w_;  // integration error for yaw rate
+  TrajectoryTracker track_;
 };
 
 #endif  // DRIVE_CONTROLLER_H_

@@ -21,6 +21,9 @@ const float M_K3 = 0.5;
 
 DriveController::DriveController() {
   ResetState();
+  if (!track_.LoadTrack("track.txt")) {
+    fprintf(stderr, "***WARNING: NO TRACK LOADED; check track.txt***\n");
+  }
 }
 
 void DriveController::ResetState() {

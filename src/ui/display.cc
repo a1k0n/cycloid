@@ -79,7 +79,8 @@ void UIDisplay::UpdateConeView(const uint8_t *yuv, int ncones, int *conesx) {
   }
 }
 
-void UIDisplay::UpdateParticleView(const coneslam::Localizer *l) {
+void UIDisplay::UpdateParticleView(const coneslam::Localizer *l,
+        float trackx, float tracky, float nx, float ny) {
   // first determine our offsets and scale; what is the min/max landmark
   // location
   float minx = 0, miny = 0, maxx = 0, maxy = 0;
@@ -93,7 +94,7 @@ void UIDisplay::UpdateParticleView(const coneslam::Localizer *l) {
   }
   // now determine our coordinate system to scale to a 320x112 display with
   // margin on the edges
-  float scale = 80.0 / (maxy - miny);
+  float scale = 60.0 / (maxy - miny);
   float y0 = 56 + 0.5 * (maxy + miny) * scale;
   float x0 = 160 - 0.5 * (maxx + minx) * scale;
 
@@ -123,6 +124,15 @@ void UIDisplay::UpdateParticleView(const coneslam::Localizer *l) {
     int y = y0 - scale * p.y;
     if (x >= 0 && x < 320 && y >= 0 && y < 112) {
       buf[320*y + x] = yellow;
+    }
+  }
+
+  for (int i = 0; i < 10; i++) {
+    static const uint16_t green = (0<<11) + (63<<5) + (0);
+    int x = x0 + scale * trackx - ny*i;
+    int y = y0 - scale * tracky - nx*i;
+    if (x >= 0 && x < 320 && y >= 0 && y < 112) {
+      buf[320*y + x] = green;
     }
   }
 }
