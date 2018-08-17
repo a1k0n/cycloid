@@ -18,12 +18,13 @@ const float V_ALPHA = 0.1;
 // circumference of tire (meters) / number of encoder ticks
 const float V_SCALE = 0.04;  // 40cm circumference, 10 ticks
 
-// TODO: move all these to config
+// TODO(asloane): move all these to config
 const float BW_v = 2*M_PI*2;  // velocity control bandwidth (configurable)
 const float BW_w = 2*M_PI*0.5;  // yaw rate control bandwidth (configurable)
 
 const float BW_SRV = 2*M_PI*4;  // servo closed loop response bandwidth (measured)
 
+// FIXME(asloane): aren't these based on encoder ticks, not velocity?
 const float M_K1 = 120.;  // DC motor response constants (measured)
 const float M_K2 = 5.6;
 const float M_K3 = 0.5;
@@ -101,7 +102,8 @@ bool DriveController::GetControl(const DriverConfig &config,
     target_v = sqrt(config.traction_limit * 0.01 / fabs(k));
   }
 
-  // use average of target velocity and current velocity to determine target yaw rate
+  // use average of target velocity and current velocity to determine
+  // target yaw rate
   float target_w = k*(velocity_ + target_v)*0.5;
 
   float err_v = velocity_ - target_v;
