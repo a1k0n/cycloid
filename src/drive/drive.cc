@@ -52,7 +52,7 @@ class Driver: public CameraReceiver {
     output_fd_ = -1;
     frame_ = 0;
     frameskip_ = 0;
-    autosteer_ = false;
+    autodrive_ = false;
     gettimeofday(&last_t_, NULL);
     if (config_.Load()) {
       fprintf(stderr, "Loaded driver configuration\n");
@@ -152,6 +152,7 @@ class Driver: public CameraReceiver {
     if (firstframe_) {
       memcpy(last_encoders_, wheel_pos_, 4*sizeof(uint16_t));
       firstframe_ = false;
+      dt = 1.0 / 30.0;
     }
     uint16_t wheel_delta[4];
     for (int i = 0; i < 4; i++) {
@@ -179,6 +180,7 @@ class Driver: public CameraReceiver {
       coneslam::Particle meanp;
       localizer_->GetLocationEstimate(&meanp);
       float cx, cy, nx, ny, k, t;
+      controller_.UpdateLocation(meanp.x, meanp.y, meanp.theta);
       controller_.GetTracker()->GetTarget(meanp.x, meanp.y,
           &cx, &cy, &nx, &ny, &k, &t);
 
@@ -195,7 +197,7 @@ class Driver: public CameraReceiver {
     last_t_ = t;
 
     if (controller_.GetControl(config_, js_throttle_ / 32767.0,
-          js_steering_ / 32767.0, &u_a, &u_s, dt)) {
+          js_steering_ / 32767.0, &u_a, &u_s, dt, autodrive_)) {
       steering_ = 127 * u_s;
       throttle_ = 127 * u_a;
       teensy.SetControls(frame_ & 4 ? 1 : 0, throttle_, steering_);
@@ -204,7 +206,7 @@ class Driver: public CameraReceiver {
     }
   }
 
-  bool autosteer_;
+  bool autodrive_;
   DriveController controller_;
   DriverConfig config_;
   int frame_;
@@ -317,9 +319,9 @@ class DriverInputReceiver : public InputReceiver {
         display_.UpdateStatus("starting line", 0x07e0);
         break;
       case 'L':
-        if (!driver_.autosteer_) {
+        if (!driver_.autodrive_) {
           fprintf(stderr, "%d.%06d autodrive ON\n", tv.tv_sec, tv.tv_usec);
-          driver_.autosteer_ = true;
+          driver_.autodrive_ = true;
         }
         break;
       case 'B':
@@ -353,8 +355,8 @@ class DriverInputReceiver : public InputReceiver {
 
     switch (button) {
       case 'L':
-        if (driver_.autosteer_) {
-          driver_.autosteer_ = false;
+        if (driver_.autodrive_) {
+          driver_.autodrive_ = false;
           fprintf(stderr, "%d.%06d autodrive OFF\n", tv.tv_sec, tv.tv_usec);
         }
         break;

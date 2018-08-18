@@ -9,13 +9,13 @@ using Eigen::Vector3f;
 const float V_ALPHA = 0.1;
 
 // circumference of tire (meters) / number of encoder ticks
-const float V_SCALE = 0.04;  // 40cm circumference, 10 ticks
+const float V_SCALE = 0.02;  // 40cm circumference, 20 ticks
 
 // servo closed loop response bandwidth (measured)
 const float BW_SRV = 2*M_PI*4;
 
 // FIXME(asloane): aren't these based on encoder ticks, not velocity?
-const float M_K1 = 120.;  // DC motor response constants (measured)
+const float M_K1 = 65.;  // DC motor response constants (measured)
 const float M_K2 = 5.6;
 const float M_K3 = 0.5;
 
@@ -62,25 +62,62 @@ void DriveController::UpdateState(const DriverConfig &config,
   w_ = gyro[2];
 }
 
+// this is the main autodrive control system
+float DriveController::TargetCurvature(const DriverConfig &config) {
+  float cx, cy, nx, ny, k, t;
+  if (!track_.GetTarget(x_, y_, &cx, &cy, &nx, &ny, &k, &t)) {
+    return 2;  // circle right if you're confused
+  }
+
+  float ye = ((x_ - cx)*nx + (y_ - cy)*ny) * V_SCALE;
+  k /= V_SCALE;
+
+  float C = cos(theta_), S = sin(theta_);
+  // cosine of psie = (S, -C).(nx, ny)
+  float Cp = S*nx - C*ny;
+  // sine of psie = (S, -C)x(nx, ny)  (i think?)
+  float Sp = S*ny + C*nx;
+  // float Sp = -S*ny - C*nx;
+  float Cpy = Cp / (1 - k * ye);
+
+  float Kpy = config.steering_kpy * 0.01;
+  float Kvy = config.steering_kvy * 0.01;
+
+  printf("x=%f,%f c=%f,%f n=(%f,%f)\n", x_, y_, cx, cy, nx, ny);
+  printf("ye=%f psie=(%f,%f) k=%f Cpy=%f\n", ye, Cp, Sp, k, Cpy);
+  printf("psie=%f\n", atan2(Sp, Cp));
+
+  float targetk = -Cpy*(ye*Cpy*(-Kpy*Cp) + Sp*(k*Sp - Kvy*Cp) + k);
+  //printf("targetk=%f\n", targetk);
+  return targetk;
+  // return ye * Kpy;  // - k;
+}
+
 bool DriveController::GetControl(const DriverConfig &config,
-      float throttle_in, float steering_in,
-    float *throttle_out, float *steering_out, float dt) {
+    float throttle_in, float steering_in,
+    float *throttle_out, float *steering_out, float dt,
+    bool autodrive) {
 
   // okay, let's control for yaw rate!
   // throttle_in controls vmax (w.r.t. the configured value)
   // steering_in controls desired curvature
 
   // if we're braking or coasting, just control that manually
-  if (throttle_in <= 0) {
+  if (!autodrive && throttle_in <= 0) {
     *throttle_out = throttle_in;
     *steering_out = -steering_in;  // yaw is backwards
     return true;
   }
 
   // max curvature is 1m radius
-  float k = -steering_in * 1;
-
+  float k = -steering_in * 2;
   float vmax = throttle_in * config.speed_limit * 0.01;
+  if (autodrive) {
+    k = TargetCurvature(config);
+    vmax = config.speed_limit * 0.01;
+    // FIXME: brake before turns
+  }
+
   float kmin = config.traction_limit * 0.01 / (vmax*vmax);
 
   float target_v = vmax;

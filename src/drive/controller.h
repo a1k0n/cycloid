@@ -11,7 +11,6 @@ class DriveController {
  public:
   DriveController();
 
-  // do full kalman filter update: prediction and sensor fusion
   void UpdateState(const DriverConfig &config,
       float throttle_in, float steering_in,
       const Eigen::Vector3f &accel,
@@ -19,16 +18,26 @@ class DriveController {
       uint8_t servo_pos,
       const uint16_t *wheel_encoders, float dt);
 
+  void UpdateLocation(float x, float y, float theta) {
+    x_ = x;
+    y_ = y;
+    theta_ = theta;
+  }
+
   bool GetControl(const DriverConfig &config,
       float throttle_in, float steering_in,
-      float *throttle_out, float *steering_out, float dt);
+      float *throttle_out, float *steering_out, float dt,
+      bool autodrive);
 
   void ResetState();
 
   TrajectoryTracker *GetTracker() { return &track_; }
 
  private:
-  // controller state
+  float TargetCurvature(const DriverConfig &config);
+
+  // car state
+  float x_, y_, theta_;
   float velocity_;  // forward velocity
   float w_;  // yaw rate
   float ierr_v_;  // integration error for velocity

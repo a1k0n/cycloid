@@ -5,9 +5,13 @@
 
 namespace coneslam {
 
-const float NOISE_ANGULAR = 0.4;
-const float NOISE_LONG = 20;
-const float NOISE_LAT = 1;
+//const float NOISE_ANGULAR = 0.4;
+//const float NOISE_LONG = 20;
+//const float NOISE_LAT = 1;
+
+const float NOISE_ANGULAR = 0.1;
+const float NOISE_LONG = 10;
+const float NOISE_LAT = 0.5;
 
 static double randn() {
   // #include <random> doesn't work in my ARM cross-compiler so I'm just

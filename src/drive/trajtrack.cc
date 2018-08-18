@@ -111,8 +111,8 @@ bool TrajectoryTracker::GetTarget(float x, float y,
   } else {  // on line segment
     *closestx = minx;
     *closesty = miny;
-    *normx = p.nx;
-    *normy = p.ny;
+    *normx = -p.nx;  // i guess i put these in backwards
+    *normy = -p.ny;
     *kappa = 0;
     *lineposition = mint;
   }
