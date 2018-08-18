@@ -9,9 +9,9 @@ namespace coneslam {
 //const float NOISE_LONG = 20;
 //const float NOISE_LAT = 1;
 
-const float NOISE_ANGULAR = 0.1;
-const float NOISE_LONG = 10;
-const float NOISE_LAT = 0.5;
+const float NOISE_ANGULAR = 0.008;
+const float NOISE_LONG = 16;
+const float NOISE_LAT = 8;
 
 static double randn() {
   // #include <random> doesn't work in my ARM cross-compiler so I'm just
@@ -30,9 +30,9 @@ Localizer::~Localizer() {
 
 void Localizer::Reset() {
   for (int i = 0; i < n_particles_; i++) {
-    particles_[i].x = randn();
-    particles_[i].y = randn();
-    particles_[i].theta = randn() * 0.5;
+    particles_[i].x = 12*randn();
+    particles_[i].y = 12*randn();
+    particles_[i].theta = randn() * 0.2;
   }
 }
 
@@ -64,12 +64,12 @@ bool Localizer::LoadLandmarks(const char *filename) {
 
 void Localizer::Predict(float ds, float w, float dt) {
   for (int i = 0; i < n_particles_; i++) {
-    float t = particles_[i].theta + w*dt + randn()*NOISE_ANGULAR*dt;
+    float t = particles_[i].theta + w*dt + randn()*NOISE_ANGULAR*ds*dt;
     float S = sin((particles_[i].theta + t)*0.5);
     float C = cos((particles_[i].theta + t)*0.5);
 
-    float dx = ds + randn()*NOISE_LONG*dt;
-    float dy = randn()*NOISE_LAT*dt;
+    float dx = ds + randn()*NOISE_LONG*ds*dt;
+    float dy = randn()*NOISE_LAT*ds*dt;
 
     particles_[i].x += dx*C - dy*S;
     particles_[i].y += dx*S + dy*C;

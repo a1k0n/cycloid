@@ -111,6 +111,7 @@ def drive(X, dt):
     # print n, C, S, ye, psie, k
     Cp = np.cos(psie)
     Sp = np.sin(psie)
+    print psie, Cp, Sp
     Cpy = Cp / (1 - k * ye)
     Kpy = 1.0
     Kvy = 5.0
@@ -145,6 +146,10 @@ def trackexport(T):
     output[5:7] = Pn
     output[7:9] = Nn
 
+    print output.shape[1]
+    for i in range(output.shape[1]):
+        print ' '.join(map(str, output[:, i]))
+
     return output
 
 
@@ -157,6 +162,17 @@ if __name__ == '__main__':
         [5, -3, -1],
         [0, -5, 1],
     ], np.float32).T
+
+    T = np.array([
+        [208, -181, 147],
+        [488, -170, 110],
+        [304, -306, -118],
+        [126, -198, 88],
+    ], np.float32).T*1.2
+    T[1] -= 20
+    T[0] -= 408
+    T[1] += 102
+    T *= 0.02
 
     print trackexport(T)
 
@@ -190,7 +206,7 @@ if __name__ == '__main__':
 
     if True:
         totalS = 0
-        X = np.array([1, 1, 0, 0, 0], np.float32)
+        X = np.array([1, 1, 0.8, 0, 0], np.float32)
         Nsteps = 222*5
         xy = np.zeros((2, Nsteps))
         dt = 1.0 / 30

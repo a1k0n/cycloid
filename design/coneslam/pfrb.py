@@ -8,20 +8,21 @@ import recordreader
 from numpy import sin, cos, arctan2 as atan2, pi, log
 
 
-VIDEO = True
+VIDEO = False
+KEYWAIT = 1  # 1 for autoplay, 0 for frame-advance
 
 # first experiment with unknown landmarks: we know the *number* of landmarks,
 # so initially just put all landmarks at the origin with a huge stddev; they'll
 # each become the maximum likelihood pick in turn as new cones are seen
 
 NUM_PARTICLES = 1000
-NUM_CONES = 8
+NUM_CONES = 4
 NOISE_ANGULAR = 0.4
 NOISE_LONG = 20
 NOISE_LAT = 1
 NOISE_BEARING = 0.4
 
-NEW_LM_THRESH = -3
+NEW_LM_THRESH = -2.8
 NEW_LM_DIST = 300
 NEW_LM_COV = 600**2
 
@@ -164,13 +165,23 @@ def main(data, f):
     camera_matrix[:2] /= 4.  # for 640x480
 
     X = np.zeros((3, NUM_PARTICLES))
+    X[0] = 200
+    X[1] = 150
     L = np.zeros((5, NUM_CONES, NUM_PARTICLES))
-    L[0] = -1000
-    L[2] = 0
-    L[4] = 0
-    L[:2, 6:8] = (L0.T*a)[:, 6:8, None]
-    L[2, 6:8] = 0.1  # anchor the first seen cone location
-    L[4, 6:8] = 0.1
+    L[:2] = np.array([
+        [400, 100],
+        [400, -100],
+        [100, -100],
+        [100, 100],
+    ]).T[:, :, None]
+
+    L[2] = 300**2
+    L[4] = 300**2
+    #L[2] = 0
+    #L[4] = 0
+    #L[:2, 6:8] = (L0.T*a)[:, 6:8, None]
+    #L[2, 6:8] = 0.1  # anchor the first seen cone location
+    #L[4, 6:8] = 0.1
     tstamp = data[0][0][0] - 1.0 / 30
     last_wheels = data[0][0][6]
 
@@ -199,7 +210,8 @@ def main(data, f):
         step(X, dt, ds, gyro)
 
         bgr = cv2.cvtColor(frame[-1], cv2.COLOR_YUV2BGR_I420)
-        mapview = bg.copy()
+        #mapview = bg.copy()
+        mapview = 200*np.ones(bg.shape, np.uint8)
 
         # draw all particles
         xi = np.uint32(123 + X[0]/a)
@@ -261,11 +273,13 @@ def main(data, f):
         else:
             cv2.imshow("raw", bgr)
             cv2.imshow("map", mapview)
-            k = cv2.waitKey()
+            k = cv2.waitKey(KEYWAIT)
             if k == ord('q'):
                 break
 
         i += 1
+    print 'final landmarks:'
+    print maxL.T
 
 
 if __name__ == '__main__':
@@ -273,7 +287,9 @@ if __name__ == '__main__':
 
     #data = pickle.load(open("20180804-194415.cones.pickle"))
     #f = open("home20180804/cycloid-20180804-194415.rec")
-    data = pickle.load(open("20180804-194750.cones.pickle"))
-    f = open("home20180804/cycloid-20180804-194750.rec")
+    #data = pickle.load(open("20180804-194750.cones.pickle"))
+    #f = open("home20180804/cycloid-20180804-194750.rec")
+    data = pickle.load(open("20180817-170943.cones.pickle"))
+    f = open("home20180817/cycloid-20180817-170943.rec")
     main(data, f)
     f.close()

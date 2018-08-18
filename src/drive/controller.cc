@@ -82,12 +82,12 @@ float DriveController::TargetCurvature(const DriverConfig &config) {
 
   float Kpy = config.steering_kpy * 0.01;
   float Kvy = config.steering_kvy * 0.01;
+  float targetk = -Cpy*(ye*Cpy*(-Kpy*Cp) + Sp*(k*Sp - Kvy*Cp) + k);
 
   printf("x=%f,%f c=%f,%f n=(%f,%f)\n", x_, y_, cx, cy, nx, ny);
   printf("ye=%f psie=(%f,%f) k=%f Cpy=%f\n", ye, Cp, Sp, k, Cpy);
-  printf("psie=%f\n", atan2(Sp, Cp));
+  printf("psie=%f Kpp=%f Kvy=%f targetk=%f\n", atan2(Sp, Cp), Kpy, Kvy, targetk);
 
-  float targetk = -Cpy*(ye*Cpy*(-Kpy*Cp) + Sp*(k*Sp - Kvy*Cp) + k);
   //printf("targetk=%f\n", targetk);
   return targetk;
   // return ye * Kpy;  // - k;
@@ -134,8 +134,9 @@ bool DriveController::GetControl(const DriverConfig &config,
 
   float BW_w = 2*M_PI*0.01*config.yaw_bw;
   *steering_out = clip(-BW_w/target_v * (ierr_w_ + err_w / BW_SRV), -1, 1);
-  // printf("w control: w=%f/%f err_w=%f ierr_w=%f out=%f\n",
-  //     w_, target_w, err_w, ierr_w_, *steering_out);
+  printf("k=%f v=%f kv=%f\n", k, velocity_, target_w);
+  printf("w control: w=%f/%f err_w=%f ierr_w=%f out=%f\n",
+      w_, target_w, err_w, ierr_w_, *steering_out);
 
   float BW_v = 2*M_PI*0.01*config.motor_bw;
   float Kp = BW_v / (M_K1 - M_K2*velocity_);
@@ -148,8 +149,8 @@ bool DriveController::GetControl(const DriverConfig &config,
     // printf("v brake: v=%f/%f Kp=%f Ki=%f err_v=%f ierr_v=%f out=%f\n",
     //     velocity_, target_v, Kp, Ki, err_v, ierr_v_, *throttle_out);
   } else {
-    // printf("v control: v=%f/%f Kp=%f Ki=%f err_v=%f ierr_v=%f out=%f\n",
-    //     velocity_, target_v, Kp, Ki, err_v, ierr_v_, *throttle_out);
+    printf("v control: v=%f/%f Kp=%f Ki=%f err_v=%f ierr_v=%f out=%f\n",
+        velocity_, target_v, Kp, Ki, err_v, ierr_v_, *throttle_out);
   }
 
   ierr_v_ += dt*err_v;

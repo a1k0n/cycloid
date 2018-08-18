@@ -37,7 +37,7 @@ bool IMU::Init() {
   i2c_.Write(0x68, 26, 0x03);
 
   // fchoice: 11 (enables filter above)
-  // gyro 1000dec/sec full scale
+  // gyro 1000deg/sec full scale
   // test  fs   - fchoice_b
   // 000 | 10 | 0 | 00
   i2c_.Write(0x68, 27, 0x10);

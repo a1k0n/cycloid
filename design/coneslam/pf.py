@@ -21,27 +21,59 @@ L0 = np.array([
     [425, 296],
     [425, 482],
 ])
+XOFF = 123
+YOFF = 475
 
 L0[:, 1] -= 389
-a = 0.875  # fudge factor for scale w.r.t. ticks
+# 482-296 units here is exactly 3.6m
+# wheel encoder ticks are 2cm apart (wheel is 40cm in diameter, and there are
+# 20 ticks / revolution)
+# 3.6m should be 180 ticks, and we have 186 pixels
+# (so a pixel is pretty close to 2cm^2)
+a = 180.0/186.0  # fudge factor for scale w.r.t. ticks
 L = L0*a
 
-NOISE_ANGULAR = 0.4
-NOISE_LONG = 20
-NOISE_LAT = 1
-LM_SELECTIVITY = 20  # 250
+L = np.array([
+    [-76.2, 0],
+    [76.2, 0],
+    [76.2, -104.14],
+    [-137.16, -104.14],
+#    [-76.2, -104.14],
+])
+
+# oakland track
+L = np.array([
+    [141, -125],
+    [653, -185],
+    [607, -336],
+    [377, -265],
+    [123, -338],
+])
+L[:, 0] -= 408
+L[:, 1] += 102
+a = 1
+
+# 408, 102
+
+XOFF = 408
+YOFF = 102
+
+NOISE_ANGULAR = 0.008
+NOISE_LONG = 16
+NOISE_LAT = 8
+LM_SELECTIVITY = 50  # 80
 
 
 def step(X, dt, encoder_dx, gyro_dtheta):
     N = X.shape[1]
     theta0 = X[2]
-    theta1 = theta0 + gyro_dtheta*dt + np.random.randn(N) * NOISE_ANGULAR * dt
+    theta1 = theta0 + gyro_dtheta*dt + np.random.randn(N) * NOISE_ANGULAR * encoder_dx * dt
 
     S = np.sin((theta0 + theta1) * 0.5)
     C = np.cos((theta0 + theta1) * 0.5)
 
-    dx = encoder_dx + np.random.randn(N) * NOISE_LONG * dt
-    dy = np.random.randn(N) * NOISE_LAT * dt
+    dx = encoder_dx + np.random.randn(N) * NOISE_LONG * encoder_dx * dt
+    dy = np.random.randn(N) * NOISE_LAT * encoder_dx * dt
 
     X[0] += dx*C - dy*S
     X[1] += dx*S + dy*C
@@ -60,10 +92,6 @@ def likeliest_lm(X, L, l):
     z = dxy[:, 0]*C + dxy[:, 1]*S
     y = dxy[:, 0]*S - dxy[:, 1]*C
     # get the relative angle
-    # FIXME: do this without arctans, just dot projections
-    # this subtraction could be problematic but only for landmarks behind us
-
-    # 40 found by tuning total likelihoods
     LL = -LM_SELECTIVITY*(np.arctan2(y, z) - l)**2
 
     # normalize probabilities just for tuning
@@ -85,17 +113,19 @@ def resample_particles(X, LL):
 
 def main(data, f):
     np.random.seed(1)
-    bg = cv2.imread("satview.png")
+    # bg = cv2.imread("satview.png")
+    bg = cv2.imread("/Users/asloane/Desktop/trackmap.png")
 
     camera_matrix = np.load("../../tools/camcal/camera_matrix.npy")
     dist_coeffs = np.load("../../tools/camcal/dist_coeffs.npy")
     camera_matrix[:2] /= 4.  # for 640x480
 
-    Np = 1000
+    Np = 300
     X = np.zeros((3, Np))
-    X[:2] = 800 * np.random.rand(2, Np)
-    X[1] -= 400
-    X[2] = np.random.rand(Np) * 0.2 - 0.1
+    #X[:2] = 100 * np.random.rand(2, Np)
+    #X[1] -= 400
+    X[:2] = 30*np.random.randn(2, Np)
+    X[2] = np.random.randn(Np) * 0.2
     tstamp = data[0][0][0] - 1.0 / 30
     last_wheels = data[0][0][6]
 
@@ -119,15 +149,17 @@ def main(data, f):
         gyro = d[0][4][2]
         dw = d[0][6] - last_wheels
         last_wheels = d[0][6]
-        ds = 0.5 * np.sum(dw[:2])  # front wheels only!
+        print 'wheels', dw, 'gyro', gyro, 'dt', dt
+        ds = 0.25*np.sum(dw)
         step(X, dt, ds, gyro)
 
         bgr = cv2.cvtColor(frame[-1], cv2.COLOR_YUV2BGR_I420)
         mapview = bg.copy()
+        # mapview = 200*np.ones(bg.shape, np.uint8)
 
         # draw all particles
-        xi = np.uint32(123 + X[0]/a)
-        xj = np.uint32(475 - X[1]/a)
+        xi = np.uint32(XOFF + X[0]/a)
+        xj = np.uint32(YOFF - X[1]/a)
         xin = (xi >= 0) & (xi < mapview.shape[1]) & (xj >= 0) & (xj < mapview.shape[0])
         mapview[xj[xin], xi[xin], :] = 0
         mapview[xj[xin], xi[xin], 1] = 255
@@ -136,18 +168,19 @@ def main(data, f):
         # draw mean/covariance also
         x = np.mean(X, axis=1)
         P = np.cov(X)
+        print "%d: %f %f %f" % (i, x[0], x[1], x[2])
 
         x0, y0 = x[:2] / a
         dx, dy = 20*np.cos(x[2]), 20*np.sin(x[2])
         U, V, _ = np.linalg.svd(P[:2, :2])
         axes = np.sqrt(V)
         angle = -np.arctan2(U[0, 1], U[0, 0]) * 180 / np.pi
-        cv2.ellipse(mapview, (123+int(x0), 475-int(y0)), (int(axes[0]), int(axes[1])),
+        cv2.ellipse(mapview, (XOFF+int(x0), YOFF-int(y0)), (int(axes[0]), int(axes[1])),
                     angle, 0, 360, (0, 0, 220), 1)
-        cv2.circle(mapview, (123+int(x0), 475-int(y0)), 3, (0, 0, 220), 2)
-        cv2.line(mapview, (123+int(x0), 475-int(y0)), (123+int(x0+dx), 475-int(y0+dy)), (0, 0, 220), 2)
+        cv2.circle(mapview, (XOFF+int(x0), YOFF-int(y0)), 3, (0, 0, 220), 2)
+        cv2.line(mapview, (XOFF+int(x0), YOFF-int(y0)), (XOFF+int(x0+dx), YOFF-int(y0+dy)), (0, 0, 220), 2)
         for l in range(len(L)):
-            lxy = (123+int(L[l, 0]/a), 475-int(L[l, 1]/a))
+            lxy = (XOFF+int(L[l, 0]/a), YOFF-int(L[l, 1]/a))
             cv2.circle(mapview, lxy, 3, (0, 128, 255), 3)
             cv2.putText(mapview, "%d" % l, (lxy[0] + 3, lxy[1] + 3), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 0, 0), 1, cv2.LINE_AA)
 
@@ -167,7 +200,7 @@ def main(data, f):
             # TODO: visualize the various landmarks being hit by the various particles
             # we could draw thicker lines for more hits and thinner for fewer
 
-            # cv2.line(mapview, (123+int(x0), 475-int(y0)), (123+int(ll[0]), 475-int(ll[1])), (255,128,0), 1)
+            # cv2.line(mapview, (XOFF+int(x0), YOFF-int(y0)), (XOFF+int(ll[0]), YOFF-int(ll[1])), (255,128,0), 1)
             # ll = L[j]
             # x, P, LL = ekf.update_lm_bearing(x, P, -zz, ll[0], ll[1], R)
 
@@ -189,7 +222,11 @@ def main(data, f):
 if __name__ == '__main__':
     #data = pickle.load(open("20180804-194625.cones.pickle"))
     #f = open("home20180804/cycloid-20180804-194625.rec")
-    data = pickle.load(open("20180804-194304.cones.pickle"))
-    f = open("home20180804/cycloid-20180804-194304.rec")
+    #data = pickle.load(open("20180804-194304.cones.pickle"))
+    #f = open("home20180804/cycloid-20180804-194304.rec")
+    #data = pickle.load(open("20180817-232656.cones.pickle"))
+    #f = open("home20180817/cycloid-20180817-232656.rec")
+    data = pickle.load(open("20180818-183727.cones.pickle"))
+    f = open("oak20180818/cycloid-20180818-183727.rec")
     main(data, f)
     f.close()

@@ -9,6 +9,8 @@ def main(data, seed):
     np.random.seed(seed)
     Np = 1000
     X = np.zeros((3, Np))
+    X[:2] = 30*np.random.randn(2, Np)
+    X[2] = np.random.randn(Np) * 0.2
     last_wheels = data[0][0][6]
     tstamp = data[0][0][0] - 1.0 / 30
 
@@ -21,7 +23,7 @@ def main(data, seed):
         gyro = d[0][4][2]
         dw = d[0][6] - last_wheels
         last_wheels = d[0][6]
-        ds = 0.5 * np.sum(dw[:2])  # front wheels only!
+        ds = 0.25*np.sum(dw)
         pf.step(X, dt, ds, gyro)
 
         for n, z in enumerate(d[1]):
@@ -39,7 +41,9 @@ def main(data, seed):
 
 
 if __name__ == '__main__':
-    data = pickle.load(open("20180804-194415.cones.pickle"))
+    # data = pickle.load(open("20180804-194415.cones.pickle"))
+    data = pickle.load(open("20180817-232656.cones.pickle"))
+    #data = pickle.load(open("20180817-232546.cones.pickle"))
     Ls = []
     for seed in range(10):
         Ls.append(main(data, seed))

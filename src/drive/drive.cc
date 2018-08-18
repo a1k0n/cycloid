@@ -161,7 +161,9 @@ class Driver: public CameraReceiver {
     memcpy(last_encoders_, wheel_pos_, 4*sizeof(uint16_t));
 
     // predict using front wheel distance
-    float ds = 0.5 * (wheel_delta[0] + wheel_delta[1]);
+    float ds = 0.25 * (
+            wheel_delta[0] + wheel_delta[1] +
+            + wheel_delta[2] + wheel_delta[3]);
     int conesx[10];
     float conestheta[10];
     int ncones = coneslam::FindCones(buf, config_.cone_thresh,
