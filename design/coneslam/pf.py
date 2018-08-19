@@ -3,7 +3,10 @@
 import numpy as np
 import pickle
 import cv2
+
+import annotate
 import recordreader
+import coneclassify
 
 
 VIDEO = False
@@ -111,7 +114,7 @@ def resample_particles(X, LL):
     return X[:, j]
 
 
-def main(data, f):
+def main(f):
     np.random.seed(1)
     # bg = cv2.imread("satview.png")
     bg = cv2.imread("/Users/asloane/Desktop/trackmap.png")
@@ -122,38 +125,44 @@ def main(data, f):
 
     Np = 300
     X = np.zeros((3, Np))
-    #X[:2] = 100 * np.random.rand(2, Np)
-    #X[1] -= 400
+    # X[:2] = 100 * np.random.rand(2, Np)
+    # X[1] -= 400
     X[:2] = 30*np.random.randn(2, Np)
     X[2] = np.random.randn(Np) * 0.2
-    tstamp = data[0][0][0] - 1.0 / 30
-    last_wheels = data[0][0][6]
+    tstamp = None
+    last_wheels = None
 
     done = False
     i = 0
     if VIDEO:
+        # vidout = cv2.VideoWriter("particlefilter.h264", cv2.VideoWriter_fourcc(
+        #    'X', '2', '6', '4'), 30, (bg.shape[1], bg.shape[0]), True)
         vidout = cv2.VideoWriter("particlefilter.h264", cv2.VideoWriter_fourcc(
-            'X', '2', '6', '4'), 30, (bg.shape[1], bg.shape[0]), True)
+            'X', '2', '6', '4'), 30, (640, 480), True)
 
-    while not done and i < len(data):
+    while not done:
         ok, frame = recordreader.read_frame(f)
         if not ok:
             break
-        d = data[i]
 
-        ts = d[0][0]
-        dt = ts - tstamp
+        _, throttle, steering, accel, gyro, servo, wheels, periods, yuv = frame
+        if tstamp is None:
+            tstamp = frame[0] - 1.0 / 30
+        if last_wheels is None:
+            last_wheels = wheels
+        ts = frame[0]
+        dt = frame[0] - tstamp
         if dt > 0.1:
             print 'WARNING: frame', i, 'has a', dt, 'second gap'
         tstamp = ts
-        gyro = d[0][4][2]
-        dw = d[0][6] - last_wheels
-        last_wheels = d[0][6]
-        print 'wheels', dw, 'gyro', gyro, 'dt', dt
+        gyroz = gyro[2]  # we only need the yaw rate from the gyro
+        dw = wheels - last_wheels
+        last_wheels = wheels
+        print 'wheels', dw, 'gyro', gyroz, 'dt', dt
         ds = 0.25*np.sum(dw)
-        step(X, dt, ds, gyro)
+        step(X, dt, ds, gyroz)
 
-        bgr = cv2.cvtColor(frame[-1], cv2.COLOR_YUV2BGR_I420)
+        bgr = cv2.cvtColor(yuv, cv2.COLOR_YUV2BGR_I420)
         mapview = bg.copy()
         # mapview = 200*np.ones(bg.shape, np.uint8)
 
@@ -184,9 +193,10 @@ def main(data, f):
             cv2.circle(mapview, lxy, 3, (0, 128, 255), 3)
             cv2.putText(mapview, "%d" % l, (lxy[0] + 3, lxy[1] + 3), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 0, 0), 1, cv2.LINE_AA)
 
-        for n, z in enumerate(data[i][1]):
+        conecenters, origcenters, _ = coneclassify.classify(yuv, gyroz)
+        for n, z in enumerate(conecenters):
             # mark the cone on the original view
-            p = cv2.fisheye.distortPoints(np.array([[z]], np.float32), camera_matrix, dist_coeffs)[0][0]
+            p = origcenters[n]
             cv2.circle(bgr, (int(p[0]), int(p[1])), 8, (255, 200, 0), cv2.FILLED)
 
             zz = np.arctan(z[0])
@@ -207,11 +217,21 @@ def main(data, f):
         cv2.putText(mapview, "%d" % i, (20, 30), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 255, 255), 2, cv2.LINE_AA)
 
         if VIDEO:
-            mapview[:240, 160:480] = bgr[::2, ::2]
-            vidout.write(mapview)
+            s = mapview[::2, ::2].shape
+            bgr[-s[0]:, -s[1]:] = mapview[::2, ::2]
+
+        annotate.draw_speed(bgr, tstamp, wheels, periods)
+        annotate.draw_steering(bgr, steering, servo, center=(200, 420))
+        # TODO: also annotate gyroz and lateral accel
+
+        if VIDEO:
+            s = (bg.shape[1] - 320) // 2
+            #mapview[-240:, s:s+320] = bgr[::2, ::2]
+            #vidout.write(mapview)
+            vidout.write(bgr)
         else:
-            cv2.imshow("raw", bgr)
             cv2.imshow("map", mapview)
+            cv2.imshow("raw", bgr)
             k = cv2.waitKey()
             if k == ord('q'):
                 break
@@ -220,13 +240,12 @@ def main(data, f):
 
 
 if __name__ == '__main__':
-    #data = pickle.load(open("20180804-194625.cones.pickle"))
-    #f = open("home20180804/cycloid-20180804-194625.rec")
-    #data = pickle.load(open("20180804-194304.cones.pickle"))
-    #f = open("home20180804/cycloid-20180804-194304.rec")
-    #data = pickle.load(open("20180817-232656.cones.pickle"))
-    #f = open("home20180817/cycloid-20180817-232656.rec")
-    data = pickle.load(open("20180818-183727.cones.pickle"))
-    f = open("oak20180818/cycloid-20180818-183727.rec")
-    main(data, f)
+    import sys
+
+    if len(sys.argv) < 2:
+        print "need input!\n%s [cycloid-yyyymmdd-hhmmss.rec]" % sys.argv[0]
+        sys.exit(1)
+
+    f = open(sys.argv[1])
+    main(f)
     f.close()
