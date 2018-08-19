@@ -117,11 +117,7 @@ def resample_particles(X, LL):
 def main(f):
     np.random.seed(1)
     # bg = cv2.imread("satview.png")
-    bg = cv2.imread("/Users/asloane/Desktop/trackmap.png")
-
-    camera_matrix = np.load("../../tools/camcal/camera_matrix.npy")
-    dist_coeffs = np.load("../../tools/camcal/dist_coeffs.npy")
-    camera_matrix[:2] /= 4.  # for 640x480
+    bg = cv2.imread("trackmap.jpg")
 
     Np = 300
     X = np.zeros((3, Np))
@@ -226,8 +222,6 @@ def main(f):
 
         if VIDEO:
             s = (bg.shape[1] - 320) // 2
-            #mapview[-240:, s:s+320] = bgr[::2, ::2]
-            #vidout.write(mapview)
             vidout.write(bgr)
         else:
             cv2.imshow("map", mapview)
