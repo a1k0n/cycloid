@@ -14,10 +14,10 @@ const float V_SCALE = 0.02;  // 40cm circumference, 20 ticks
 // servo closed loop response bandwidth (measured)
 const float BW_SRV = 2*M_PI*4;
 
-// FIXME(asloane): aren't these based on encoder ticks, not velocity?
-const float M_K1 = 65.;  // DC motor response constants (measured)
-const float M_K2 = 5.6;
-const float M_K3 = 0.5;
+const float M_K1 = 2.58;  // DC motor response constants (measured)
+const float M_K2 = 0.093;
+const float M_K3 = 0.218;
+const float M_OFFSET = 0.103;  // minimum control input (dead zone)
 
 DriveController::DriveController() {
   ResetState();
@@ -141,11 +141,11 @@ bool DriveController::GetControl(const DriverConfig &config,
   float BW_v = 2*M_PI*0.01*config.motor_bw;
   float Kp = BW_v / (M_K1 - M_K2*velocity_);
   float Ki = M_K3;
-  *throttle_out = clip(-Kp*(err_v + Ki*ierr_v_), 0, 1);
+  *throttle_out = clip(-Kp*(err_v + Ki*ierr_v_) + M_OFFSET, 0, 1);
   if (*throttle_out == 0 && velocity_ > 0) {  // handle braking
     // alternate control law
     float Kp2 = BW_v / (-M_K2*velocity_);
-    *throttle_out = clip(Kp2*(err_v + Ki*ierr_v_), -1, 0);
+    *throttle_out = clip(Kp2*(err_v + Ki*ierr_v_ - M_OFFSET), -1, 0);
     // printf("v brake: v=%f/%f Kp=%f Ki=%f err_v=%f ierr_v=%f out=%f\n",
     //     velocity_, target_v, Kp, Ki, err_v, ierr_v_, *throttle_out);
   } else {
