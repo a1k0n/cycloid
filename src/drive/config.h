@@ -22,6 +22,8 @@ class DriverConfig {
 
   int16_t lm_precision;  // landmark precision (1/sigma^2)
 
+  int16_t srv_cal;  // servo calibration mark (temporary)
+
   DriverConfig() {
     // Default values
     cone_thresh = 300;
@@ -36,6 +38,8 @@ class DriverConfig {
     yaw_bw = 0.50 * 100;
 
     lm_precision = 1.0 * 100;
+
+    srv_cal = 64;
   }
 
   bool Save() {

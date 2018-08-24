@@ -27,7 +27,7 @@ class DriveController {
   bool GetControl(const DriverConfig &config,
       float throttle_in, float steering_in,
       float *throttle_out, float *steering_out, float dt,
-      bool autodrive);
+      bool autodrive, int frameno);
 
   void ResetState();
 
@@ -38,10 +38,11 @@ class DriveController {
 
   // car state
   float x_, y_, theta_;
-  float velocity_;  // forward velocity
+  float vf_, vr_;  // front and rear wheel velocity
   float w_;  // yaw rate
   float ierr_v_;  // integration error for velocity
   float ierr_w_;  // integration error for yaw rate
+  float delta_;  // current steering angle
   TrajectoryTracker track_;
 };
 

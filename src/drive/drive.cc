@@ -63,6 +63,7 @@ class Driver: public CameraReceiver {
 
   bool StartRecording(const char *fname, int frameskip) {
     frameskip_ = frameskip;
+    frame_ = 0;
     if (!strcmp(fname, "-")) {
       output_fd_ = fileno(stdout);
     } else {
@@ -72,6 +73,7 @@ class Driver: public CameraReceiver {
       perror(fname);
       return false;
     }
+    printf("--- recording %s ---\n", fname);
     return true;
   }
 
@@ -199,9 +201,17 @@ class Driver: public CameraReceiver {
     last_t_ = t;
 
     if (controller_.GetControl(config_, js_throttle_ / 32767.0,
-          js_steering_ / 32767.0, &u_a, &u_s, dt, autodrive_)) {
+          js_steering_ / 32767.0, &u_a, &u_s, dt, autodrive_, frame_)) {
       steering_ = 127 * u_s;
       throttle_ = 127 * u_a;
+
+      // override steering for servo angle calibration
+      if (calibration_ == CAL_SRV_RIGHT) {
+        steering_ = -config_.srv_cal;
+      } else if (calibration_ == CAL_SRV_LEFT) {
+        steering_ = config_.srv_cal;
+      }
+
       teensy.SetControls(frame_ & 4 ? 1 : 0, throttle_, steering_);
       // pca.SetPWM(PWMCHAN_STEERING, steering_);
       // pca.SetPWM(PWMCHAN_ESC, throttle_);
@@ -215,6 +225,12 @@ class Driver: public CameraReceiver {
 
   bool firstframe_;
   uint16_t last_encoders_[4];
+
+  enum {
+    CAL_NONE,
+    CAL_SRV_LEFT,
+    CAL_SRV_RIGHT,
+  } calibration_;
 
  private:
   int output_fd_;
@@ -293,8 +309,8 @@ class DriverInputReceiver : public InputReceiver {
 
     int16_t *value = ((int16_t*) config_) + config_item_;
 
-    switch(button) {
-      case '+': // start button: start recording
+    switch (button) {
+      case '+':  // start button: start recording
         if (!driver_.IsRecording()) {
           char fnamebuf[256];
           time_t start_time = time(NULL);
@@ -321,10 +337,14 @@ class DriverInputReceiver : public InputReceiver {
         display_.UpdateStatus("starting line", 0x07e0);
         break;
       case 'L':
-        if (!driver_.autodrive_) {
-          fprintf(stderr, "%d.%06d autodrive ON\n", tv.tv_sec, tv.tv_usec);
-          driver_.autodrive_ = true;
-        }
+        // if (!driver_.autodrive_) {
+        //  fprintf(stderr, "%d.%06d autodrive ON\n", tv.tv_sec, tv.tv_usec);
+        //  driver_.autodrive_ = true;
+        //}
+        driver_.calibration_ = Driver::CAL_SRV_LEFT;
+        break;
+      case 'R':
+        driver_.calibration_ = Driver::CAL_SRV_RIGHT;
         break;
       case 'B':
         driver_.controller_.ResetState();
@@ -361,6 +381,9 @@ class DriverInputReceiver : public InputReceiver {
           driver_.autodrive_ = false;
           fprintf(stderr, "%d.%06d autodrive OFF\n", tv.tv_sec, tv.tv_usec);
         }
+        // fall through
+      case 'R':
+        driver_.calibration_ = Driver::CAL_NONE;
         break;
       case 'X':
         x_down_ = false;
@@ -402,6 +425,7 @@ const char *DriverInputReceiver::configmenu[] = {
   "motor bw",
   "yaw rate bw",
   "cone precision",
+  "servo cal",
 };
 const int DriverInputReceiver::N_CONFIGITEMS = sizeof(configmenu) / sizeof(configmenu[0]);
 
