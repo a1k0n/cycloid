@@ -3,7 +3,19 @@
 
 namespace coneslam {
 
-#include "coneslam/lut.h"
+namespace lut {
+#include "lut.h"
+}  // namespace lut
+
+using lut::conedetect_turn_slope;
+using lut::conedetect_y_offset;
+using lut::conedetect_vpy;
+using lut::conedetect_width;
+using lut::conedetect_LUT;
+
+float GetVpy() {
+  return lut::conedetect_vpy;
+}
 
 int FindCones(const uint8_t *yuvimg, int thresh, float gyroz, int nout,
     int *x_out, float *bearing_out) {
@@ -58,11 +70,11 @@ int FindCones(const uint8_t *yuvimg, int thresh, float gyroz, int nout,
       x_out[outputs] = center;
       int lut_y = y0+yinc*center*0.5 + conedetect_y_offset;
       if (lut_y >= (sizeof(conedetect_LUT) / 640)) {
-        fprintf(stderr, "panic: lut_y = %d, too big\n", lut_y);
+        fprintf(stderr, "panic: lut_y = %d, too big gyroz=%f y0=%f yinc=%f", lut_y, gyroz, y0, yinc);
         lut_y = (sizeof(conedetect_LUT) / 640) - 1;
       }
       if (lut_y < 0) {
-        fprintf(stderr, "panic: lut_y = %d, < 0?", lut_y);
+        fprintf(stderr, "panic: lut_y = %d, < 0? gyroz=%f y0=%f yinc=%f", lut_y, gyroz, y0, yinc);
         lut_y = 0;
       }
       bearing_out[outputs] = conedetect_LUT[lut_y*640 + center];

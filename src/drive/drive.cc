@@ -174,7 +174,7 @@ class Driver: public CameraReceiver {
     if (ds > 0) {  // only do coneslam updates while we're moving
       localizer_->Predict(ds, gyro_[2], dt);
       for (int i = 0; i < ncones; i++) {
-        localizer_->UpdateLM(conestheta[i], config_.lm_precision * 0.1);
+        localizer_->UpdateLM(conestheta[i], config_.lm_precision);
       }
     }
 
@@ -337,11 +337,11 @@ class DriverInputReceiver : public InputReceiver {
         display_.UpdateStatus("starting line", 0x07e0);
         break;
       case 'L':
-        // if (!driver_.autodrive_) {
-        //  fprintf(stderr, "%d.%06d autodrive ON\n", tv.tv_sec, tv.tv_usec);
-        //  driver_.autodrive_ = true;
-        //}
-        driver_.calibration_ = Driver::CAL_SRV_LEFT;
+         if (!driver_.autodrive_) {
+          fprintf(stderr, "%d.%06d autodrive ON\n", tv.tv_sec, tv.tv_usec);
+          driver_.autodrive_ = true;
+        }
+        // driver_.calibration_ = Driver::CAL_SRV_LEFT;
         break;
       case 'R':
         driver_.calibration_ = Driver::CAL_SRV_RIGHT;

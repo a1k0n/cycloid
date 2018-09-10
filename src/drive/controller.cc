@@ -122,16 +122,16 @@ bool DriveController::GetControl(const DriverConfig &config,
   float target_v = vmax;
   if (fabs(k) > kmin) {  // any curvature more than this will reduce speed
     target_v = sqrt(config.traction_limit * 0.01 / fabs(k));
-  }
 
-  // maintain an optimal slip ratio with 0 lateral velocity
-  // by adjusting speed until vf = vr*cos(delta) - w*Lf*sin(delta)
-  // vr = (vf + w*Lf*sin(delta)) / cos(delta)
-  float vr_slip_target = (vf_ + w_*GEOM_LF*sin(delta_)) / cos(delta_);
-  if (vr_slip_target < target_v && vr_slip_target > 1.0) {
-    printf("[%d] using slip target %f (vf=%f vr=%f)\n",
-        frameno, vr_slip_target, vf_, vr_);
-    target_v = vr_slip_target;
+    // maintain an optimal slip ratio with 0 lateral velocity
+    // by adjusting speed until vf = vr*cos(delta) - w*Lf*sin(delta)
+    // vr = (vf + w*Lf*sin(delta)) / cos(delta)
+    float vr_slip_target = (vf_ + w_*GEOM_LF*sin(delta_)) / cos(delta_);
+    if (vr_slip_target < target_v && vr_slip_target > 1.0) {
+      printf("[%d] using slip target %f (vf=%f vr=%f)\n",
+          frameno, vr_slip_target, vf_, vr_);
+      target_v = vr_slip_target;
+    }
   }
 
   // use current velocity to determine target yaw rate

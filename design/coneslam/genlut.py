@@ -1,15 +1,13 @@
 import numpy as np
 import cv2
 
+from params import vpy, turn_slope, bandheight
+
 camera_matrix = np.load("../../tools/camcal/camera_matrix.npy")
 dist_coeffs = np.load("../../tools/camcal/dist_coeffs.npy")
 camera_matrix[:2] /= 4.  # for 640x480
 
-vpy = 207  # y vanishing point on a 640x480 image
-turn_slope = 15
-width = 8
-
-pts = np.mgrid[:640, :turn_slope*4+width].T + np.array([0, vpy])
+pts = np.mgrid[:640, :turn_slope*4+bandheight].T + np.array([0, vpy])
 xyu = cv2.fisheye.undistortPoints(
     np.array(pts, np.float32), camera_matrix, dist_coeffs)
 
@@ -23,7 +21,7 @@ np.save("lut.npy", data)
 print "const int conedetect_vpy = %d;" % vpy
 print "const float conedetect_turn_slope = %f;" % (turn_slope / 2.0)
 print "const int conedetect_y_offset = %d;" % (turn_slope - vpy/2)
-print "const int conedetect_width= %d;" % (width / 2)
+print "const int conedetect_width= %d;" % (bandheight / 2)
 d = data.reshape(-1)
 print "\nconst float conedetect_LUT[%d] = {" % len(d)
 for i, v in enumerate(d):

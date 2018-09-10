@@ -55,7 +55,7 @@ void UIDisplay::UpdateConeView(const uint8_t *yuv, int ncones, int *conesx) {
   uint16_t *buf = screen_.GetBuffer();
 
   for (int j = 0; j < 112; j++) {
-    int y0 = coneslam::conedetect_vpy/2 - 92 + j;
+    int y0 = coneslam::GetVpy()/2 - 92 + j;
     const uint8_t *y = yuv + y0*640*2;
     const uint8_t *u = yuv + 640*480 + y0*320;
     const uint8_t *v = yuv + 640*600 + y0*320;

@@ -1,11 +1,8 @@
 import numpy as np
 import cv2
+from params import vpy, turn_slope, threshold, bandheight
 
 
-# parameters for detection
-vpy = 207  # y vanishing point
-turn_slope = 15
-threshold = 250
 kernel = np.float32([-1, -1, -1, 2, 2, 2, -1, -1, -1])
 
 
@@ -22,7 +19,7 @@ def classify(yuv420img, gyroz):
     # convolutional filter which activates on cones on scanlines near the
     # vanishing point
     A = np.zeros(320, np.float32)
-    for i in range(4):  # add up 4 scanlines of filters
+    for i in range(bandheight/2):  # add up 4 scanlines of filters
         a = np.convolve(imgv[slopevp2 + i, np.arange(320)],
                         kernel, mode='same')
         a[:5] = 0
@@ -30,6 +27,7 @@ def classify(yuv420img, gyroz):
         A += a
 
     A = A > threshold  # classify
+    origA = A.copy()
     for i in range(5):
         A[1:] |= A[:-1]
         A[:-1] |= A[1:]
@@ -42,7 +40,7 @@ def classify(yuv420img, gyroz):
         if not A[i] and l is not None:
             center = (i-1 + l)
             width = i-1 - l
-            conecenters.append([center, slopevp[center]+4])
+            conecenters.append([center, slopevp[center]+bandheight])
             conewidths.append(width)
             l = None
         elif A[i] and l is None:
@@ -53,4 +51,4 @@ def classify(yuv420img, gyroz):
         origcenters = conecenters
         conecenters = cv2.fisheye.undistortPoints(np.array([conecenters], np.float32), camera_matrix, dist_coeffs)[0]
 
-    return conecenters, origcenters, conewidths
+    return conecenters, origcenters, origA

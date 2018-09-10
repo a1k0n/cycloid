@@ -37,7 +37,7 @@ class DriverConfig {
     motor_bw = 2.00 * 100;
     yaw_bw = 0.50 * 100;
 
-    lm_precision = 1.0 * 100;
+    lm_precision = 100;
 
     srv_cal = 64;
   }

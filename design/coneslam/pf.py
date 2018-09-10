@@ -1,70 +1,49 @@
 # particle filter coneslam (just using FastSLAM algorithm but without any trees
 # as we have a relatively small number of landmarks)
 import numpy as np
-import pickle
 import cv2
 
 import annotate
 import recordreader
 import coneclassify
+import caldata
+import params
 
 
 VIDEO = False
 np.set_printoptions(suppress=True)
 
-# relative landmark locations, with unknown scale -- pixel measurements
-# from a google maps screenshot
-L0 = np.array([
-    [0, 0],
-    [0, 296],
-    [0, 482],
-    [0, 778],
-    [716, 0],
-    [716, 778],
-    [425, 296],
-    [425, 482],
-])
-XOFF = 123
-YOFF = 475
+# length from back axle to camera in encoder ticks (2cm)
+carlength = 12*.0254/.02
 
-L0[:, 1] -= 389
-# 482-296 units here is exactly 3.6m
-# wheel encoder ticks are 2cm apart (wheel is 40cm in diameter, and there are
-# 20 ticks / revolution)
-# 3.6m should be 180 ticks, and we have 186 pixels
-# (so a pixel is pretty close to 2cm^2)
-a = 180.0/186.0  # fudge factor for scale w.r.t. ticks
-L = L0*a
 
-L = np.array([
-    [-76.2, 0],
-    [76.2, 0],
-    [76.2, -104.14],
-    [-137.16, -104.14],
-#    [-76.2, -104.14],
-])
+def read_landmarks():
+    L = None
+    f = open("lm.txt")
+    i = 0
+    for line in f:
+        if line.strip() == '':
+            continue
+        if L is None:
+            L = np.zeros((int(line.strip()), 2))
+        else:
+            x, y = map(float, line.strip().split())
+            L[i] = [x, y]
+            i += 1
+    return L
 
-# oakland track
-L = np.array([
-    [141, -125],
-    [653, -185],
-    [607, -336],
-    [377, -265],
-    [123, -338],
-])
-L[:, 0] -= 408
-L[:, 1] += 102
-a = 1
 
-# 408, 102
+L = read_landmarks()
+a=1
+XOFF = 300
+YOFF = 50
 
-XOFF = 408
-YOFF = 102
 
 NOISE_ANGULAR = 0.008
 NOISE_LONG = 16
 NOISE_LAT = 8
-LM_SELECTIVITY = 50  # 80
+LM_SELECTIVITY = 90  # 9??!? how did that even work? 80
+BOGON_THRESH = .01  # (minimum acceptable angle in radians^2 to a real landmark)
 
 
 def step(X, dt, encoder_dx, gyro_dtheta):
@@ -89,17 +68,18 @@ def likeliest_lm(X, L, l):
     # we need to check Np x Nl combinations
 
     # dxy[l, :, p] is the relative position between particle p and landmark l
-    dxy = L[:, :, None] - X[:2]
     S, C = np.sin(X[2]), np.cos(X[2])
+    dxy = L[:, :, None] - (X[:2] + carlength*np.array([C, S]))
     # rotate each landmark into each particle's frame (y, z)
     z = dxy[:, 0]*C + dxy[:, 1]*S
     y = dxy[:, 0]*S - dxy[:, 1]*C
-    # get the relative angle
-    LL = -LM_SELECTIVITY*(np.arctan2(y, z) - l)**2
+    # get the relative angle^2
+    e = np.minimum((np.arctan2(y, z) - l)**2, BOGON_THRESH)
+    LL = -LM_SELECTIVITY*e
 
-    # normalize probabilities just for tuning
+    # normalize probabilities so that resampling among landmarks is fair
     LL -= np.max(LL)
-    LL -= np.log(np.sum(np.exp(LL)))
+    LL -= np.log(np.sum(np.exp(LL))) - np.log(X.shape[0])
 
     j = np.argmax(LL, axis=0)
     return j, np.max(LL, axis=0)
@@ -117,7 +97,8 @@ def resample_particles(X, LL):
 def main(f):
     np.random.seed(1)
     # bg = cv2.imread("satview.png")
-    bg = cv2.imread("trackmap.jpg")
+    # bg = cv2.imread("trackmap.jpg")
+    bg = cv2.imread("drtrack-2cm.png")
 
     Np = 300
     X = np.zeros((3, Np))
@@ -136,6 +117,8 @@ def main(f):
         vidout = cv2.VideoWriter("particlefilter.h264", cv2.VideoWriter_fourcc(
             'X', '2', '6', '4'), 30, (640, 480), True)
 
+    Am, Ae = 0, 0
+    Vlat = 0
     while not done:
         ok, frame = recordreader.read_frame(f)
         if not ok:
@@ -154,9 +137,17 @@ def main(f):
         gyroz = gyro[2]  # we only need the yaw rate from the gyro
         dw = wheels - last_wheels
         last_wheels = wheels
-        print 'wheels', dw, 'gyro', gyroz, 'dt', dt
+        # print 'wheels', dw, 'gyro', gyroz, 'dt', dt
         ds = 0.25*np.sum(dw)
         step(X, dt, ds, gyroz)
+
+        if True:
+            Am = 0.8*Am + 0.2*accel[1]*9.8
+            Ae = 0.8*Ae + 0.2*ds*gyroz/dt*0.02
+            Vlat = 0.8*Vlat + dt*accel[1]*9.8 - ds*gyroz*0.02
+            print 'alat', accel[1]*9.8, 'estimated', ds*gyroz/dt*0.02
+            print 'Vlat estimate', Vlat
+            # print 'measured alat', Am, 'estimated alat', Ae
 
         bgr = cv2.cvtColor(yuv, cv2.COLOR_YUV2BGR_I420)
         mapview = bg.copy()
@@ -173,7 +164,7 @@ def main(f):
         # draw mean/covariance also
         x = np.mean(X, axis=1)
         P = np.cov(X)
-        print "%d: %f %f %f" % (i, x[0], x[1], x[2])
+        # print "%d: %f %f %f" % (i, x[0], x[1], x[2])
 
         x0, y0 = x[:2] / a
         dx, dy = 20*np.cos(x[2]), 20*np.sin(x[2])
@@ -189,7 +180,8 @@ def main(f):
             cv2.circle(mapview, lxy, 3, (0, 128, 255), 3)
             cv2.putText(mapview, "%d" % l, (lxy[0] + 3, lxy[1] + 3), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 0, 0), 1, cv2.LINE_AA)
 
-        conecenters, origcenters, _ = coneclassify.classify(yuv, gyroz)
+        conecenters, origcenters, cone_acts = coneclassify.classify(yuv, gyroz)
+        LLs = np.zeros(Np)
         for n, z in enumerate(conecenters):
             # mark the cone on the original view
             p = origcenters[n]
@@ -197,9 +189,8 @@ def main(f):
 
             zz = np.arctan(z[0])
             j, LL = likeliest_lm(X, L, zz)
-
-            # resample the particles based on their landmark likelihood
-            X = resample_particles(X, LL)
+            LLs += LL
+            print 'frame', i, 'cone', n, 'LL', np.min(LL), np.mean(LL), '+-', np.std(LL), np.max(LL)
 
             # we could also update the landmarks at this point
 
@@ -210,15 +201,35 @@ def main(f):
             # ll = L[j]
             # x, P, LL = ekf.update_lm_bearing(x, P, -zz, ll[0], ll[1], R)
 
+        bgr[params.vpy, ::2][cone_acts] = 255
+        bgr[params.vpy, 1::2][cone_acts] = 255
+        bgr[params.vpy+1, ::2][cone_acts] = 255
+        bgr[params.vpy+1, 1::2][cone_acts] = 255
+
+        if len(conecenters) > 0:
+            # resample the particles based on their landmark likelihood
+            X = resample_particles(X, LL)
+
         cv2.putText(mapview, "%d" % i, (20, 30), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 255, 255), 2, cv2.LINE_AA)
 
         if VIDEO:
             s = mapview[::2, ::2].shape
             bgr[-s[0]:, -s[1]:] = mapview[::2, ::2]
 
+        annotate.draw_throttle(bgr, throttle)
         annotate.draw_speed(bgr, tstamp, wheels, periods)
         annotate.draw_steering(bgr, steering, servo, center=(200, 420))
         # TODO: also annotate gyroz and lateral accel
+
+        # get steering angle, front and rear wheel velocities
+        delta = caldata.wheel_angle(servo)
+        vf = 0.5*np.sum(dw[:2])
+        vr = 0.5*np.sum(dw[2:])
+        print 'vf', vf, 'vr', vr, 'vr-vf', vr-vf, 'vr/vf', vr/(vf + 0.001)
+        if np.abs(delta) > 0.08:
+            # estimate lateral velocity
+            vy = (vr*np.cos(delta) + gyroz*a*np.sin(delta) - vf)
+            print 'lateral velocity *', np.sin(delta), '=', vy
 
         if VIDEO:
             s = (bg.shape[1] - 320) // 2
