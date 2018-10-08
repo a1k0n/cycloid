@@ -43,7 +43,6 @@ static inline float clip(float x, float min, float max) {
 }
 
 void DriveController::UpdateState(const DriverConfig &config,
-    float throttle_in, float steering_in,
     const Vector3f &accel, const Vector3f &gyro,
     uint8_t servo_pos, const uint16_t *wheel_delta, float dt) {
 
@@ -149,10 +148,6 @@ bool DriveController::GetControl(const DriverConfig &config,
   // at low speeds unless BW_w is tiny.
   *steering_out = clip(-BW_w * (ierr_w_ + err_w / BW_SRV), -1, 1);
 
-  printf("[%d] k=%f v=%f kv=%f\n", frameno, k, vr_, target_w);
-  printf("[%d] w control: w=%f/%f err_w=%f ierr_w=%f out=%f\n",
-      frameno, w_, target_w, err_w, ierr_w_, *steering_out);
-
   float BW_v = 2*M_PI*0.01*config.motor_bw;
   float Kp = BW_v / (M_K1 - M_K2*vr_);
   float Ki = M_K3;
@@ -161,11 +156,6 @@ bool DriveController::GetControl(const DriverConfig &config,
     // alternate control law
     float Kp2 = BW_v / (-M_K2*vr_);
     *throttle_out = clip(Kp2*(err_v + Ki*ierr_v_ - M_OFFSET), -1, 0);
-    printf("[%d] v brake: v=%f/%f Kp=%f Ki=%f err_v=%f ierr_v=%f out=%f\n",
-        frameno, vr_, target_v, Kp, Ki, err_v, ierr_v_, *throttle_out);
-  } else {
-    printf("[%d] v control: v=%f/%f Kp=%f Ki=%f err_v=%f ierr_v=%f out=%f\n",
-        frameno, vr_, target_v, Kp, Ki, err_v, ierr_v_, *throttle_out);
   }
 
   ierr_v_ += dt*err_v;
@@ -178,3 +168,5 @@ bool DriveController::GetControl(const DriverConfig &config,
   return true;
 }
 
+int DriveController::Serialize(uint8_t *buf, int buflen) const {
+}

@@ -2,6 +2,7 @@
 #define CONESLAM_LOCALIZE_H_
 
 #include <stdlib.h>
+#include <stdint.h>
 
 namespace coneslam {
 
@@ -39,13 +40,16 @@ class Localizer {
   void UpdateLM(float lm_bearing, float precision, float bogon_thresh);
   void Resample();  // implicitly resets internal likelihoods
 
-  bool GetLocationEstimate(Particle *mean);
+  bool GetLocationEstimate(Particle *mean) const;
 
   const Landmark *GetLandmarks() const { return landmarks_; }
   int NumLandmarks() const { return n_landmarks_; }
 
   const Particle *GetParticles() const { return particles_; }
   int NumParticles() const { return n_particles_; }
+
+  int SerializedSize() const;
+  int Serialize(uint8_t *buf, int buflen) const;
 
  private:
   void ResetLikelihood();

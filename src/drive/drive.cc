@@ -26,10 +26,6 @@ const int NUM_PARTICLES = 300;
 
 volatile bool done = false;
 
-// ugh ugh ugh
-int8_t throttle_ = 0, steering_ = 0;
-int16_t js_throttle_ = 0, js_steering_ = 0;
-
 // const int PWMCHAN_STEERING = 14;
 // const int PWMCHAN_ESC = 15;
 
@@ -41,10 +37,41 @@ Teensy teensy(i2c);
 IMU imu(i2c);
 UIDisplay display_;
 FlushThread flush_thread_;
-Eigen::Vector3f accel_(0, 0, 0), gyro_(0, 0, 0);
-uint8_t servo_pos_ = 110;
-uint16_t wheel_pos_[4] = {0, 0, 0, 0};
-uint16_t wheel_dt_[4] = {0, 0, 0, 0};
+int16_t js_throttle_ = 0, js_steering_ = 0;
+
+struct CarState {
+  Eigen::Vector3f accel, gyro;
+  uint8_t servo_pos;
+  uint16_t wheel_pos[4];
+  uint16_t wheel_dt[4];
+  int8_t throttle, steering;
+
+  CarState(): accel(0, 0, 0), gyro(0, 0, 0) {
+    memset(wheel_pos, 0, 8);
+    memset(wheel_dt, 0, 8);
+    servo_pos = 110;
+    throttle = 0;
+    steering = 0;
+  }
+
+  // 2 3-float vectors, 3 uint8s, 2 4-uint16 arrays
+  int SerializedSize() { return 4*3*2 + 3 + 2*4*2; }
+  int Serialize(uint8_t *buf, int bufsiz) {
+    assert(bufsiz >= 43);
+    memcpy(buf+0, &throttle, 1);
+    memcpy(buf+1, &steering, 1);
+    memcpy(buf+2, &accel[0], 4);
+    memcpy(buf+2+4, &accel[1], 4);
+    memcpy(buf+2+8, &accel[2], 4);
+    memcpy(buf+14, &gyro[0], 4);
+    memcpy(buf+14+4, &gyro[1], 4);
+    memcpy(buf+14+8, &gyro[2], 4);
+    memcpy(buf+26, &servo_pos, 1);
+    memcpy(buf+27, wheel_pos, 2*4);
+    memcpy(buf+35, wheel_dt, 2*4);
+    return 43;
+  }
+} carstate_;
 
 class Driver: public CameraReceiver {
  public:
@@ -93,86 +120,53 @@ class Driver: public CameraReceiver {
     StopRecording();
   }
 
-  void OnFrame(uint8_t *buf, size_t length) {
-    struct timeval t;
-    gettimeofday(&t, NULL);
-    frame_++;
+  void QueueRecordingData(const timeval &t, uint8_t *buf, size_t length) {
+    uint32_t flushlen = 12 + carstate_.SerializedSize() + length;
+    flushlen += localizer_->SerializedSize();
+    flushlen += controller_.SerializedSize();
 
-    if (IsRecording() && frame_ > frameskip_) {
-      frame_ = 0;
-      uint32_t flushlen = 55 + length;
-      // copy our frame, push it onto a stack to be flushed
-      // asynchronously to sdcard
-      uint8_t *flushbuf = new uint8_t[flushlen];
-      memcpy(flushbuf, &flushlen, 4);  // write header length
-      memcpy(flushbuf+4, &t.tv_sec, 4);
-      memcpy(flushbuf+8, &t.tv_usec, 4);
-      memcpy(flushbuf+12, &throttle_, 1);
-      memcpy(flushbuf+13, &steering_, 1);
-      memcpy(flushbuf+14, &accel_[0], 4);
-      memcpy(flushbuf+14+4, &accel_[1], 4);
-      memcpy(flushbuf+14+8, &accel_[2], 4);
-      memcpy(flushbuf+26, &gyro_[0], 4);
-      memcpy(flushbuf+26+4, &gyro_[1], 4);
-      memcpy(flushbuf+26+8, &gyro_[2], 4);
-      memcpy(flushbuf+38, &servo_pos_, 1);
-      memcpy(flushbuf+39, wheel_pos_, 2*4);
-      memcpy(flushbuf+47, wheel_dt_, 2*4);
-      // write the whole 640x480 buffer
-      memcpy(flushbuf+55, buf, length);
+    // copy our frame, push it onto a stack to be flushed
+    // asynchronously to sdcard
+    uint8_t *flushbuf = new uint8_t[flushlen];
+    // write length + timestamp header
+    memcpy(flushbuf, &flushlen, 4);
+    memcpy(flushbuf+4, &t.tv_sec, 4);
+    memcpy(flushbuf+8, &t.tv_usec, 4);
+    int ptr = 12;
+    ptr += carstate_.Serialize(flushbuf+ptr, flushlen - ptr);
+    ptr += localizer_->Serialize(flushbuf+ptr, flushlen - ptr);
+    ptr += controller_.Serialize(flushbuf+ptr, flushlen - ptr);
 
-      struct timeval t1;
-      gettimeofday(&t1, NULL);
-      float dt = t1.tv_sec - t.tv_sec + (t1.tv_usec - t.tv_usec) * 1e-6;
-      if (dt > 0.1) {
-        fprintf(stderr, "CameraThread::OnFrame: WARNING: "
-            "alloc/copy took %fs\n", dt);
-      }
+    // write the whole 640x480 buffer
+    memcpy(flushbuf+ptr, buf, length);
 
-      flush_thread_.AddEntry(output_fd_, flushbuf, flushlen);
-      struct timeval t2;
-      gettimeofday(&t2, NULL);
-      dt = t2.tv_sec - t1.tv_sec + (t2.tv_usec - t1.tv_usec) * 1e-6;
-      if (dt > 0.1) {
-        fprintf(stderr, "CameraThread::OnFrame: WARNING: "
-            "flush_thread.AddEntry took %fs\n", dt);
-      }
-    }
+    flush_thread_.AddEntry(output_fd_, flushbuf, flushlen);
+  }
 
-    {
-      static struct timeval t0 = {0, 0};
-      float dt = t.tv_sec - t0.tv_sec + (t.tv_usec - t0.tv_usec) * 1e-6;
-      if (dt > 0.1 && t0.tv_sec != 0) {
-        fprintf(stderr, "CameraThread::OnFrame: WARNING: "
-            "%fs gap between frames?!\n", dt);
-      }
-      t0 = t;
-    }
-
-    float dt = t.tv_sec - last_t_.tv_sec + (t.tv_usec - last_t_.tv_usec) * 1e-6;
-
+  // Update controller and UI from camera, gyro, and wheel encoder inputs
+  void UpdateFromSensors(uint8_t *buf, float dt) {
     if (firstframe_) {
-      memcpy(last_encoders_, wheel_pos_, 4*sizeof(uint16_t));
+      memcpy(last_encoders_, carstate_.wheel_pos, 4*sizeof(uint16_t));
       firstframe_ = false;
       dt = 1.0 / 30.0;
     }
     uint16_t wheel_delta[4];
     for (int i = 0; i < 4; i++) {
-      wheel_delta[i] = wheel_pos_[i] - last_encoders_[i];
+      wheel_delta[i] = carstate_.wheel_pos[i] - last_encoders_[i];
     }
-    memcpy(last_encoders_, wheel_pos_, 4*sizeof(uint16_t));
+    memcpy(last_encoders_, carstate_.wheel_pos, 4*sizeof(uint16_t));
 
     // predict using front wheel distance
     float ds = 0.25 * (
-            wheel_delta[0] + wheel_delta[1] +
-            + wheel_delta[2] + wheel_delta[3]);
+        wheel_delta[0] + wheel_delta[1] +
+        + wheel_delta[2] + wheel_delta[3]);
     int conesx[10];
     float conestheta[10];
     int ncones = coneslam::FindCones(buf, config_.cone_thresh,
-        gyro_[2], 10, conesx, conestheta);
+        carstate_.gyro[2], 10, conesx, conestheta);
 
     if (ds > 0) {  // only do coneslam updates while we're moving
-      localizer_->Predict(ds, gyro_[2], dt);
+      localizer_->Predict(ds, carstate_.gyro[2], dt);
       for (int i = 0; i < ncones; i++) {
         localizer_->UpdateLM(conestheta[i], config_.lm_precision,
             config_.lm_bogon_thresh*0.01);
@@ -183,7 +177,7 @@ class Driver: public CameraReceiver {
     }
 
     display_.UpdateConeView(buf, ncones, conesx);
-    display_.UpdateEncoders(wheel_pos_);
+    display_.UpdateEncoders(carstate_.wheel_pos);
     {
       coneslam::Particle meanp;
       localizer_->GetLocationEstimate(&meanp);
@@ -195,31 +189,50 @@ class Driver: public CameraReceiver {
       display_.UpdateParticleView(localizer_, cx, cy, nx, ny);
     }
 
-    float u_a = throttle_ / 127.0;
-    float u_s = steering_ / 127.0;
     controller_.UpdateState(config_,
-            u_a, u_s,
-            accel_, gyro_,
-            servo_pos_, wheel_delta,
-            dt);
-    last_t_ = t;
+            carstate_.accel, carstate_.gyro,
+            carstate_.servo_pos, wheel_delta, dt);
+  }
 
+  void OnFrame(uint8_t *buf, size_t length) {
+    struct timeval t;
+    gettimeofday(&t, NULL);
+    frame_++;
+
+    float dt = t.tv_sec - last_t_.tv_sec + (t.tv_usec - last_t_.tv_usec) * 1e-6;
+    if (dt > 0.1 && last_t_.tv_sec != 0) {
+      fprintf(stderr, "CameraThread::OnFrame: WARNING: "
+          "%fs gap between frames?!\n", dt);
+    }
+
+    UpdateFromSensors(buf, dt);
+
+    float u_a = carstate_.throttle / 127.0;
+    float u_s = carstate_.steering / 127.0;
     if (controller_.GetControl(config_, js_throttle_ / 32767.0,
           js_steering_ / 32767.0, &u_a, &u_s, dt, autodrive_, frame_)) {
-      steering_ = 127 * u_s;
-      throttle_ = 127 * u_a;
+      carstate_.steering = 127 * u_s;
+      carstate_.throttle = 127 * u_a;
 
       // override steering for servo angle calibration
       if (calibration_ == CAL_SRV_RIGHT) {
-        steering_ = -config_.srv_cal;
+        carstate_.steering = -config_.srv_cal;
       } else if (calibration_ == CAL_SRV_LEFT) {
-        steering_ = config_.srv_cal;
+        carstate_.steering = config_.srv_cal;
       }
 
-      teensy.SetControls(frame_ & 4 ? 1 : 0, throttle_, steering_);
+      teensy.SetControls(frame_ & 4 ? 1 : 0,
+          carstate_.throttle, carstate_.steering);
       // pca.SetPWM(PWMCHAN_STEERING, steering_);
       // pca.SetPWM(PWMCHAN_ESC, throttle_);
     }
+
+    if (IsRecording() && frame_ > frameskip_) {
+      frame_ = 0;
+      QueueRecordingData(t, buf, length);
+    }
+
+    last_t_ = t;
   }
 
   bool autodrive_;
@@ -478,11 +491,13 @@ int main(int argc, char *argv[]) {
 
   teensy.Init();
   teensy.SetControls(0, 0, 0);
-  teensy.GetFeedback(&servo_pos_, wheel_pos_, wheel_dt_);
+  teensy.GetFeedback(&carstate_.servo_pos,
+      carstate_.wheel_pos, carstate_.wheel_dt);
   fprintf(stderr, "initial teensy state feedback: \n"
           "  servo %d encoders %d %d %d %d\r",
-          servo_pos_, wheel_pos_[0], wheel_pos_[1],
-          wheel_pos_[2], wheel_pos_[3]);
+          carstate_.servo_pos,
+          carstate_.wheel_pos[0], carstate_.wheel_pos[1],
+          carstate_.wheel_pos[2], carstate_.wheel_pos[3]);
 
   // pca.Init(100);  // 100Hz output
   // pca.SetPWM(PWMCHAN_STEERING, 614);
@@ -513,9 +528,10 @@ int main(int argc, char *argv[]) {
     // FIXME: predict step here?
     {
       float temp;
-      imu.ReadIMU(&accel_, &gyro_, &temp);
+      imu.ReadIMU(&carstate_.accel, &carstate_.gyro, &temp);
       // FIXME: imu EKF update step?
-      teensy.GetFeedback(&servo_pos_, wheel_pos_, wheel_dt_);
+      teensy.GetFeedback(&carstate_.servo_pos,
+          carstate_.wheel_pos, carstate_.wheel_dt);
     }
     usleep(1000);
   }

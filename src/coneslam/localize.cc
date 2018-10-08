@@ -1,5 +1,6 @@
 #include <math.h>
 #include <stdio.h>
+#include <string.h>
 
 #include "coneslam/localize.h"
 
@@ -166,7 +167,7 @@ void Localizer::Resample() {
   particles_ = newp;
 }
 
-bool Localizer::GetLocationEstimate(Particle *mean) {
+bool Localizer::GetLocationEstimate(Particle *mean) const {
   mean->x = 0;
   mean->y = 0;
   mean->theta = 0;
@@ -179,6 +180,16 @@ bool Localizer::GetLocationEstimate(Particle *mean) {
   mean->y /= n_particles_;
   mean->theta /= n_particles_;
   return true;
+}
+
+int Localizer::SerializedSize() const {
+  // todo: we could put the cone detection locations in here also
+  return 4 + n_particles_ * sizeof(Particle);
+}
+
+int Localizer::Serialize(uint8_t *buf, int buflen) const {
+  memcpy(buf, &n_particles_, 4);
+  memcpy(buf+4, particles_, n_particles_ * sizeof(Particle));
 }
 
 }  // namespace coneslam

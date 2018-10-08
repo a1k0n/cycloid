@@ -12,7 +12,6 @@ class DriveController {
   DriveController();
 
   void UpdateState(const DriverConfig &config,
-      float throttle_in, float steering_in,
       const Eigen::Vector3f &accel,
       const Eigen::Vector3f &gyro,
       uint8_t servo_pos,
@@ -31,6 +30,9 @@ class DriveController {
 
   void ResetState();
 
+  int SerializedSize() const { return 0; }
+  int Serialize(uint8_t *buf, int buflen) const;
+
   TrajectoryTracker *GetTracker() { return &track_; }
 
  private:
@@ -43,6 +45,10 @@ class DriveController {
   float ierr_v_;  // integration error for velocity
   float ierr_w_;  // integration error for yaw rate
   float delta_;  // current steering angle
+
+  float target_v_, target_w_;  // control targets
+  float ye_, sinpsie_, cospsie_, k_;  // relative trajectory target
+
   TrajectoryTracker track_;
 };
 
