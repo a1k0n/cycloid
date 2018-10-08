@@ -8,9 +8,6 @@ using Eigen::Vector3f;
 
 const float V_ALPHA = 0.1;
 
-// circumference of tire (meters) / number of encoder ticks
-const float V_SCALE = 0.02;  // 40cm circumference, 20 ticks
-
 // servo closed loop response bandwidth (measured)
 const float BW_SRV = 2*M_PI*4;  // Hz
 
@@ -65,13 +62,12 @@ float DriveController::TargetCurvature(const DriverConfig &config) {
     return 2;  // circle right if you're confused
   }
 
-  float ye = ((x_ - cx)*nx + (y_ - cy)*ny) * V_SCALE;
-  k /= V_SCALE;
+  float ye = ((x_ - cx)*nx + (y_ - cy)*ny);
 
   float C = cos(theta_), S = sin(theta_);
   // cosine of psie = (S, -C).(nx, ny)
   float Cp = S*nx - C*ny;
-  // sine of psie = (S, -C)x(nx, ny)  (i think?)
+  // sine of psie = (S, -C).(-ny, nx)  (i think?)
   float Sp = S*ny + C*nx;
   // float Sp = -S*ny - C*nx;
   float Cpy = Cp / (1 - k * ye);
@@ -80,13 +76,13 @@ float DriveController::TargetCurvature(const DriverConfig &config) {
   float Kvy = config.steering_kvy * 0.01;
   float targetk = -Cpy*(ye*Cpy*(-Kpy*Cp) + Sp*(k*Sp - Kvy*Cp) + k);
 
-  printf("x=%f,%f c=%f,%f n=(%f,%f)\n", x_, y_, cx, cy, nx, ny);
-  printf("ye=%f psie=(%f,%f) k=%f Cpy=%f\n", ye, Cp, Sp, k, Cpy);
-  printf("psie=%f Kpp=%f Kvy=%f targetk=%f\n", atan2(Sp, Cp), Kpy, Kvy, targetk);
+  // update control state for datalogging
+  ye_ = ye;
+  psie_ = atan2(Sp, Cp);
+  k_ = k;
+  target_k_ = targetk;
 
-  //printf("targetk=%f\n", targetk);
   return targetk;
-  // return ye * Kpy;  // - k;
 }
 
 bool DriveController::GetControl(const DriverConfig &config,
@@ -165,8 +161,34 @@ bool DriveController::GetControl(const DriverConfig &config,
     ierr_w_ += dt*err_w;
   }
 
+  // update state for datalogging
+  target_v_ = target_v;
+  target_w_ = target_w;
+
   return true;
 }
 
+int DriveController::SerializedSize() const {
+  return sizeof(float)*15;
+}
+
 int DriveController::Serialize(uint8_t *buf, int buflen) const {
+  memcpy(buf, &x_, 4);
+  memcpy(buf+4, &y_, 4);
+  memcpy(buf+8, &theta_, 4);
+  memcpy(buf+12, &vf_, 4);
+  memcpy(buf+16, &vr_, 4);
+  memcpy(buf+20, &w_, 4);
+  memcpy(buf+24, &ierr_v_, 4);
+  memcpy(buf+28, &ierr_w_, 4);
+  memcpy(buf+32, &delta_, 4);
+
+  memcpy(buf+36, &target_k_, 4);
+  memcpy(buf+40, &target_v_, 4);
+  memcpy(buf+44, &target_w_, 4);
+  memcpy(buf+48, &ye_, 4);
+  memcpy(buf+52, &psie_, 4);
+  memcpy(buf+56, &k_, 4);
+
+  return 60;
 }

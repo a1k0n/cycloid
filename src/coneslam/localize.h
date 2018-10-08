@@ -24,6 +24,7 @@ class Localizer {
     n_landmarks_ = 0;
     landmarks_ = NULL;
     LL_ = new float[n_particles];
+    home_x_ = home_y_ = home_theta_ = 0;
     Reset();
   }
 
@@ -34,6 +35,7 @@ class Localizer {
   void Reset();
 
   // predict after encoder / gyro measurement
+  // ds is in meters, w in rad/sec, dt in sec
   void Predict(float ds, float w, float dt);
 
   // update after landmark measurement
@@ -59,6 +61,8 @@ class Localizer {
 
   int n_landmarks_;
   Landmark *landmarks_;
+
+  float home_x_, home_y_, home_theta_;
 
   float *LL_;  // particle log-likelihood
   float LLmax_;

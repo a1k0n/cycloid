@@ -4,6 +4,9 @@
 #include <cstdint>
 #include <cstdio>
 
+// circumference of tire (meters) / number of encoder ticks
+const float V_SCALE = 0.02;  // 40cm circumference, 20 ticks
+
 // Dynamic configuration variables
 // can be changed via commandline or controller
 class DriverConfig {
@@ -39,7 +42,7 @@ class DriverConfig {
     yaw_bw = 0.50 * 100;
 
     lm_precision = 100;
-    lm_bogon_thresh = 10;  // 0.1
+    lm_bogon_thresh = 0.1 * 100;
 
     srv_cal = 64;
   }

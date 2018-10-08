@@ -10,9 +10,9 @@ namespace coneslam {
 //const float NOISE_LONG = 20;
 //const float NOISE_LAT = 1;
 
-const float NOISE_ANGULAR = 0.008;
-const float NOISE_LONG = 16;
-const float NOISE_LAT = 8;
+const float NOISE_ANGULAR = 0.4;
+const float NOISE_LONG = 800;
+const float NOISE_LAT = 400;
 
 static double randn() {
   // #include <random> doesn't work in my ARM cross-compiler so I'm just
@@ -32,9 +32,9 @@ Localizer::~Localizer() {
 
 void Localizer::Reset() {
   for (int i = 0; i < n_particles_; i++) {
-    particles_[i].x = 12*randn();
-    particles_[i].y = 12*randn();
-    particles_[i].theta = randn() * 0.2;
+    particles_[i].x = 0.25*randn() + home_x_;
+    particles_[i].y = 0.25*randn() + home_y_;
+    particles_[i].theta = randn() * 0.2 + home_theta_;
   }
   ResetLikelihood();
 }
@@ -67,6 +67,11 @@ bool Localizer::LoadLandmarks(const char *filename) {
       fclose(fp);
       return false;
     }
+  }
+  // if the last line is "home [x] [y] [theta]", override the home location
+  if (fscanf(fp, "home %f %f %f\n", &home_x_, &home_y_, &home_theta_) == 3) {
+    fprintf(stderr, "home location set to %f %f %f\n",
+        home_x_, home_y_, home_theta_);
   }
   fclose(fp);
   return true;
@@ -152,6 +157,8 @@ void Localizer::Resample() {
       }
     }
     newp[i] = particles_[j];
+    // canonicalize angles while resampling
+    newp[i].theta = fmodf(newp[i].theta + M_PI, 2*M_PI) - M_PI;
 #ifdef PF_DEBUG
     printf("%d ", j);
 #endif

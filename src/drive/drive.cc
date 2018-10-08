@@ -157,7 +157,7 @@ class Driver: public CameraReceiver {
     memcpy(last_encoders_, carstate_.wheel_pos, 4*sizeof(uint16_t));
 
     // predict using front wheel distance
-    float ds = 0.25 * (
+    float ds = V_SCALE * 0.25 * (
         wheel_delta[0] + wheel_delta[1] +
         + wheel_delta[2] + wheel_delta[3]);
     int conesx[10];

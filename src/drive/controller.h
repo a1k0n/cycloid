@@ -30,7 +30,7 @@ class DriveController {
 
   void ResetState();
 
-  int SerializedSize() const { return 0; }
+  int SerializedSize() const;
   int Serialize(uint8_t *buf, int buflen) const;
 
   TrajectoryTracker *GetTracker() { return &track_; }
@@ -46,8 +46,8 @@ class DriveController {
   float ierr_w_;  // integration error for yaw rate
   float delta_;  // current steering angle
 
-  float target_v_, target_w_;  // control targets
-  float ye_, sinpsie_, cospsie_, k_;  // relative trajectory target
+  float target_k_, target_v_, target_w_;  // control targets
+  float ye_, psie_, k_;  // relative trajectory target
 
   TrajectoryTracker track_;
 };
