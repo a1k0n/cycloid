@@ -22,6 +22,7 @@ class Localizer {
     particles_ = new Particle[n_particles];
     n_landmarks_ = 0;
     landmarks_ = NULL;
+    LL_ = new float[n_particles];
     Reset();
   }
 
@@ -33,8 +34,10 @@ class Localizer {
 
   // predict after encoder / gyro measurement
   void Predict(float ds, float w, float dt);
+
   // update after landmark measurement
-  void UpdateLM(float lm_bearing, float precision);
+  void UpdateLM(float lm_bearing, float precision, float bogon_thresh);
+  void Resample();  // implicitly resets internal likelihoods
 
   bool GetLocationEstimate(Particle *mean);
 
@@ -45,11 +48,16 @@ class Localizer {
   int NumParticles() const { return n_particles_; }
 
  private:
+  void ResetLikelihood();
+
   int n_particles_;
   Particle *particles_;
 
   int n_landmarks_;
   Landmark *landmarks_;
+
+  float *LL_;  // particle log-likelihood
+  float LLmax_;
 };
 
 }  // namespace coneslam

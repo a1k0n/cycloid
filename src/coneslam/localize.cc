@@ -26,6 +26,7 @@ static double randn() {
 Localizer::~Localizer() {
   delete[] particles_;
   delete[] landmarks_;
+  delete[] LL_;
 }
 
 void Localizer::Reset() {
@@ -34,6 +35,14 @@ void Localizer::Reset() {
     particles_[i].y = 12*randn();
     particles_[i].theta = randn() * 0.2;
   }
+  ResetLikelihood();
+}
+
+void Localizer::ResetLikelihood() {
+  for (int i = 0; i < n_particles_; i++) {
+    LL_[i] = -1e6;
+  }
+  LLmax_ = -1e6;
 }
 
 bool Localizer::LoadLandmarks(const char *filename) {
@@ -77,17 +86,14 @@ void Localizer::Predict(float ds, float w, float dt) {
   }
 }
 
-void Localizer::UpdateLM(float lm_bearing, float precision) {
-  float *LL;
-  LL = new float[n_particles_];
-  float LLmax = -1e6;
+void Localizer::UpdateLM(float lm_bearing, float precision, float bogon_thresh) {
+  LL_ = new float[n_particles_];
 
   // for each particle, find likeliest landmark and its likelihood
   for (int i = 0; i < n_particles_; i++) {
     const Particle &p = particles_[i];
     float S = sin(p.theta),
           C = cos(p.theta);
-    LL[i] = -1e6;
 #ifdef PF_DEBUG
     printf("%d: ", i);
 #endif
@@ -98,32 +104,34 @@ void Localizer::UpdateLM(float lm_bearing, float precision) {
       float z = dx*C + dy*S,
             y = dx*S - dy*C;
       float diff = atan2f(y, z) - lm_bearing;
-      float L = -precision*diff*diff;
+      float L = -precision*fmin(bogon_thresh, diff*diff);
 #ifdef PF_DEBUG
       printf("[%d]%f %f ", j, diff, L);
 #endif
-      if (L > LL[i]) {
-        LL[i] = L;
+      if (L > LL_[i]) {
+        LL_[i] = L;
       }
     }
 #ifdef PF_DEBUG
-    printf("LL[i]=%f\n", LL[i]);
+    printf("LL[i]=%f\n", LL_[i]);
 #endif
-    if (LL[i] > LLmax) {
-      LLmax = LL[i];
+    if (LL_[i] > LLmax_) {
+      LLmax_ = LL_[i];
     }
   }
 #ifdef PF_DEBUG
-  printf("LLmax=%f (%d landmarks)\n", LLmax, n_landmarks_);
+  printf("LLmax=%f (%d landmarks)\n", LLmax_, n_landmarks_);
 #endif
+}
 
+void Localizer::Resample() {
   // now, normalize the distribution and resample particles
   float totalP = 0;
   for (int i = 0; i < n_particles_; i++) {
-    LL[i] = exp(LL[i] - LLmax);
-    totalP += LL[i];
+    LL_[i] = exp(LL_[i] - LLmax_);
+    totalP += LL_[i];
 #ifdef PF_DEBUG
-    printf("%0.3f ", LL[i]);
+    printf("%0.3f ", LL_[i]);
 #endif
   }
 #ifdef PF_DEBUG
@@ -135,8 +143,8 @@ void Localizer::UpdateLM(float lm_bearing, float precision) {
   Particle *newp = new Particle[n_particles_];
   int j = 0;
   for (int i = 0; i < n_particles_; i++) {
-    while (randP > LL[j]) {
-      randP -= LL[j];
+    while (randP > LL_[j]) {
+      randP -= LL_[j];
       j++;
       if (j == n_particles_) {
         j = 0;
@@ -152,10 +160,10 @@ void Localizer::UpdateLM(float lm_bearing, float precision) {
   printf("\n");
 #endif
 
+  ResetLikelihood();
+
   delete[] particles_;
   particles_ = newp;
-
-  delete[] LL;
 }
 
 bool Localizer::GetLocationEstimate(Particle *mean) {

@@ -61,8 +61,8 @@ void DriveController::UpdateState(const DriverConfig &config,
 
 // this is the main autodrive control system
 float DriveController::TargetCurvature(const DriverConfig &config) {
-  float cx, cy, nx, ny, k, t;
-  if (!track_.GetTarget(x_, y_, &cx, &cy, &nx, &ny, &k, &t)) {
+  float cx, cy, nx, ny, k;
+  if (!track_.GetTarget(x_, y_, &cx, &cy, &nx, &ny, &k)) {
     return 2;  // circle right if you're confused
   }
 

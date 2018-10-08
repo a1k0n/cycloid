@@ -174,7 +174,11 @@ class Driver: public CameraReceiver {
     if (ds > 0) {  // only do coneslam updates while we're moving
       localizer_->Predict(ds, gyro_[2], dt);
       for (int i = 0; i < ncones; i++) {
-        localizer_->UpdateLM(conestheta[i], config_.lm_precision);
+        localizer_->UpdateLM(conestheta[i], config_.lm_precision,
+            config_.lm_bogon_thresh*0.01);
+      }
+      if (ncones > 0) {
+        localizer_->Resample();
       }
     }
 
@@ -183,10 +187,10 @@ class Driver: public CameraReceiver {
     {
       coneslam::Particle meanp;
       localizer_->GetLocationEstimate(&meanp);
-      float cx, cy, nx, ny, k, t;
+      float cx, cy, nx, ny, k;
       controller_.UpdateLocation(meanp.x, meanp.y, meanp.theta);
       controller_.GetTracker()->GetTarget(meanp.x, meanp.y,
-          &cx, &cy, &nx, &ny, &k, &t);
+          &cx, &cy, &nx, &ny, &k);
 
       display_.UpdateParticleView(localizer_, cx, cy, nx, ny);
     }
@@ -425,6 +429,7 @@ const char *DriverInputReceiver::configmenu[] = {
   "motor bw",
   "yaw rate bw",
   "cone precision",
+  "bogon thresh",
   "servo cal",
 };
 const int DriverInputReceiver::N_CONFIGITEMS = sizeof(configmenu) / sizeof(configmenu[0]);
