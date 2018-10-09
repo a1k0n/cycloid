@@ -12,8 +12,8 @@ namespace coneslam {
 //const float NOISE_LAT = 1;
 
 const float NOISE_ANGULAR = 0.4;
-const float NOISE_LONG = 800;
-const float NOISE_LAT = 400;
+const float NOISE_LONG = 16;
+const float NOISE_LAT = 8;
 
 static double randn() {
   // #include <random> doesn't work in my ARM cross-compiler so I'm just
@@ -95,7 +95,6 @@ void Localizer::Predict(float ds, float w, float dt) {
 }
 
 void Localizer::UpdateLM(float lm_bearing, float precision, float bogon_thresh) {
-  LL_ = new float[n_particles_];
   float mindiffsqr = bogon_thresh*bogon_thresh;
 
   // for each particle, find likeliest landmark and its likelihood
