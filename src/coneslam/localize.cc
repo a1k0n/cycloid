@@ -75,6 +75,7 @@ bool Localizer::LoadLandmarks(const char *filename) {
         home_x_, home_y_, home_theta_);
   }
   fclose(fp);
+  Reset();
   return true;
 }
 
@@ -197,9 +198,11 @@ int Localizer::SerializedSize() const {
 }
 
 int Localizer::Serialize(uint8_t *buf, int buflen) const {
-  assert(buflen > (4 + n_particles_*sizeof(Particle)));
+  int len = SerializedSize();
+  assert(buflen > len);
   memcpy(buf, &n_particles_, 4);
   memcpy(buf+4, particles_, n_particles_ * sizeof(Particle));
+  return len;
 }
 
 }  // namespace coneslam

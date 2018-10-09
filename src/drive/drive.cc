@@ -80,7 +80,7 @@ class Driver: public CameraReceiver {
     frame_ = 0;
     frameskip_ = 0;
     autodrive_ = false;
-    gettimeofday(&last_t_, NULL);
+    memset(&last_t_, 0, sizeof(last_t_));
     if (config_.Load()) {
       fprintf(stderr, "Loaded driver configuration\n");
     }
