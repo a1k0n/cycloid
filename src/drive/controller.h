@@ -48,6 +48,7 @@ class DriveController {
 
   float target_k_, target_v_, target_w_;  // control targets
   float ye_, psie_, k_;  // relative trajectory target
+  float bw_w_, bw_v_;  // control bandwidth for yaw and speed
 
   TrajectoryTracker track_;
 };

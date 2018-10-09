@@ -24,7 +24,7 @@ class DriverConfig {
   int16_t yaw_bw;
 
   int16_t lm_precision;  // landmark precision (1/sigma^2)
-  int16_t lm_bogon_thresh;  // minimum radians^2 for a true cone detection
+  int16_t lm_bogon_thresh;  // min angle-error (radians) for true cone detection
 
   int16_t srv_cal;  // servo fixed value for turn calibration
 
@@ -36,13 +36,13 @@ class DriverConfig {
     traction_limit = 4.0 * 100;
 
     steering_kpy = 1.0 * 100;
-    steering_kvy = 5.0 * 100;
+    steering_kvy = 1.0 * 100;
 
     motor_bw = 2.00 * 100;
     yaw_bw = 0.50 * 100;
 
     lm_precision = 100;
-    lm_bogon_thresh = 0.1 * 100;
+    lm_bogon_thresh = 0.31 * 100;
 
     srv_cal = 64;
   }

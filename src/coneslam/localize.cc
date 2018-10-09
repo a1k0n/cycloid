@@ -1,3 +1,4 @@
+#include <assert.h>
 #include <math.h>
 #include <stdio.h>
 #include <string.h>
@@ -94,6 +95,7 @@ void Localizer::Predict(float ds, float w, float dt) {
 
 void Localizer::UpdateLM(float lm_bearing, float precision, float bogon_thresh) {
   LL_ = new float[n_particles_];
+  float mindiffsqr = bogon_thresh*bogon_thresh;
 
   // for each particle, find likeliest landmark and its likelihood
   for (int i = 0; i < n_particles_; i++) {
@@ -110,7 +112,7 @@ void Localizer::UpdateLM(float lm_bearing, float precision, float bogon_thresh) 
       float z = dx*C + dy*S,
             y = dx*S - dy*C;
       float diff = atan2f(y, z) - lm_bearing;
-      float L = -precision*fmin(bogon_thresh, diff*diff);
+      float L = -precision*fmin(mindiffsqr, diff*diff);
 #ifdef PF_DEBUG
       printf("[%d]%f %f ", j, diff, L);
 #endif
@@ -195,6 +197,7 @@ int Localizer::SerializedSize() const {
 }
 
 int Localizer::Serialize(uint8_t *buf, int buflen) const {
+  assert(buflen > (4 + n_particles_*sizeof(Particle)));
   memcpy(buf, &n_particles_, 4);
   memcpy(buf+4, particles_, n_particles_ * sizeof(Particle));
 }

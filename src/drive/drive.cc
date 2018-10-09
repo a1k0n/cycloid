@@ -137,7 +137,7 @@ class Driver: public CameraReceiver {
     ptr += localizer_->Serialize(flushbuf+ptr, flushlen - ptr);
     ptr += controller_.Serialize(flushbuf+ptr, flushlen - ptr);
 
-    // write the whole 640x480 buffer
+    // write the 640x480 yuv420 buffer last
     memcpy(flushbuf+ptr, buf, length);
 
     flush_thread_.AddEntry(output_fd_, flushbuf, flushlen);

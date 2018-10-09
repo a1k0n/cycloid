@@ -164,15 +164,19 @@ bool DriveController::GetControl(const DriverConfig &config,
   // update state for datalogging
   target_v_ = target_v;
   target_w_ = target_w;
+  bw_w_ = BW_w;
+  bw_v_ = BW_v;
 
   return true;
 }
 
 int DriveController::SerializedSize() const {
-  return sizeof(float)*15;
+  return sizeof(float)*17;
 }
 
 int DriveController::Serialize(uint8_t *buf, int buflen) const {
+  assert(buflen >= 68);
+
   memcpy(buf, &x_, 4);
   memcpy(buf+4, &y_, 4);
   memcpy(buf+8, &theta_, 4);
@@ -189,6 +193,8 @@ int DriveController::Serialize(uint8_t *buf, int buflen) const {
   memcpy(buf+48, &ye_, 4);
   memcpy(buf+52, &psie_, 4);
   memcpy(buf+56, &k_, 4);
+  memcpy(buf+60, &bw_w_, 4);
+  memcpy(buf+64, &bw_v_, 4);
 
-  return 60;
+  return 68;
 }
