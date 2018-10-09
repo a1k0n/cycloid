@@ -69,7 +69,7 @@ int FindCones(const uint8_t *yuvimg, int thresh, float gyroz, int nout,
       // from the convolution
       x_out[outputs] = center;
       int lut_y = y0+yinc*center*0.5 + conedetect_y_offset;
-      if (lut_y >= (sizeof(conedetect_LUT) / 640)) {
+      if (lut_y >= (int)(sizeof(conedetect_LUT) / 640)) {
         fprintf(stderr, "panic: lut_y = %d, too big gyroz=%f y0=%f yinc=%f", lut_y, gyroz, y0, yinc);
         lut_y = (sizeof(conedetect_LUT) / 640) - 1;
       }

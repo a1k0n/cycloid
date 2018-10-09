@@ -324,8 +324,6 @@ class DriverInputReceiver : public InputReceiver {
     struct timeval tv;
     gettimeofday(&tv, NULL);
 
-    int16_t *value = ((int16_t*) config_) + config_item_;
-
     switch (button) {
       case '+':  // start button: start recording
         if (!driver_.IsRecording()) {
@@ -336,7 +334,7 @@ class DriverInputReceiver : public InputReceiver {
           strftime(fnamebuf, sizeof(fnamebuf), "cycloid-%Y%m%d-%H%M%S.rec",
               &start_time_tm);
           if (driver_.StartRecording(fnamebuf, 0)) {
-            fprintf(stderr, "%d.%06d started recording %s\n",
+            fprintf(stderr, "%ld.%06ld started recording %s\n",
                 tv.tv_sec, tv.tv_usec, fnamebuf);
             display_.UpdateStatus(fnamebuf, 0xffe0);
           }
@@ -345,7 +343,8 @@ class DriverInputReceiver : public InputReceiver {
       case '-':  // select button: stop recording
         if (driver_.IsRecording()) {
           driver_.StopRecording();
-          fprintf(stderr, "%d.%06d stopped recording\n", tv.tv_sec, tv.tv_usec);
+          fprintf(stderr, "%ld.%06ld stopped recording\n",
+              tv.tv_sec, tv.tv_usec);
           display_.UpdateStatus("recording stopped", 0xffff);
         }
         break;
@@ -355,7 +354,7 @@ class DriverInputReceiver : public InputReceiver {
         break;
       case 'L':
          if (!driver_.autodrive_) {
-          fprintf(stderr, "%d.%06d autodrive ON\n", tv.tv_sec, tv.tv_usec);
+          fprintf(stderr, "%ld.%06ld autodrive ON\n", tv.tv_sec, tv.tv_usec);
           driver_.autodrive_ = true;
         }
         // driver_.calibration_ = Driver::CAL_SRV_LEFT;
@@ -368,7 +367,8 @@ class DriverInputReceiver : public InputReceiver {
         if (config_->Load()) {
           fprintf(stderr, "config loaded\n");
           int16_t *values = ((int16_t*) config_);
-          display_.UpdateConfig(configmenu, N_CONFIGITEMS, config_item_, values);
+          display_.UpdateConfig(configmenu, N_CONFIGITEMS,
+              config_item_, values);
           display_.UpdateStatus("config loaded", 0xffff);
         }
         fprintf(stderr, "reset kalman filter\n");
@@ -396,7 +396,7 @@ class DriverInputReceiver : public InputReceiver {
       case 'L':
         if (driver_.autodrive_) {
           driver_.autodrive_ = false;
-          fprintf(stderr, "%d.%06d autodrive OFF\n", tv.tv_sec, tv.tv_usec);
+          fprintf(stderr, "%ld.%06ld autodrive OFF\n", tv.tv_sec, tv.tv_usec);
         }
         // fall through
       case 'R':
@@ -507,7 +507,7 @@ int main(int argc, char *argv[]) {
 
   struct timeval tv;
   gettimeofday(&tv, NULL);
-  fprintf(stderr, "%d.%06d camera on @%d fps\n", tv.tv_sec, tv.tv_usec, fps);
+  fprintf(stderr, "%ld.%06ld camera on @%d fps\n", tv.tv_sec, tv.tv_usec, fps);
 
   DriverInputReceiver input_receiver(&driver_.config_);
 #ifdef CAMERA
@@ -516,12 +516,10 @@ int main(int argc, char *argv[]) {
   }
 
   gettimeofday(&tv, NULL);
-  fprintf(stderr, "%d.%06d started camera\n", tv.tv_sec, tv.tv_usec);
+  fprintf(stderr, "%ld.%06ld started camera\n", tv.tv_sec, tv.tv_usec);
 #endif
 
   while (!done) {
-    int t = 0, s = 0;
-    uint16_t b = 0;
     if (has_joystick && js.ReadInput(&input_receiver)) {
       // nothing to do here
     }

@@ -11,8 +11,8 @@
 struct FlushEntry {
   int fd_;
   uint8_t *buf_;
-  size_t len_;
-  size_t unsynced_;
+  ssize_t len_;
+  ssize_t unsynced_;
 
   FlushEntry() { buf_ = NULL; }
   FlushEntry(int fd, uint8_t *buf, size_t len):

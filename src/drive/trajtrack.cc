@@ -49,12 +49,6 @@ bool TrajectoryTracker::LoadTrack(const char *fname) {
   return true;
 }
 
-static float clip(float x, float a, float b) {
-  if (x < a) return a;
-  if (x > b) return b;
-  return x;
-}
-
 bool TrajectoryTracker::GetTarget(float x, float y,
     float *closestx, float *closesty,
     float *normx, float *normy,

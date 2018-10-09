@@ -64,8 +64,8 @@ class DriverConfig {
     }
     fseek(fp, 0, SEEK_END);
     if (ftell(fp) != sizeof(*this)) {
-      fprintf(stderr, "driverconfig is %d bytes; "
-          "config should be %d; ignoring\n", ftell(fp), sizeof(this));
+      fprintf(stderr, "driverconfig is %ld bytes; "
+          "config should be %u; ignoring\n", ftell(fp), sizeof(this));
       fclose(fp);
       return true;
     }

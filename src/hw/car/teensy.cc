@@ -42,7 +42,7 @@ bool Teensy::Init() {
 }
 
 bool Teensy::SetControls(uint8_t led, int8_t esc, int8_t servo) {
-  uint8_t buf[3] = {led, esc, servo};
+  uint8_t buf[3] = {led, (uint8_t)esc, (uint8_t)servo};
   return i2c_.Write(TEENSY_ADDRESS, 0, 3, buf);
 }
 

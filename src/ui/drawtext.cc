@@ -17,7 +17,7 @@ static const uint8_t BIGFONTWIDTH[] = {
 };
 
 void DrawText(const char *str, int x, int y, uint16_t color, uint16_t *buf) {
-  while (char c = *str++) {
+  while (int c = static_cast<int>(*str++)) {
     uint8_t w = FONTWIDTH[c];
     if (x + w - 1 >= 320) {  // off screen
       return;
@@ -36,7 +36,7 @@ void DrawText(const char *str, int x, int y, uint16_t color, uint16_t *buf) {
 }
 
 void DrawTextBig(const char *str, int x, int y, uint16_t color, uint16_t *buf) {
-  while (char c = *str++) {
+  while (int c = static_cast<int>(*str++)) {
     uint8_t w = BIGFONTWIDTH[c];
     if (x + w - 1 >= 320) {  // off screen
       return;
@@ -56,7 +56,7 @@ void DrawTextBig(const char *str, int x, int y, uint16_t color, uint16_t *buf) {
 
 int TextWidthBig(const char *str) {
   int w = 0;
-  while (char c = *str++) {
+  while (int c = static_cast<int>(*str++)) {
     w += BIGFONTWIDTH[c] + 1;
   }
   return w;
