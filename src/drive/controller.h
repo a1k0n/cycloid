@@ -32,11 +32,9 @@ class DriveController {
 
   int SerializedSize() const;
   int Serialize(uint8_t *buf, int buflen) const;
+  void Dump() const;
 
   TrajectoryTracker *GetTracker() { return &track_; }
-
- private:
-  float TargetCurvature(const DriverConfig &config);
 
   // car state
   float x_, y_, theta_;
@@ -49,6 +47,9 @@ class DriveController {
   float target_k_, target_v_, target_w_;  // control targets
   float ye_, psie_, k_;  // relative trajectory target
   float bw_w_, bw_v_;  // control bandwidth for yaw and speed
+
+ private:
+  float TargetCurvature(const DriverConfig &config);
 
   TrajectoryTracker track_;
 };

@@ -104,15 +104,15 @@ bool TrajectoryTracker::GetTarget(float x, float y,
     float norm = sqrt(dpx*dpx + dpy*dpy);
     *closestx = p.x + fabs(p.r) * dpx / norm;
     *closesty = p.y + fabs(p.r) * dpy / norm;
-    *normx = -dpx * copysignf(1.0, p.r) / norm;
-    *normy = -dpy * copysignf(1.0, p.r) / norm;
-    *kappa = 1.0 / p.r;
+    *normx = dpx * copysignf(1.0, p.r) / norm;
+    *normy = dpy * copysignf(1.0, p.r) / norm;
+    *kappa = -1.0 / p.r;
     *lineposition = 0;
   } else {  // on line segment
     *closestx = minx;
     *closesty = miny;
-    *normx = -p.nx;  // i guess i put these in backwards
-    *normy = -p.ny;
+    *normx = p.nx;
+    *normy = p.ny;
     *kappa = 0;
     *lineposition = mint;
   }

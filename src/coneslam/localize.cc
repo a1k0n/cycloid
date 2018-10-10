@@ -159,8 +159,11 @@ void Localizer::Resample() {
       }
     }
     newp[i] = particles_[j];
+
     // canonicalize angles while resampling
-    newp[i].theta = fmodf(newp[i].theta + M_PI, 2*M_PI) - M_PI;
+    // newp[i].theta = fmodf(newp[i].theta + M_PI, 2*M_PI) - M_PI;
+    // NO! we can't do this if we then go around and average theta!
+
 #ifdef PF_DEBUG
     printf("%d ", j);
 #endif

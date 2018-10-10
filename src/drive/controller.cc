@@ -62,19 +62,20 @@ float DriveController::TargetCurvature(const DriverConfig &config) {
     return 2;  // circle right if you're confused
   }
 
+  // (nx, ny) is the vector pointing towards +y (left)
   float ye = ((x_ - cx)*nx + (y_ - cy)*ny);
 
   float C = cos(theta_), S = sin(theta_);
-  // cosine of psie = (S, -C).(nx, ny)
-  float Cp = S*nx - C*ny;
-  // sine of psie = (S, -C).(-ny, nx)  (i think?)
+
+  // the car's "y" coordinate is (-S, C); measure cos/sin psi
+  float Cp = -S*nx + C*ny;
   float Sp = S*ny + C*nx;
-  // float Sp = -S*ny - C*nx;
   float Cpy = Cp / (1 - k * ye);
 
   float Kpy = config.steering_kpy * 0.01;
   float Kvy = config.steering_kvy * 0.01;
-  float targetk = -Cpy*(ye*Cpy*(-Kpy*Cp) + Sp*(k*Sp - Kvy*Cp) + k);
+  //float targetk = -Cpy*(ye*Cpy*(-Kpy*Cp) + Sp*(k*Sp - Kvy*Cp) + k);
+  float targetk = Cpy*(ye*Cpy*(-Kpy*Cp) + Sp*(k*Sp - Kvy*Cp) + k);
 
   // update control state for datalogging
   ye_ = ye;
@@ -94,6 +95,9 @@ bool DriveController::GetControl(const DriverConfig &config,
   // throttle_in controls vmax (w.r.t. the configured value)
   // steering_in controls desired curvature
 
+  // compute target curvature at all times, just for datalogging purposes
+  float autok = TargetCurvature(config);
+
   // if we're braking or coasting, just control that manually
   if (!autodrive && throttle_in <= 0) {
     *throttle_out = throttle_in;
@@ -104,12 +108,12 @@ bool DriveController::GetControl(const DriverConfig &config,
   }
 
   // max curvature is 1m radius
-  float k = -steering_in * 2;
+  // use a quadratic curve to give finer control near center
+  float k = -steering_in * 2 * fabs(steering_in);
   float vmax = throttle_in * config.speed_limit * 0.01;
   if (autodrive) {
-    k = TargetCurvature(config);
+    k = autok;
     vmax = config.speed_limit * 0.01;
-    // FIXME: brake before turns
   }
 
   float kmin = config.traction_limit * 0.01 / (vmax*vmax);
@@ -197,4 +201,8 @@ int DriveController::Serialize(uint8_t *buf, int buflen) const {
   memcpy(buf+64, &bw_v_, 4);
 
   return 68;
+}
+
+void DriveController::Dump() const {
+  printf("targetkvw %f %f %f v %f k %f", target_k_, target_v_, target_w_, vr_, k_);
 }

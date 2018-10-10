@@ -35,10 +35,10 @@ class DriverConfig {
     speed_limit = 4.0 * 100;
     traction_limit = 4.0 * 100;
 
-    steering_kpy = 1.0 * 100;
-    steering_kvy = 1.0 * 100;
+    steering_kpy = 0.4 * 100;
+    steering_kvy = 0.4 * 100;
 
-    motor_bw = 2.00 * 100;
+    motor_bw = 0.05 * 100;
     yaw_bw = 0.50 * 100;
 
     lm_precision = 100;
@@ -65,7 +65,7 @@ class DriverConfig {
     fseek(fp, 0, SEEK_END);
     if (ftell(fp) != sizeof(*this)) {
       fprintf(stderr, "driverconfig is %ld bytes; "
-          "config should be %u; ignoring\n", ftell(fp), sizeof(this));
+          "config should be %lu; ignoring\n", ftell(fp), sizeof(this));
       fclose(fp);
       return true;
     }
