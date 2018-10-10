@@ -32,14 +32,14 @@ class DriverConfig {
     // Default values
     cone_thresh = 300;
 
-    speed_limit = 4.0 * 100;
-    traction_limit = 4.0 * 100;
+    speed_limit = 8.0 * 100;
+    traction_limit = 8.0 * 100;
 
-    steering_kpy = 0.4 * 100;
-    steering_kvy = 0.4 * 100;
+    steering_kpy = 0.2 * 100;
+    steering_kvy = 0.6 * 100;
 
     motor_bw = 0.05 * 100;
-    yaw_bw = 0.50 * 100;
+    yaw_bw = 0.6 * 100;
 
     lm_precision = 100;
     lm_bogon_thresh = 0.31 * 100;
