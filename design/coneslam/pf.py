@@ -34,7 +34,7 @@ def read_landmarks():
 
 
 L = read_landmarks()
-a=1
+a = 1
 XOFF = 300
 YOFF = 50
 
@@ -42,8 +42,8 @@ YOFF = 50
 NOISE_ANGULAR = 0.008
 NOISE_LONG = 16
 NOISE_LAT = 8
-LM_SELECTIVITY = 90  # 9??!? how did that even work? 80
-BOGON_THRESH = .01  # (minimum acceptable angle in radians^2 to a real landmark)
+LM_SELECTIVITY = 90
+BOGON_THRESH = .01  # minimum radians^2 to a real landmark
 
 
 def step(X, dt, encoder_dx, gyro_dtheta):
