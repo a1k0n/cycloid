@@ -6,7 +6,7 @@
 
 using Eigen::Vector3f;
 
-const float V_ALPHA = 0.1;
+const float V_ALPHA = 0.3;
 
 // servo closed loop response bandwidth (measured)
 const float BW_SRV = 2*M_PI*4;  // Hz
@@ -74,7 +74,6 @@ float DriveController::TargetCurvature(const DriverConfig &config) {
 
   float Kpy = config.steering_kpy * 0.01;
   float Kvy = config.steering_kvy * 0.01;
-  //float targetk = -Cpy*(ye*Cpy*(-Kpy*Cp) + Sp*(k*Sp - Kvy*Cp) + k);
   float targetk = Cpy*(ye*Cpy*(-Kpy*Cp) + Sp*(k*Sp - Kvy*Cp) + k);
 
   // update control state for datalogging
@@ -158,7 +157,11 @@ bool DriveController::GetControl(const DriverConfig &config,
     *throttle_out = clip(Kp2*(err_v + Ki*ierr_v_ - M_OFFSET), -1, 0);
   }
 
-  ierr_v_ += dt*err_v;
+  // don't wind-up at control limits
+  if (*throttle_out > -1 && *throttle_out < 1) {
+    ierr_v_ += dt*err_v;
+  }
+
   if ((*steering_out > -1 && *steering_out < 1) ||
       (err_w > 0 && ierr_w_ < 0) || (err_w < 0 && ierr_w_ > 0)) {
     // don't windup integrator if we're maxed out
@@ -204,5 +207,6 @@ int DriveController::Serialize(uint8_t *buf, int buflen) const {
 }
 
 void DriveController::Dump() const {
-  printf("targetkvw %f %f %f v %f k %f", target_k_, target_v_, target_w_, vr_, k_);
+  printf("targetkvw %f %f %f v %f k %f windup %f %f",
+      target_k_, target_v_, target_w_, vr_, k_, ierr_v_, ierr_w_);
 }

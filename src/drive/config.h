@@ -35,11 +35,11 @@ class DriverConfig {
     speed_limit = 8.0 * 100;
     traction_limit = 8.0 * 100;
 
-    steering_kpy = 0.2 * 100;
-    steering_kvy = 0.6 * 100;
+    steering_kpy = 1.0 * 100;
+    steering_kvy = 1.0 * 100;
 
-    motor_bw = 0.05 * 100;
-    yaw_bw = 0.6 * 100;
+    motor_bw = 0.10 * 100;
+    yaw_bw = 0.30 * 100;
 
     lm_precision = 100;
     lm_bogon_thresh = 0.31 * 100;

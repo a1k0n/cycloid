@@ -76,6 +76,7 @@ bool TrajectoryTracker::GetTarget(float x, float y,
   *normx = p.nx;
   *normy = p.ny;
   *kappa = p.k;
+  // printf("i %d pt %f %f norm %f %f k %f\n", mini, p.x, p.y, p.nx, p.ny, p.k);
 
   return true;
 }

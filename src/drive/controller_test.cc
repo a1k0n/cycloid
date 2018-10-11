@@ -28,7 +28,8 @@ int main() {
 
   float x = 8, y = -7, theta = 3.14;
   float v = 0, w = 0;
-  float s = 0, lasts = 0;
+  float s = 0;
+  uint16_t lastenc = 0;
 
   Eigen::Vector3f gyro(0, 0, 0), accel(0, 0, 0);
 
@@ -38,9 +39,10 @@ int main() {
     float throttle, steering;
 
     uint16_t encoders[4];
-    encoders[0] = encoders[1] = encoders[2] = encoders[3] = 50*(s - lasts);
+    uint16_t enc = 50*s;
+    encoders[0] = encoders[1] = encoders[2] = encoders[3] = enc - lastenc;
 
-    control.UpdateState(config, accel, gyro, 128, encoders, dt);
+    control.UpdateState(config, accel, gyro, 1, encoders, dt);
     control.UpdateLocation(x, y, theta);
     if (!control.GetControl(config, 0, 0, &throttle, &steering, dt, true, i)) {
       break;
@@ -57,9 +59,9 @@ int main() {
     v = motor(throttle, v, dt);
     theta += dt*w;
     float S = sin(theta), C = cos(theta);
-    lasts = s;
     x += dt*v*C;
     y += dt*v*S;
     s += dt*v;
+    lastenc = enc;
   }
 }
