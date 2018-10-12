@@ -5,11 +5,10 @@ Car is a Traxxas Rustler (not VXL), stock ESC, brushed Titan 12T motor,
 aftermarket 2S lipo battery.
 
 
-Previous iteration of this project, which followed lines on the ground:
-[![Car driving in my backyard](https://img.youtube.com/vi/rkZvHl7T1OU/0.jpg)](https://www.youtube.com/watch?v=rkZvHl7T1OU)
+[![Racing on a basketball court](https://img.youtube.com/vi/abS4v-PrAvE/0.jpg)](https://www.youtube.com/watch?v=abS4v-PrAvE)
 
-This new version uses a pre-planned track, and doesn't have any tools for
-planning the track yet other than a bunch of ipython notebooks.
+This uses a pre-planned track, and doesn't have any tools for planning the
+track yet other than a bunch of ipython notebooks.
 
 
 ## Hardware
