@@ -18,7 +18,8 @@ track yet other than a bunch of ipython notebooks.
  - Teensy 3.2
  - MPU-9250 9-DoF IMU (about $3 on eBay)
  - LM2596S DC-DC buck converter (about $1 on eBay)
- - ILI9340 SPI 240x320 LCD display, via the fbtft device driver
+ - ILI9340 SPI 240x320 LCD display, via the fbtft device driver (about $7)
+ - Arducam OV5647 Raspberry Pi 3 camera with LS-40180 fisheye lens ($30)
  - Custom PCB connecting everything together -- see `hw/pcb/`
  - Wii U Pro controller (connected via bluetooth)
 
