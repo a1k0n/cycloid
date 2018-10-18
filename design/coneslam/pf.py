@@ -14,15 +14,19 @@ VIDEO = False
 np.set_printoptions(suppress=True)
 
 # length from back axle to camera in encoder ticks (2cm)
-carlength = 12*.0254/.02
+carlength = 0  # 12*.0254/.02
 
 
 def read_landmarks():
     L = None
     f = open("lm.txt")
+    home = np.zeros(3)
     i = 0
     for line in f:
         if line.strip() == '':
+            continue
+        if line[:4] == "home":
+            home[:] = map(float, line.strip().split()[1:])
             continue
         if L is None:
             L = np.zeros((int(line.strip()), 2))
@@ -30,32 +34,44 @@ def read_landmarks():
             x, y = map(float, line.strip().split())
             L[i] = [x, y]
             i += 1
-    return L
+    L /= .02
+    home[:2] /= .02
+    return L, home
 
 
-L = read_landmarks()
+L, Lhome = read_landmarks()
 a = 1
-XOFF = 300
-YOFF = 50
+XOFF = 0
+YOFF = 0
+
+CONE_RADIUS = 44.5/np.pi/4  # cone radius in 2cm units
 
 
-NOISE_ANGULAR = 0.008
-NOISE_LONG = 16
+NOISE_ANGULAR = 0.4*0.02
+NOISE_LONG = 8
 NOISE_LAT = 8
-LM_SELECTIVITY = 90
-BOGON_THRESH = .01  # minimum radians^2 to a real landmark
+LM_SELECTIVITY = 100
+BOGON_THRESH = .31**2  # minimum radians^2 to a real landmark
+#BOGON_THRESH = .1**2  # minimum radians^2 to a real landmark
+
+
+def pseudorandn(N):
+    r = np.random.random(N)
+    for j in range(1, 6):
+        r += np.random.random(N)
+    return 2*r - 6
 
 
 def step(X, dt, encoder_dx, gyro_dtheta):
     N = X.shape[1]
     theta0 = X[2]
-    theta1 = theta0 + gyro_dtheta*dt + np.random.randn(N) * NOISE_ANGULAR * encoder_dx * dt
+    theta1 = theta0 + gyro_dtheta*dt + pseudorandn(N) * NOISE_ANGULAR * encoder_dx * dt
 
     S = np.sin((theta0 + theta1) * 0.5)
     C = np.cos((theta0 + theta1) * 0.5)
 
-    dx = encoder_dx + np.random.randn(N) * NOISE_LONG * encoder_dx * dt
-    dy = np.random.randn(N) * NOISE_LAT * encoder_dx * dt
+    dx = encoder_dx + pseudorandn(N) * NOISE_LONG * encoder_dx * dt
+    dy = pseudorandn(N) * NOISE_LAT * encoder_dx * dt
 
     X[0] += dx*C - dy*S
     X[1] += dx*S + dy*C
@@ -74,7 +90,12 @@ def likeliest_lm(X, L, l):
     z = dxy[:, 0]*C + dxy[:, 1]*S
     y = dxy[:, 0]*S - dxy[:, 1]*C
     # get the relative angle^2
-    e = np.minimum((np.arctan2(y, z) - l)**2, BOGON_THRESH)
+    d = np.linalg.norm(dxy, axis=1)
+    # print 'd', d.shape, d
+    coneangle = 2*np.arcsin(np.minimum(CONE_RADIUS/d, 1))
+    # print 'coneangle', coneangle
+    angledist = np.maximum(np.abs(np.arctan2(y, z) - l) - coneangle, 0)
+    e = np.minimum(angledist**2, BOGON_THRESH)
     LL = -LM_SELECTIVITY*e
 
     # normalize probabilities so that resampling among landmarks is fair
@@ -96,9 +117,9 @@ def resample_particles(X, LL):
 
 def main(f):
     np.random.seed(1)
-    # bg = cv2.imread("satview.png")
     # bg = cv2.imread("trackmap.jpg")
-    bg = cv2.imread("drtrack-2cm.png")
+    # bg = cv2.imread("drtrack-2cm.png")
+    bg = cv2.imread("bball-2cm.png")
 
     Np = 300
     X = np.zeros((3, Np))
@@ -106,6 +127,8 @@ def main(f):
     # X[1] -= 400
     X[:2] = 30*np.random.randn(2, Np)
     X[2] = np.random.randn(Np) * 0.2
+    print 'Lhome', Lhome
+    X.T[:, :] += Lhome
     tstamp = None
     last_wheels = None
 
@@ -119,18 +142,21 @@ def main(f):
 
     Am, Ae = 0, 0
     Vlat = 0
+    totalL = 0
     while not done:
-        ok, frame = recordreader.read_frame(f)
+        ok, framedata = recordreader.read_frame(f)
         if not ok:
             break
 
-        _, throttle, steering, accel, gyro, servo, wheels, periods, yuv = frame
+        throttle, steering, accel, gyro, servo, wheels, periods = framedata[1]
+        savedparticles = framedata[2]
+        yuv = framedata[-1].reshape((-1, 640))
         if tstamp is None:
-            tstamp = frame[0] - 1.0 / 30
+            tstamp = framedata[0] - 1.0 / 30
         if last_wheels is None:
             last_wheels = wheels
-        ts = frame[0]
-        dt = frame[0] - tstamp
+        ts = framedata[0]
+        dt = framedata[0] - tstamp
         if dt > 0.1:
             print 'WARNING: frame', i, 'has a', dt, 'second gap'
         tstamp = ts
@@ -145,8 +171,8 @@ def main(f):
             Am = 0.8*Am + 0.2*accel[1]*9.8
             Ae = 0.8*Ae + 0.2*ds*gyroz/dt*0.02
             Vlat = 0.8*Vlat + dt*accel[1]*9.8 - ds*gyroz*0.02
-            print 'alat', accel[1]*9.8, 'estimated', ds*gyroz/dt*0.02
-            print 'Vlat estimate', Vlat
+            # print 'alat', accel[1]*9.8, 'estimated', ds*gyroz/dt*0.02
+            # print 'Vlat estimate', Vlat
             # print 'measured alat', Am, 'estimated alat', Ae
 
         bgr = cv2.cvtColor(yuv, cv2.COLOR_YUV2BGR_I420)
@@ -160,6 +186,13 @@ def main(f):
         mapview[xj[xin], xi[xin], :] = 0
         mapview[xj[xin], xi[xin], 1] = 255
         mapview[xj[xin], xi[xin], 2] = 255
+
+        xi = np.uint32(XOFF + savedparticles[:, 0]/.02)
+        xj = np.uint32(YOFF - savedparticles[:, 1]/.02)
+        xin = (xi >= 0) & (xi < mapview.shape[1]) & (xj >= 0) & (xj < mapview.shape[0])
+        mapview[xj[xin], xi[xin], :] = 0
+        mapview[xj[xin], xi[xin], 1] = 255
+        mapview[xj[xin], xi[xin], 2] = 0
 
         # draw mean/covariance also
         x = np.mean(X, axis=1)
@@ -190,7 +223,8 @@ def main(f):
             zz = np.arctan(z[0])
             j, LL = likeliest_lm(X, L, zz)
             LLs += LL
-            print 'frame', i, 'cone', n, 'LL', np.min(LL), np.mean(LL), '+-', np.std(LL), np.max(LL)
+            totalL += np.sum(LL)
+            # print 'frame', i, 'cone', n, 'LL', np.min(LL), np.mean(LL), '+-', np.std(LL), np.max(LL)
 
             # we could also update the landmarks at this point
 
@@ -206,7 +240,7 @@ def main(f):
         bgr[params.vpy+1, ::2][cone_acts] = 255
         bgr[params.vpy+1, 1::2][cone_acts] = 255
 
-        if len(conecenters) > 0:
+        if ds > 0 and len(conecenters) > 0:
             # resample the particles based on their landmark likelihood
             X = resample_particles(X, LL)
 
@@ -225,11 +259,11 @@ def main(f):
         delta = caldata.wheel_angle(servo)
         vf = 0.5*np.sum(dw[:2])
         vr = 0.5*np.sum(dw[2:])
-        print 'vf', vf, 'vr', vr, 'vr-vf', vr-vf, 'vr/vf', vr/(vf + 0.001)
+        # print 'vf', vf, 'vr', vr, 'vr-vf', vr-vf, 'vr/vf', vr/(vf + 0.001)
         if np.abs(delta) > 0.08:
             # estimate lateral velocity
             vy = (vr*np.cos(delta) + gyroz*a*np.sin(delta) - vf)
-            print 'lateral velocity *', np.sin(delta), '=', vy
+            # print 'lateral velocity *', np.sin(delta), '=', vy
 
         if VIDEO:
             s = (bg.shape[1] - 320) // 2
@@ -240,6 +274,7 @@ def main(f):
             k = cv2.waitKey()
             if k == ord('q'):
                 break
+        print 'frame', i, 'L', totalL
 
         i += 1
 

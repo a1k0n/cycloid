@@ -55,34 +55,45 @@ void DriveController::UpdateState(const DriverConfig &config,
   w_ = gyro[2];
 }
 
-// this is the main autodrive control system
-float DriveController::TargetCurvature(const DriverConfig &config) {
-  float cx, cy, nx, ny, k;
-  if (!track_.GetTarget(x_, y_, &cx, &cy, &nx, &ny, &k)) {
-    return 2;  // circle right if you're confused
+void DriveController::UpdateLocation(const DriverConfig &config,
+    float x, float y, float theta) {
+  x_ = x;
+  y_ = y;
+  theta_ = theta;
+  if (!track_.GetTarget(x_, y_, config.lookahead,
+        &cx_, &cy_, &nx_, &ny_, &k_)) {
+    cx_ = cy_ = ny_ = 0;
+    nx_ = 1;
+    // circle left if you're confused
+    k_ = 2;
   }
+  ye_ = 0;
+  psie_ = 0;
+  target_k_ = 0;
+  k_samples_ = 0;
+}
 
-  // (nx, ny) is the vector pointing towards +y (left)
-  float ye = ((x_ - cx)*nx + (y_ - cy)*ny);
+void DriveController::AddSample(const DriverConfig &config,
+    float x, float y, float theta) {
+  // (nx_, ny_) is the vector pointing towards +y (left)
+  float ye = ((x - cx_)*nx_ + (y - cy_)*ny_);
 
-  float C = cos(theta_), S = sin(theta_);
+  float C = cos(theta), S = sin(theta);
 
   // the car's "y" coordinate is (-S, C); measure cos/sin psi
-  float Cp = -S*nx + C*ny;
-  float Sp = S*ny + C*nx;
-  float Cpy = Cp / (1 - k * ye);
+  float Cp = -S*nx_ + C*ny_;
+  float Sp = S*ny_ + C*nx_;
+  float Cpy = Cp / (1 - k_ * ye);
 
   float Kpy = config.steering_kpy * 0.01;
   float Kvy = config.steering_kvy * 0.01;
-  float targetk = Cpy*(ye*Cpy*(-Kpy*Cp) + Sp*(k*Sp - Kvy*Cp) + k);
+  float targetk = Cpy*(ye*Cpy*(-Kpy*Cp) + Sp*(k_*Sp - Kvy*Cp) + k_);
 
   // update control state for datalogging
-  ye_ = ye;
-  psie_ = atan2(Sp, Cp);
-  k_ = k;
-  target_k_ = targetk;
-
-  return targetk;
+  ye_ += ye;
+  psie_ += atan2(Sp, Cp);
+  target_k_ += targetk;
+  k_samples_++;
 }
 
 bool DriveController::GetControl(const DriverConfig &config,
@@ -90,12 +101,20 @@ bool DriveController::GetControl(const DriverConfig &config,
     float *throttle_out, float *steering_out, float dt,
     bool autodrive, int frameno) {
 
+  // compute marginal estimate of trajectory target
+  if (k_samples_ > 0) {
+    target_k_ /= k_samples_;
+    ye_ /= k_samples_;
+    psie_ /= k_samples_;
+    k_samples_ = 1;
+  }
+
   // okay, let's control for yaw rate!
   // throttle_in controls vmax (w.r.t. the configured value)
   // steering_in controls desired curvature
 
   // compute target curvature at all times, just for datalogging purposes
-  float autok = TargetCurvature(config);
+  float autok = target_k_;
 
   // if we're braking or coasting, just control that manually
   if (!autodrive && throttle_in <= 0) {
@@ -120,14 +139,16 @@ bool DriveController::GetControl(const DriverConfig &config,
   float target_v = vmax;
   if (fabs(k) > kmin) {  // any curvature more than this will reduce speed
     target_v = sqrt(config.traction_limit * 0.01 / fabs(k));
+    float atarget = config.accel_limit * 0.01;
 
     // maintain an optimal slip ratio with 0 lateral velocity
     // by adjusting speed until vf = vr*cos(delta) - w*Lf*sin(delta)
     // vr = (vf + w*Lf*sin(delta)) / cos(delta)
-    float vr_slip_target = (vf_ + w_*GEOM_LF*sin(delta_)) / cos(delta_);
+    float vr_slip_target = (vf_ + atarget + w_*GEOM_LF*sin(delta_)) /
+        cos(delta_);
     if (vr_slip_target < target_v && vr_slip_target > 1.0) {
-      printf("[%d] using slip target %f (vf=%f vr=%f)\n",
-          frameno, vr_slip_target, vf_, vr_);
+      // printf("[%d] using slip target %f (vf=%f vr=%f)\n",
+      //     frameno, vr_slip_target, vf_, vr_);
       target_v = vr_slip_target;
     }
   }
@@ -158,13 +179,13 @@ bool DriveController::GetControl(const DriverConfig &config,
   }
 
   // don't wind-up at control limits
-  if (*throttle_out > -1 && *throttle_out < 1) {
+  if ((*throttle_out > -1 && *throttle_out < 1) ||
+      (err_v > 0 && ierr_v_ < 0) || (err_v < 0 && ierr_v_ > 0)) {
     ierr_v_ += dt*err_v;
   }
 
   if ((*steering_out > -1 && *steering_out < 1) ||
       (err_w > 0 && ierr_w_ < 0) || (err_w < 0 && ierr_w_ > 0)) {
-    // don't windup integrator if we're maxed out
     ierr_w_ += dt*err_w;
   }
 

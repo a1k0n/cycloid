@@ -16,6 +16,7 @@ class DriverConfig {
   // all these int16_ts are 1/100th scale
   int16_t speed_limit;  // m/s, maximum allowed speed
   int16_t traction_limit;  // m/s^2 (lateral force, v*w product)
+  int16_t accel_limit;  // m/s^2 (target acceleration ramp rate)
 
   int16_t steering_kpy;  // PID curve following proportional const
   int16_t steering_kvy;  // derivative const
@@ -26,7 +27,7 @@ class DriverConfig {
   int16_t lm_precision;  // landmark precision (1/sigma^2)
   int16_t lm_bogon_thresh;  // min angle-error (radians) for true cone detection
 
-  int16_t srv_cal;  // servo fixed value for turn calibration
+  int16_t lookahead;  // servo fixed value for turn calibration
 
   DriverConfig() {
     // Default values
@@ -34,17 +35,18 @@ class DriverConfig {
 
     speed_limit = 8.0 * 100;
     traction_limit = 8.0 * 100;
+    accel_limit = 8.0 * 100;
 
-    steering_kpy = 1.0 * 100;
+    steering_kpy = 0.15 * 100;
     steering_kvy = 1.0 * 100;
 
-    motor_bw = 0.10 * 100;
-    yaw_bw = 0.30 * 100;
+    motor_bw = 0.03 * 100;
+    yaw_bw = 0.25 * 100;
 
     lm_precision = 100;
     lm_bogon_thresh = 0.31 * 100;
 
-    srv_cal = 64;
+    lookahead = 0;
   }
 
   bool Save() {
@@ -65,7 +67,7 @@ class DriverConfig {
     fseek(fp, 0, SEEK_END);
     if (ftell(fp) != sizeof(*this)) {
       fprintf(stderr, "driverconfig is %ld bytes; "
-          "config should be %lu; ignoring\n", ftell(fp), sizeof(this));
+          "config should be %u; ignoring\n", ftell(fp), sizeof(this));
       fclose(fp);
       return true;
     }

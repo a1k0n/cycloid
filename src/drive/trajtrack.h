@@ -14,7 +14,7 @@ class TrajectoryTracker {
 
   bool LoadTrack(const char *fname);
 
-  bool GetTarget(float x, float y,
+  bool GetTarget(float x, float y, int lookahead,
       float *closestx, float *closesty,
       float *normx, float *normy,
       float *kappa);

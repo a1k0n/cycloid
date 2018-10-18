@@ -7,12 +7,13 @@
 
 namespace coneslam {
 
-//const float NOISE_ANGULAR = 0.4;
-//const float NOISE_LONG = 20;
-//const float NOISE_LAT = 1;
+// const float NOISE_ANGULAR = 0.4;
+// const float NOISE_LONG = 16;
+// const float NOISE_LAT = 8;
 
+const float CONE_RADIUS = 44.5/M_PI/200.;
 const float NOISE_ANGULAR = 0.4;
-const float NOISE_LONG = 16;
+const float NOISE_LONG = 8;
 const float NOISE_LAT = 8;
 
 static double randn() {
@@ -111,7 +112,9 @@ void Localizer::UpdateLM(float lm_bearing, float precision, float bogon_thresh) 
             dy = l.y - p.y;
       float z = dx*C + dy*S,
             y = dx*S - dy*C;
-      float diff = atan2f(y, z) - lm_bearing;
+      float d = sqrt(dx*dx + dy*dy);
+      float coneangle = 2*asin(fmin(CONE_RADIUS / d, 1));
+      float diff = fmax(fabs(atan2f(y, z) - lm_bearing) - coneangle, 0);
       float L = -precision*fmin(mindiffsqr, diff*diff);
 #ifdef PF_DEBUG
       printf("[%d]%f %f ", j, diff, L);

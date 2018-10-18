@@ -49,7 +49,7 @@ bool TrajectoryTracker::LoadTrack(const char *fname) {
   return true;
 }
 
-bool TrajectoryTracker::GetTarget(float x, float y,
+bool TrajectoryTracker::GetTarget(float x, float y, int lookahead,
     float *closestx, float *closesty,
     float *normx, float *normy,
     float *kappa) {
@@ -69,6 +69,9 @@ bool TrajectoryTracker::GetTarget(float x, float y,
       mini = i;
     }
   }
+
+  mini += lookahead;
+  mini %= n_pts_;
 
   const TrajectoryPoint &p = pts_[mini];
   *closestx = p.x;

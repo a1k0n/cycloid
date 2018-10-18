@@ -17,11 +17,10 @@ class DriveController {
       uint8_t servo_pos,
       const uint16_t *wheel_encoders, float dt);
 
-  void UpdateLocation(float x, float y, float theta) {
-    x_ = x;
-    y_ = y;
-    theta_ = theta;
-  }
+  void UpdateLocation(const DriverConfig &config,
+          float x, float y, float theta);
+  void AddSample(const DriverConfig &config,
+          float x, float y, float theta);
 
   bool GetControl(const DriverConfig &config,
       float throttle_in, float steering_in,
@@ -44,13 +43,16 @@ class DriveController {
   float ierr_w_;  // integration error for yaw rate
   float delta_;  // current steering angle
 
-  float target_k_, target_v_, target_w_;  // control targets
+  float target_k_;  // mean path computation
+  int k_samples_;
+
+  float target_v_, target_w_;  // control targets
   float ye_, psie_, k_;  // relative trajectory target
   float bw_w_, bw_v_;  // control bandwidth for yaw and speed
 
- private:
-  float TargetCurvature(const DriverConfig &config);
+  float cx_, cy_, nx_, ny_;
 
+ private:
   TrajectoryTracker track_;
 };
 
