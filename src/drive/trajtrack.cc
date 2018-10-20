@@ -52,7 +52,7 @@ bool TrajectoryTracker::LoadTrack(const char *fname) {
 bool TrajectoryTracker::GetTarget(float x, float y, int lookahead,
     float *closestx, float *closesty,
     float *normx, float *normy,
-    float *kappa) {
+    float *kappa, float *lookahead_kappa) {
 
   if (n_pts_ == 0) {
     return false;
@@ -70,8 +70,7 @@ bool TrajectoryTracker::GetTarget(float x, float y, int lookahead,
     }
   }
 
-  mini += lookahead;
-  mini %= n_pts_;
+  int li = (mini + lookahead) & n_pts_;
 
   const TrajectoryPoint &p = pts_[mini];
   *closestx = p.x;
@@ -79,6 +78,7 @@ bool TrajectoryTracker::GetTarget(float x, float y, int lookahead,
   *normx = p.nx;
   *normy = p.ny;
   *kappa = p.k;
+  *lookahead_kappa = pts_[li].k;
   // printf("i %d pt %f %f norm %f %f k %f\n", mini, p.x, p.y, p.nx, p.ny, p.k);
 
   return true;

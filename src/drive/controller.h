@@ -47,7 +47,7 @@ class DriveController {
   int k_samples_;
 
   float target_v_, target_w_;  // control targets
-  float ye_, psie_, k_;  // relative trajectory target
+  float ye_, psie_, k_, vk_;  // relative trajectory target
   float bw_w_, bw_v_;  // control bandwidth for yaw and speed
 
   float cx_, cy_, nx_, ny_;

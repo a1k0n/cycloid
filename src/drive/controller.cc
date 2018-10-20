@@ -61,11 +61,12 @@ void DriveController::UpdateLocation(const DriverConfig &config,
   y_ = y;
   theta_ = theta;
   if (!track_.GetTarget(x_, y_, config.lookahead,
-        &cx_, &cy_, &nx_, &ny_, &k_)) {
+        &cx_, &cy_, &nx_, &ny_, &k_, &vk_)) {
     cx_ = cy_ = ny_ = 0;
     nx_ = 1;
     // circle left if you're confused
     k_ = 2;
+    vk_ = 1;
   }
   ye_ = 0;
   psie_ = 0;
@@ -128,17 +129,20 @@ bool DriveController::GetControl(const DriverConfig &config,
   // max curvature is 1m radius
   // use a quadratic curve to give finer control near center
   float k = -steering_in * 2 * fabs(steering_in);
+  float vk = k;  // curvature to use for velocity calc
   float vmax = throttle_in * config.speed_limit * 0.01;
   if (autodrive) {
     k = autok;
+    // use lookahead vk_ to slow down early
+    vk = fmax(fabs(vk_), fabs(k));
     vmax = config.speed_limit * 0.01;
   }
 
   float kmin = config.traction_limit * 0.01 / (vmax*vmax);
 
   float target_v = vmax;
-  if (fabs(k) > kmin) {  // any curvature more than this will reduce speed
-    target_v = sqrt(config.traction_limit * 0.01 / fabs(k));
+  if (fabs(vk) > kmin) {  // any curvature more than this will reduce speed
+    target_v = sqrt(config.traction_limit * 0.01 / fabs(vk));
     float atarget = config.accel_limit * 0.01;
 
     // maintain an optimal slip ratio with 0 lateral velocity

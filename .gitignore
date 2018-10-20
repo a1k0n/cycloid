@@ -1,3 +1,9 @@
 *.pyc
 .*.sw*
 .ipynb_checkpoints
+*.txt
+*.rec
+*.ipynb
+*.mp4
+*.h264
+*.pickle
