@@ -70,7 +70,7 @@ bool TrajectoryTracker::GetTarget(float x, float y, int lookahead,
     }
   }
 
-  int li = (mini + lookahead) & n_pts_;
+  int li = (mini + lookahead) % n_pts_;
 
   const TrajectoryPoint &p = pts_[mini];
   *closestx = p.x;
