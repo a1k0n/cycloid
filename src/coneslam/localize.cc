@@ -13,8 +13,8 @@ namespace coneslam {
 
 const float CONE_RADIUS = 44.5/M_PI/200.;
 const float NOISE_ANGULAR = 0.4;
-const float NOISE_LONG = 8;
-const float NOISE_LAT = 8;
+const float NOISE_LONG = 4;
+const float NOISE_LAT = 2;
 
 static double randn() {
   // #include <random> doesn't work in my ARM cross-compiler so I'm just

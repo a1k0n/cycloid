@@ -1,3 +1,4 @@
+#include <algorithm>
 #include <stdio.h>
 #include "coneslam/imgproc.h"
 
@@ -34,7 +35,9 @@ int FindCones(const uint8_t *yuvimg, int thresh, float gyroz, int nout,
   for (int i = 0; i < 320; i++) {
     int yi = static_cast<int>(y0) * 320;
     for (int j = 0; j < conedetect_width*320; j+=320) {
-      xsum += imgv[yi+j+i];
+      // filter out blue V channel values, we want orange only
+      // (this prevents strong blue stripes from forming "anti-cones")
+      xsum += std::max(imgv[yi+j+i], (uint8_t)128);
       accumbuf[i+1] = xsum;
     }
     y += yinc;
