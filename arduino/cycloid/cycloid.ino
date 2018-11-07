@@ -1,3 +1,4 @@
+#include <ADC.h>
 #include <Wire.h>
 
 static const float PWM_HZ = 100;
@@ -43,6 +44,7 @@ static const int ADDR_ENCODER_PERIOD = 0x10;
 // 17 - encoder #4 period (high)
 static const int NUM_ADDRS = 0x18;
 static volatile bool dirty = true;  // set to true after a finished write call
+static ADC adc_;
 
 void i2cOnReceive(int numBytes) {
   if (Wire.available()) {
@@ -78,6 +80,13 @@ void setup() {
   Wire.begin(118);
   Wire.onReceive(i2cOnReceive);
   Wire.onRequest(i2cOnRequest);
+
+  // set up for sampling the servo feedback pin
+  // which is a pretty high-impedance and low-frequency input, so slow it down and average
+  adc_.setSamplingSpeed(ADC_SAMPLING_SPEED::VERY_LOW_SPEED);
+  adc_.setConversionSpeed(ADC_CONVERSION_SPEED::LOW_SPEED);
+  adc_.setAveraging(8);
+  adc_.startContinuous(0);
 }
 
 uint16_t servo_pw(int8_t value) {
@@ -97,7 +106,7 @@ static uint16_t enc_counts[4] = {0, 0, 0, 0};
 static uint32_t enc_timestamps[4] = {0, 0, 0, 0};
 
 void loop() {
-  uint16_t servo_value = analogRead(0);  // or is it 
+  uint16_t servo_value = adc_.analogReadContinuous();
 
   {
     bool w;
@@ -121,14 +130,6 @@ void loop() {
           enc_timestamps[i] = timestamp;
         }
         last_w[i] = w;
-#if 0
-        Serial.print("encoder ");
-        Serial.print(i);
-        Serial.print(" count ");
-        Serial.print(count);
-        Serial.print(" dt ");
-        Serial.println(dt);
-#endif
       }
     }
   }
