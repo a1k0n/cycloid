@@ -8,6 +8,7 @@ import recordreader
 import coneclassify
 import caldata
 import params
+import time
 
 
 VIDEO = False
@@ -15,6 +16,7 @@ np.set_printoptions(suppress=True)
 
 # length from back axle to camera in encoder ticks (2cm)
 carlength = 0  # 12*.0254/.02
+WHEEL_TICK_LENGTH = 0.02 * 32/40.
 
 
 def read_landmarks():
@@ -34,25 +36,35 @@ def read_landmarks():
             x, y = map(float, line.strip().split())
             L[i] = [x, y]
             i += 1
-    L /= .02
-    home[:2] /= .02
+    f.close()
     return L, home
 
 
+def read_track():
+    T = []
+    f = open("track.txt")
+    for line in f:
+        line = line.strip().split()
+        if len(line) == 5:
+            T.append(map(float, line))
+    f.close()
+    return np.array(T)
+
 L, Lhome = read_landmarks()
-a = 1
+Track = read_track()
+a = 0.02
 XOFF = 0
 YOFF = 0
 
 CONE_RADIUS = 44.5/np.pi/4  # cone radius in 2cm units
 
 
-NOISE_ANGULAR = 0.4*0.02
+NOISE_ANGULAR = 0.4
 NOISE_LONG = 8
 NOISE_LAT = 8
 LM_SELECTIVITY = 100
-BOGON_THRESH = .31**2  # minimum radians^2 to a real landmark
-#BOGON_THRESH = .1**2  # minimum radians^2 to a real landmark
+#BOGON_THRESH = .21**2  # minimum radians^2 to a real landmark
+BOGON_THRESH = .1**2  # minimum radians^2 to a real landmark
 
 
 def pseudorandn(N):
@@ -119,13 +131,14 @@ def main(f):
     np.random.seed(1)
     # bg = cv2.imread("trackmap.jpg")
     # bg = cv2.imread("drtrack-2cm.png")
-    bg = cv2.imread("bball-2cm.png")
+    # bg = cv2.imread("bball-2cm.png")
+    bg = cv2.imread("cl.png")
 
     Np = 300
     X = np.zeros((3, Np))
     # X[:2] = 100 * np.random.rand(2, Np)
     # X[1] -= 400
-    X[:2] = 30*np.random.randn(2, Np)
+    X[:2] = 0.25*np.random.randn(2, Np)
     X[2] = np.random.randn(Np) * 0.2
     print 'Lhome', Lhome
     X.T[:, :] += Lhome
@@ -138,7 +151,7 @@ def main(f):
         # vidout = cv2.VideoWriter("particlefilter.h264", cv2.VideoWriter_fourcc(
         #    'X', '2', '6', '4'), 30, (bg.shape[1], bg.shape[0]), True)
         vidout = cv2.VideoWriter("particlefilter.h264", cv2.VideoWriter_fourcc(
-            'X', '2', '6', '4'), 30, (640, 480), True)
+            'X', '2', '6', '4'), 28.8, (640, 480), True)
 
     Am, Ae = 0, 0
     Vlat = 0
@@ -160,11 +173,14 @@ def main(f):
         if dt > 0.1:
             print 'WARNING: frame', i, 'has a', dt, 'second gap'
         tstamp = ts
+        tsfrac = tstamp - int(tstamp)
+        tstring = time.strftime("%H:%M:%S.", time.localtime(tstamp)) + "%02d" % (tsfrac*100)
         gyroz = gyro[2]  # we only need the yaw rate from the gyro
         dw = wheels - last_wheels
         last_wheels = wheels
-        # print 'wheels', dw, 'gyro', gyroz, 'dt', dt
-        ds = 0.25*np.sum(dw)
+        print 'wheels', dw, 'gyro', gyroz, 'dt', dt
+        ds = 0.25*np.sum(dw) * WHEEL_TICK_LENGTH
+        # ds = 0.5*np.sum(dw[2:])
         step(X, dt, ds, gyroz)
 
         if True:
@@ -175,6 +191,8 @@ def main(f):
             # print 'Vlat estimate', Vlat
             # print 'measured alat', Am, 'estimated alat', Ae
 
+        yuv = yuv.copy()
+        yuv[480+120:] = np.maximum(yuv[480+120:], 128)  # filter out blue
         bgr = cv2.cvtColor(yuv, cv2.COLOR_YUV2BGR_I420)
         mapview = bg.copy()
         # mapview = 200*np.ones(bg.shape, np.uint8)
@@ -245,10 +263,26 @@ def main(f):
             X = resample_particles(X, LL)
 
         cv2.putText(mapview, "%d" % i, (20, 30), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 255, 255), 2, cv2.LINE_AA)
+        cv2.putText(bgr, tstring, (20, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 1, cv2.LINE_AA)
 
         if VIDEO:
-            s = mapview[::2, ::2].shape
-            bgr[-s[0]:, -s[1]:] = mapview[::2, ::2]
+            #s = mapview[::2, ::2].shape
+            #bgr[-s[0]:, -s[1]:] = mapview[::2, ::2]
+            pass
+
+        # draw particle map on front view too
+        xi = np.uint32(400 + savedparticles[:, 0]/.08)
+        xj = np.uint32(-savedparticles[:, 1]/.08)
+        xin = (xi >= 0) & (xi < bgr.shape[1]) & (xj >= 0) & (xj < bgr.shape[0])
+        bgr[xj[xin], xi[xin], :] = 0
+        bgr[xj[xin], xi[xin], 1] = 255
+        for l in range(len(L)):
+            lxy = (400+int(L[l, 0]/.08), 0-int(L[l, 1]/.08))
+            cv2.circle(bgr, lxy, 2, (0, 128, 255), 2)
+        for t in range(0, len(Track), 2):
+            txy1 = (400+int(Track[t, 0]/.08), 0-int(Track[t, 1]/.08))
+            txy2 = (400+int(Track[t+1, 0]/.08), 0-int(Track[t+1, 1]/.08))
+            cv2.line(bgr, txy1, txy2, (190, 190, 190), 1)
 
         annotate.draw_throttle(bgr, throttle)
         annotate.draw_speed(bgr, tstamp, wheels, periods)
@@ -266,7 +300,6 @@ def main(f):
             # print 'lateral velocity *', np.sin(delta), '=', vy
 
         if VIDEO:
-            s = (bg.shape[1] - 320) // 2
             vidout.write(bgr)
         else:
             cv2.imshow("map", mapview)
