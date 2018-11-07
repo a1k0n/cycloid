@@ -11,9 +11,9 @@ const float V_ALPHA = 0.3;
 // servo closed loop response bandwidth (measured)
 const float BW_SRV = 2*M_PI*4;  // Hz
 
-const float M_K1 = 2.58;  // DC motor response constants (measured)
-const float M_K2 = 0.093;
-const float M_K3 = 0.218;
+const float M_K1 = 13.7;  // DC motor response constants (measured)
+const float M_K2 = 1.26;
+const float M_K3 = 0.53;
 const float M_OFFSET = 0.103;  // minimum control input (dead zone)
 
 const float GEOM_LF = 6.5*.0254;  // car geometry; A = CG to front axle length
@@ -134,6 +134,7 @@ bool DriveController::GetControl(const DriverConfig &config,
   if (autodrive) {
     k = autok;
     // use lookahead vk_ to slow down early
+    // maybe just use vk_ directly here? then we speed up at corner exit
     vk = fmax(fabs(vk_), fabs(k));
     vmax = config.speed_limit * 0.01;
   }

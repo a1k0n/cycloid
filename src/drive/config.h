@@ -5,7 +5,8 @@
 #include <cstdio>
 
 // circumference of tire (meters) / number of encoder ticks
-const float V_SCALE = 0.02;  // 40cm circumference, 20 ticks
+// const float V_SCALE = 0.02;  // 40cm circumference, 20 ticks
+const float V_SCALE = 0.02 * 32/40;  // 32cm circumference, 20 ticks
 
 // Dynamic configuration variables
 // can be changed via commandline or controller
