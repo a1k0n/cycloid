@@ -42,7 +42,8 @@ bool IMU::Init() {
   // 000 | 10 | 0 | 00
   i2c_.Write(0x68, 27, 0x10);
 
-  // accel_fs_sel +/- 2g (00), default
+  // accel_fs_sel +/- 4g (01)
+  i2c_.Write(0x68, 28, 0x08);
 
   // a_dlpfcfg = 3, 44.8Hz accel bw, 4.88ms delay
   i2c_.Write(0x68, 29, 0x03);
@@ -207,8 +208,8 @@ bool IMU::ReadIMU(Vector3f *accel, Vector3f *gyro, float *temp) {
     int16_t gx = (readbuf[ 8] << 8) | readbuf[ 9],
             gy = (readbuf[10] << 8) | readbuf[11],
             gz = (readbuf[12] << 8) | readbuf[13];
-    // we are in 16384 LSB/g scale (+/- 2g)
-    *accel = Vector3f(ax, ay, az) / 16384.0;
+    // we are in 8192 LSB/g scale (+/- 4g)
+    *accel = Vector3f(ax, ay, az) / 8192.0;
     // TODO: temp calibration
     // we are in +/- 1000 degrees/second full scale range
     // return radians/second

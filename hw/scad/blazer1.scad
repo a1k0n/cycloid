@@ -120,22 +120,22 @@ module FrontSprocketMount() {
   }
 }
 
-module BasePlate() {
+BaseScrews =[
+  [-36.5/2, 12], [-36.5/2, -12],
+  [36.5/2, 6], [36.5/2, -6]
+];
+
+RPi3MountingScrews = [
+  [3.5, 3.5], [3.5 + 58, 3.5],
+  [3.5, 3.5 + 49], [3.5 + 58, 3.5 + 49]
+];
+
+module BasePlateWithTeensy() {
   thick = 2.5;
   standoff = 4;
 
   basesize = [80, 85, thick];
   mountoffset = [-10, 0, 0];  // distance from center to adjust screws
-
-  BaseScrews =[
-    [-36.5/2, 12], [-36.5/2, -12],
-    [36.5/2, 6], [36.5/2, -6]
-  ];
-
-  RPi3MountingScrews = [
-    [3.5, 3.5], [3.5 + 58, 3.5],
-    [3.5, 3.5 + 49], [3.5 + 58, 3.5 + 49]
-  ];
 
   PWMBoardScrews = [
     [3.3, 3.3], [59.2, 3.3],
@@ -177,6 +177,37 @@ module BasePlate() {
           cylinder(d=screw_diam, h=thick+standoff+0.2, $fn=30);
       }
     }
+  }
+}
+
+module BasePlate() {  // raspi only, with HAT board
+  thick = 2.5;
+  standoff = 4;
+
+  basesize = [65, 56, thick];
+  mountoffset = [-10, 0, 0];  // distance from center to adjust screws
+
+  difference() {
+    union() {
+      translate(mountoffset - [basesize[0]/2, basesize[1]/2, 0]) {
+        cube(basesize);
+        for (s = RPi3MountingScrews) {
+          translate([s[0], s[1], thick-0.1])
+            cylinder(d=5, h=standoff, $fn=30);
+        }
+      }
+    }
+
+    for (s = BaseScrews) {
+      translate([s[0], s[1], -0.1])
+        cylinder(d=screw_diam*1.4, h=thick+0.2, $fn=30);
+    }
+
+    translate(mountoffset - [basesize[0]/2, basesize[1]/2, 0])
+      for (s = RPi3MountingScrews) {
+        translate([s[0], s[1], -0.1])
+          cylinder(d=screw_diam, h=thick+standoff+0.2, $fn=30);
+      }
   }
 }
 

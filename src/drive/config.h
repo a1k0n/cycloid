@@ -1,12 +1,36 @@
 #ifndef DRIVE_CONFIG_H_
 #define DRIVE_CONFIG_H_
 
+#include <cmath>
 #include <cstdint>
 #include <cstdio>
 
 // circumference of tire (meters) / number of encoder ticks
+
+#define BLAZE_R1
+
+
+#ifdef RUSTLER
 // const float V_SCALE = 0.02;  // 40cm circumference, 20 ticks
 const float V_SCALE = 0.02 * 32/40;  // 32cm circumference, 20 ticks
+const float SERVO_DIRECTION = 1;  // 1 if +servo is left, -1 if +servo is right
+const int ACTIVE_ENCODERS = 4;
+
+#define TEENSY 1
+
+#endif
+
+#ifdef BLAZE_R1
+const float WHEEL_DIAMETER = 0.0666;
+const float DRIVE_RATIO = 84./25. * 2.1;  // 84t spur, 25t pinion, 2.1 final drive
+const float MOTOR_POLES = 3;  // brushless sensor counts per motor revolution
+const float V_SCALE = WHEEL_DIAMETER*M_PI / DRIVE_RATIO / MOTOR_POLES;
+const float SERVO_DIRECTION = -1;  // 1 if +servo is left, -1 if +servo is right
+const int ACTIVE_ENCODERS = 1;
+
+#define STM32HAT 1
+
+#endif
 
 // Dynamic configuration variables
 // can be changed via commandline or controller

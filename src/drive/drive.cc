@@ -13,10 +13,17 @@
 #include "drive/flushthread.h"
 #include "hw/cam/cam.h"
 // #include "hw/car/pca9685.h"
-#include "hw/car/teensy.h"
 #include "hw/imu/imu.h"
 #include "hw/input/js.h"
 #include "ui/display.h"
+
+#ifdef TEENSY
+#include "hw/car/teensy.h"
+#endif
+
+#ifdef STM32HAT
+#include "hw/car/stm32hat.h"
+#endif
 
 // #undef this to disable camera, just to record w/ raspivid while
 // driving around w/ controller
@@ -33,7 +40,12 @@ void handle_sigint(int signo) { done = true; }
 
 I2C i2c;
 // PCA9685 pca(i2c);
+#ifdef TEENSY
 Teensy teensy(i2c);
+#endif
+#ifdef STM32HAT
+STM32Hat stm32hat(i2c);
+#endif
 IMU imu(i2c);
 UIDisplay display_;
 FlushThread flush_thread_;
@@ -157,7 +169,7 @@ class Driver: public CameraReceiver {
     memcpy(last_encoders_, carstate_.wheel_pos, 4*sizeof(uint16_t));
 
     // predict using front wheel distance
-    float ds = V_SCALE * 0.25 * (
+    float ds = V_SCALE * (1.0/ACTIVE_ENCODERS) * (
         wheel_delta[0] + wheel_delta[1] +
         + wheel_delta[2] + wheel_delta[3]);
     int conesx[10];
@@ -214,7 +226,7 @@ class Driver: public CameraReceiver {
     float u_s = carstate_.steering / 127.0;
     if (controller_.GetControl(config_, js_throttle_ / 32767.0,
           js_steering_ / 32767.0, &u_a, &u_s, dt, autodrive_, frame_)) {
-      carstate_.steering = 127 * u_s;
+      carstate_.steering = SERVO_DIRECTION * 127 * u_s;
       carstate_.throttle = 127 * u_a;
 
       // override steering for servo angle calibration
@@ -224,8 +236,14 @@ class Driver: public CameraReceiver {
         carstate_.steering = 64;
       }
 
+#ifdef TEENSY
       teensy.SetControls(frame_ & 4 ? 1 : 0,
           carstate_.throttle, carstate_.steering);
+#endif
+#ifdef STM32HAT
+      stm32hat.SetControls(frame_ & 4 ? 1 : 0,
+          carstate_.throttle, carstate_.steering);
+#endif
       // pca.SetPWM(PWMCHAN_STEERING, steering_);
       // pca.SetPWM(PWMCHAN_ESC, throttle_);
     }
@@ -493,6 +511,7 @@ int main(int argc, char *argv[]) {
     fprintf(stderr, "joystick not detected, but continuing anyway!\n");
   }
 
+#ifdef TEENSY
   teensy.Init();
   teensy.SetControls(0, 0, 0);
   teensy.GetFeedback(&carstate_.servo_pos,
@@ -502,6 +521,7 @@ int main(int argc, char *argv[]) {
           carstate_.servo_pos,
           carstate_.wheel_pos[0], carstate_.wheel_pos[1],
           carstate_.wheel_pos[2], carstate_.wheel_pos[3]);
+#endif
 
   // pca.Init(100);  // 100Hz output
   // pca.SetPWM(PWMCHAN_STEERING, 614);
@@ -528,12 +548,18 @@ int main(int argc, char *argv[]) {
       // nothing to do here
     }
     // FIXME: predict step here?
+    // FIXME: update controls here?
     {
       float temp;
       imu.ReadIMU(&carstate_.accel, &carstate_.gyro, &temp);
       // FIXME: imu EKF update step?
+#ifdef TEENSY
       teensy.GetFeedback(&carstate_.servo_pos,
           carstate_.wheel_pos, carstate_.wheel_dt);
+#endif
+#ifdef STM32HAT
+      stm32hat.GetFeedback(carstate_.wheel_pos, carstate_.wheel_dt);
+#endif
     }
     usleep(1000);
   }

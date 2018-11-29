@@ -44,13 +44,24 @@ void DriveController::UpdateState(const DriverConfig &config,
     uint8_t servo_pos, const uint16_t *wheel_delta, float dt) {
 
   // FIXME: hardcoded servo calibraiton
-  delta_ = (servo_pos - 126.5) / 121.3;
+  // delta_ = (servo_pos - 126.5) / 121.3;
+  delta_ = 0;
 
   // update front/rear velocity estimate through crude filter
-  vf_ *= (1 - V_ALPHA);
-  vf_ += V_ALPHA * V_SCALE * 0.5*(wheel_delta[0] + wheel_delta[1])/dt;
-  vr_ *= (1 - V_ALPHA);
-  vr_ += V_ALPHA * V_SCALE * 0.5*(wheel_delta[2] + wheel_delta[3])/dt;
+  if (ACTIVE_ENCODERS == 4) {
+    vf_ *= (1 - V_ALPHA);
+    vf_ += V_ALPHA * V_SCALE * 0.5*(wheel_delta[0] + wheel_delta[1])/dt;
+    vr_ *= (1 - V_ALPHA);
+    vr_ += V_ALPHA * V_SCALE * 0.5*(wheel_delta[2] + wheel_delta[3])/dt;
+  } else {
+    vf_ *= (1 - V_ALPHA);
+    float sum = 0;
+    for (int i = 0; i < ACTIVE_ENCODERS; i++) {
+      sum += wheel_delta[i];
+    }
+    vf_ += V_ALPHA * V_SCALE * sum * (1.0 / ACTIVE_ENCODERS) / dt;
+    vr_ = vf_;  // assume vr==vf, AWD
+  }
 
   w_ = gyro[2];
 }
