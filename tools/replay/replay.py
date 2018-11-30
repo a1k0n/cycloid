@@ -4,7 +4,6 @@ import numpy as np
 import ekf
 import imgproc
 import recordreader
-import localize
 
 np.set_printoptions(suppress=True)
 
@@ -95,9 +94,6 @@ def replay(fname, f):
 
     LL_center, LL_imu, LL_encoders = 0, 0, 0
 
-    Sdist = np.zeros(localize.KMAP_ENTRIES)
-    Sdist[0] = 1  # but only if we start at the start line
-
     while True:
         ok, record = recordreader.read_frame(f)
         (tstamp, throttle, steering, accel, gyro, servo,
@@ -123,54 +119,39 @@ def replay(fname, f):
 
         t = (0.7*last_throttle + 0.3*throttle)
         s = last_steering
-        if Sdist is not None:
-            Sdist = localize.predict(Sdist, x, P, dt)
         x, P = ekf.predict(x, P, dt, t / 127.0, s / 127.0)
 
         last_throttle, last_steering = throttle, steering
-        print 'x_predict\n', x
+        #print 'x_predict\n', x
         xpred, Ppred = np.copy(x), np.copy(P)
 
         hv, th, B, yc, Rk = imgproc.detect_centerline(frame[:, :, 1])
 
         if B is not None:
             x, P, LL_center = ekf.update_centerline(x, P, B[0], B[1], B[2], yc, Rk)
-            print 'x_centerline\n', x
+            #print 'x_centerline\n', x
 
-        print 'accel', accel
-        print 'gyro', gyro[2]
+        #print 'accel', accel
+        #print 'gyro', gyro[2]
         x, P, LL_imu = ekf.update_IMU(x, P, gyro[2])
-        print 'x_gyro\n', x
+        #print 'x_gyro\n', x
 
-        print 'wheels', wheels, 'periods', periods
+        #print 'wheels', wheels, 'periods', periods
         if wheels_last is not None:
             ds = np.sum(wheels - wheels_last) / 4.0
             if ds != 0:
                 x, P, LL_encoders = ekf.update_encoders(x, P, ds/dt, float(servo))
-                print 'x_encoders\n', x
+                #print 'x_encoders\n', x
             else:
                 x, P, LL_encoders = ekf.update_encoders(x, P, 0, float(servo))
-                print 'x_encoders\n', x
+                #print 'x_encoders\n', x
 
         # gyrozs.append(gyro[2])
         # print 'gyro', gyro[2], 'mean', np.mean(gyrozs), 'std', np.std(gyrozs)
 
-        print 'LL', LL_center, LL_imu, LL_encoders
+        #print 'LL', LL_center, LL_imu, LL_encoders
 
-        print 'k', x[4], 1.0 / P[4, 4]
-        if Sdist is None:
-            # Sdist = np.zeros(localize.KMAP_ENTRIES)
-            # Sdist[0] = 1
-            Sdist = localize.prob_s_given_k(x[4], 0.02 / P[4, 4])
-        else:
-            Sdist *= localize.prob_s_given_k(x[4], 0.02 / P[4, 4])
-            s = np.sum(Sdist)
-            print 'localization likelihood', s
-            if s == 0:
-                Sdist = np.ones(len(Sdist)) / len(Sdist)
-                print 'localization: no probability mass, reset'
-            else:
-                Sdist /= s
+        #print 'k', x[4], 1.0 / P[4, 4]
 
         timg = cv2.resize(
             th[::-1],
@@ -200,18 +181,6 @@ def replay(fname, f):
         vidframe[frame.shape[0]:, 320:, 0] = timg
         vidframe[frame.shape[0]:, 320:, 1] = timg
         vidframe[frame.shape[0]:, 320:, 2] = timg
-
-        for i in range(len(Sdist)-1):
-            y1 = int(220 - localize.kmap[i + 1] * 20)
-            y0 = int(220 - localize.kmap[i] * 20)
-            cv2.line(vidframe, (100+i, y0), (101+i, y1), (128, 255, 0), 1)
-
-        for i in range(len(Sdist)-1):
-            y1 = int(220 - Sdist[i + 1] * 100)
-            y0 = int(220 - Sdist[i] * 100)
-            cv2.line(vidframe, (100+i, y0), (101+i, y1), (255, 255, 255), 1)
-
-        localize.drawstate(x, Sdist)
 
         vidscale = timg.shape[1] / th.shape[1]
 
@@ -260,8 +229,8 @@ def replay(fname, f):
         except np.linalg.linalg.LinAlgError:
             pass
 
-        print 'x5   ', x[:5]
-        print 'Prec5', 1.0 / np.diag(P[:5, :5])
+        #print 'x5   ', x[:5]
+        #print 'Prec5', 1.0 / np.diag(P[:5, :5])
 
         vidout.write(vidframe)
         cv2.imshow('f', vidframe)
@@ -271,7 +240,7 @@ def replay(fname, f):
         if k == ord(',') and len(statelist) > 0:  # previous frame
             x, P = statelist[-1]
             wheels_last = encoderlist[-1]
-            print 'wheels_last', wheels_last
+            #print 'wheels_last', wheels_last
             t0 = tlist[-1]
             statelist.pop()
             encoderlist.pop()

@@ -17,7 +17,6 @@ class STM32Hat {
 
  private:
   const I2C &i2c_;
-  uint16_t lastcount_;
 };
 
 #endif  // HW_CAR_STM32HAT_H_

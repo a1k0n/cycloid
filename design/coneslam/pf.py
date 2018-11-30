@@ -16,7 +16,6 @@ np.set_printoptions(suppress=True)
 
 # length from back axle to camera in encoder ticks (2cm)
 carlength = 0  # 12*.0254/.02
-WHEEL_TICK_LENGTH = 0.02 * 32/40.
 
 
 def read_landmarks():
@@ -56,16 +55,6 @@ a = 0.02
 XOFF = 0
 YOFF = 0
 
-CONE_RADIUS = 44.5/np.pi/4  # cone radius in 2cm units
-
-
-NOISE_ANGULAR = 0.4
-NOISE_LONG = 8
-NOISE_LAT = 8
-LM_SELECTIVITY = 100
-#BOGON_THRESH = .21**2  # minimum radians^2 to a real landmark
-BOGON_THRESH = .1**2  # minimum radians^2 to a real landmark
-
 
 def pseudorandn(N):
     r = np.random.random(N)
@@ -74,16 +63,16 @@ def pseudorandn(N):
     return 2*r - 6
 
 
-def step(X, dt, encoder_dx, gyro_dtheta):
+def step(X, dt, ds, gyro_dtheta, accel_y):
     N = X.shape[1]
     theta0 = X[2]
-    theta1 = theta0 + gyro_dtheta*dt + pseudorandn(N) * NOISE_ANGULAR * encoder_dx * dt
+    theta1 = theta0 + gyro_dtheta*dt + pseudorandn(N) * params.NOISE_ANGULAR * ds * dt
 
     S = np.sin((theta0 + theta1) * 0.5)
     C = np.cos((theta0 + theta1) * 0.5)
 
-    dx = encoder_dx + pseudorandn(N) * NOISE_LONG * encoder_dx * dt
-    dy = pseudorandn(N) * NOISE_LAT * encoder_dx * dt
+    dx = ds + pseudorandn(N) * params.NOISE_LONG * ds * dt
+    dy = pseudorandn(N) * params.NOISE_LAT * ds * dt
 
     X[0] += dx*C - dy*S
     X[1] += dx*S + dy*C
@@ -104,15 +93,15 @@ def likeliest_lm(X, L, l):
     # get the relative angle^2
     d = np.linalg.norm(dxy, axis=1)
     # print 'd', d.shape, d
-    coneangle = 2*np.arcsin(np.minimum(CONE_RADIUS/d, 1))
+    coneangle = 2*np.arcsin(np.minimum(params.CONE_RADIUS/d, 1))
     # print 'coneangle', coneangle
     angledist = np.maximum(np.abs(np.arctan2(y, z) - l) - coneangle, 0)
-    e = np.minimum(angledist**2, BOGON_THRESH)
-    LL = -LM_SELECTIVITY*e
+    e = np.minimum(angledist**2, params.BOGON_THRESH)
+    LL = -params.LM_SELECTIVITY*e
 
     # normalize probabilities so that resampling among landmarks is fair
-    LL -= np.max(LL)
-    LL -= np.log(np.sum(np.exp(LL))) - np.log(X.shape[0])
+    #LL -= np.max(LL)
+    #LL -= np.log(np.sum(np.exp(LL))) - np.log(X.shape[0])
 
     j = np.argmax(LL, axis=0)
     return j, np.max(LL, axis=0)
@@ -122,24 +111,36 @@ def likeliest_lm(X, L, l):
 def resample_particles(X, LL):
     N = X.shape[1]
     LL = np.exp(LL - np.max(LL))
-    LL /= np.sum(LL)
-    j = np.random.choice(N, N, replace=True, p=LL)
-    return X[:, j]
+    totalP = np.sum(LL)
+    deltaP = totalP / N
+    randP = np.random.random() * totalP
+    js = []
+    j = 0
+    for i in range(N):
+        while randP > LL[j]:
+            randP -= LL[j]
+            j += 1
+            if j == N:
+                j = 0
+        js.append(j)
+        randP += deltaP
+    return X[:, js]
 
 
 def main(f):
     np.random.seed(1)
     # bg = cv2.imread("trackmap.jpg")
     # bg = cv2.imread("drtrack-2cm.png")
-    # bg = cv2.imread("bball-2cm.png")
-    bg = cv2.imread("cl.png")
+    bg = cv2.imread("bball-2cm.png")
+    # bg = cv2.imread("cl.png")
 
     Np = 300
     X = np.zeros((3, Np))
     # X[:2] = 100 * np.random.rand(2, Np)
     # X[1] -= 400
-    X[:2] = 0.25*np.random.randn(2, Np)
-    X[2] = np.random.randn(Np) * 0.2
+    X[0] = 0.25*pseudorandn(Np)
+    X[1] = 0.25*pseudorandn(Np)
+    X[2] = pseudorandn(Np) * 0.2
     print 'Lhome', Lhome
     X.T[:, :] += Lhome
     tstamp = None
@@ -178,18 +179,25 @@ def main(f):
         gyroz = gyro[2]  # we only need the yaw rate from the gyro
         dw = wheels - last_wheels
         last_wheels = wheels
-        print 'wheels', dw, 'gyro', gyroz, 'dt', dt
-        ds = 0.25*np.sum(dw) * WHEEL_TICK_LENGTH
+        print 'wheels', dw, 'periods', periods, 'gyro', gyroz, 'dt', dt
+        ds = np.sum(dw) * params.WHEEL_TICK_LENGTH / params.NUM_ENCODERS
+        vest1 = np.mean(periods[:params.NUM_ENCODERS])
+        if vest1 != 0:
+            vest1 = params.WHEEL_TICK_LENGTH * 1e6 / vest1
+        vest2 = ds / dt
         # ds = 0.5*np.sum(dw[2:])
-        step(X, dt, ds, gyroz)
+        # w = v k
+        # a = v^2 k = v w
+        print 'accel', accel[1], ' expected ', gyroz * vest1 / 9.8, 'v', vest1, vest2, accel[0]*dt * 9.8
+        step(X, dt, ds, gyroz, accel[1])
 
-        if True:
+        if False:
             Am = 0.8*Am + 0.2*accel[1]*9.8
             Ae = 0.8*Ae + 0.2*ds*gyroz/dt*0.02
-            Vlat = 0.8*Vlat + dt*accel[1]*9.8 - ds*gyroz*0.02
-            # print 'alat', accel[1]*9.8, 'estimated', ds*gyroz/dt*0.02
-            # print 'Vlat estimate', Vlat
-            # print 'measured alat', Am, 'estimated alat', Ae
+            Vlat = 0.8*Vlat + dt*accel[1]*9.8 - ds*gyroz
+            print 'alat', accel[1]*9.8, 'estimated', ds*gyroz/dt*0.02
+            print 'Vlat estimate', Vlat
+            print 'measured alat', Am, 'estimated alat', Ae
 
         yuv = yuv.copy()
         yuv[480+120:] = np.maximum(yuv[480+120:], 128)  # filter out blue

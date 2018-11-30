@@ -41,8 +41,8 @@ def main(data, seed):
 
 
 if __name__ == '__main__':
-    # data = pickle.load(open("20180804-194415.cones.pickle"))
-    data = pickle.load(open("20180817-232656.cones.pickle"))
+    #data = pickle.load(open("20180804-194415.cones.pickle"))
+    #data = pickle.load(open("20180817-232656.cones.pickle"))
     #data = pickle.load(open("20180817-232546.cones.pickle"))
     Ls = []
     for seed in range(10):

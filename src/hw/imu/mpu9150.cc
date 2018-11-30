@@ -32,9 +32,13 @@ bool IMU::Init() {
   // samplerate divisor 4 -> 1kHz / 5 = 200Hz samplerate
   i2c_.Write(0x68, 25, 0x04);
 
-  // dlpf_cfg = 3, no fsync; 41Hz gyro bandwidth, 5.9ms delay
+  // // dlpf_cfg = 3, no fsync; 41Hz gyro bandwidth, 5.9ms delay
+  // // 1kHz base sample rate
+  // i2c_.Write(0x68, 26, 0x03);
+
+  // dlpf_cfg = 5, no fsync; 10Hz gyro bandwidth, 13.8ms delay
   // 1kHz base sample rate
-  i2c_.Write(0x68, 26, 0x03);
+  i2c_.Write(0x68, 26, 0x05);
 
   // fchoice: 11 (enables filter above)
   // gyro 1000deg/sec full scale
@@ -45,8 +49,8 @@ bool IMU::Init() {
   // accel_fs_sel +/- 4g (01)
   i2c_.Write(0x68, 28, 0x08);
 
-  // a_dlpfcfg = 3, 44.8Hz accel bw, 4.88ms delay
-  i2c_.Write(0x68, 29, 0x03);
+  // a_dlpfcfg = 5, 10.2Hz accel bw, 16ms delay
+  i2c_.Write(0x68, 29, 0x05);
 
 
   i2c_.Write(0x68, 56, 1);  // DRDY int enable (for checking timing on scope)

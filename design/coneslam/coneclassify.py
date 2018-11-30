@@ -52,3 +52,9 @@ def classify(yuv420img, gyroz):
         conecenters = cv2.fisheye.undistortPoints(np.array([conecenters], np.float32), camera_matrix, dist_coeffs)[0]
 
     return conecenters, origcenters, origA
+
+
+if __name__ == '__main__':
+    # read a replay recording, classify all the cones, and store it in a pickle
+    # for pftune.py
+    pass
