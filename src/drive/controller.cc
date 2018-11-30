@@ -41,12 +41,13 @@ static inline float clip(float x, float min, float max) {
 
 void DriveController::UpdateState(const DriverConfig &config,
     const Vector3f &accel, const Vector3f &gyro,
-    uint8_t servo_pos, const uint16_t *wheel_delta, float dt) {
+    uint8_t servo_pos, const uint16_t *wheel_period, float dt) {
 
   // FIXME: hardcoded servo calibraiton
   // delta_ = (servo_pos - 126.5) / 121.3;
   delta_ = 0;
 
+#if 0
   // update front/rear velocity estimate through crude filter
   if (ACTIVE_ENCODERS == 4) {
     vf_ *= (1 - V_ALPHA);
@@ -62,6 +63,15 @@ void DriveController::UpdateState(const DriverConfig &config,
     vf_ += V_ALPHA * V_SCALE * sum * (1.0 / ACTIVE_ENCODERS) / dt;
     vr_ = vf_;  // assume vr==vf, AWD
   }
+#else
+  // with new STM32 hat firmware, this isn't necessary and we have a better
+  // wheel speed estimate
+  if (wheel_period[0] == 0) {
+    vf_ = vr_ = 0;
+  } else {
+    vf_ = vr_ = V_SCALE * 1e6 / wheel_period[0];
+  }
+#endif
 
   w_ = gyro[2];
 }
@@ -160,6 +170,7 @@ bool DriveController::GetControl(const DriverConfig &config,
     // maintain an optimal slip ratio with 0 lateral velocity
     // by adjusting speed until vf = vr*cos(delta) - w*Lf*sin(delta)
     // vr = (vf + w*Lf*sin(delta)) / cos(delta)
+#if 0
     float vr_slip_target = (vf_ + atarget + w_*GEOM_LF*sin(delta_)) /
         cos(delta_);
     if (vr_slip_target < target_v && vr_slip_target > 1.0) {
@@ -167,6 +178,7 @@ bool DriveController::GetControl(const DriverConfig &config,
       //     frameno, vr_slip_target, vf_, vr_);
       target_v = vr_slip_target;
     }
+#endif
   }
 
   // use current velocity to determine target yaw rate

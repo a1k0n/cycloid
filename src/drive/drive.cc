@@ -204,9 +204,15 @@ class Driver: public CameraReceiver {
               controller_.nx_, controller_.ny_);
     }
 
+#if 0
     controller_.UpdateState(config_,
             carstate_.accel, carstate_.gyro,
             carstate_.servo_pos, wheel_delta, dt);
+#else
+    controller_.UpdateState(config_,
+            carstate_.accel, carstate_.gyro,
+            carstate_.servo_pos, wheel_dt, dt);
+#endif
   }
 
   void OnFrame(uint8_t *buf, size_t length) {

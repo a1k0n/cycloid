@@ -17,10 +17,15 @@ NUM_ENCODERS = 1
 STEER_DIRECTION = -1
 
 CONE_RADIUS = 44.5/3.1415/200.  # cone radius in meters
-NOISE_ANGULAR = 0.2
-NOISE_LONG = 10
-NOISE_LAT = 0.5
-LM_SELECTIVITY = 5
+#NOISE_ANGULAR = 0.2
+#NOISE_LONG = 10
+#NOISE_LAT = 0.5
+
+NOISE_ANGULAR = 0.4
+NOISE_LONG = 4
+NOISE_LAT = 2
+LM_SELECTIVITY = 50
+
 #BOGON_THRESH = .21**2  # minimum radians^2 to a real landmark
 #BOGON_THRESH = .1**2  # minimum radians^2 to a real landmark
 BOGON_THRESH = .31**2  # minimum radians^2 to a real landmark
