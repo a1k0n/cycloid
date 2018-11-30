@@ -63,7 +63,7 @@ bool JoystickInput::ReadInput(InputReceiver *receiver) {
     newvalue = true;
     if (type == 0x01) {  // button
       value = value ? 1 : 0;
-      uint32_t oldvalue = (buttons_ >> number) & 1;
+      int16_t oldvalue = (buttons_ >> number) & 1;
       static const char *buttonmap = "BAXYLRlr-+H,.";
       if (oldvalue != value) {
         if (number < 13) {
