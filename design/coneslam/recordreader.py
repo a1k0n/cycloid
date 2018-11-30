@@ -24,6 +24,11 @@ def read_frame(f):
 
     ptr = 51
     nparticles, = struct.unpack("=I", buf[ptr:ptr+4])
+
+    # for particles w/ heading
+    # particles = np.frombuffer(buf[55:55+nparticles*16], np.float32).reshape((-1, 4))
+    # ptr += 4 + nparticles*16
+
     particles = np.frombuffer(buf[55:55+nparticles*12], np.float32).reshape((-1, 3))
     ptr += 4 + nparticles*12
 

@@ -63,13 +63,21 @@ def pseudorandn(N):
     return 2*r - 6
 
 
-def step(X, dt, ds, gyro_dtheta, accel_y):
+def step(X, dt, ds, gyro_dtheta, v, accel_y):
     N = X.shape[1]
     theta0 = X[2]
     theta1 = theta0 + gyro_dtheta*dt + pseudorandn(N) * params.NOISE_ANGULAR * ds * dt
 
-    S = np.sin((theta0 + theta1) * 0.5)
-    C = np.cos((theta0 + theta1) * 0.5)
+    heading = X[3]
+    # now how much angular velocity does our actual heading have we have given
+    # the lateral acceleration? (basically, how much are we understeering?)
+    # the accelerometer is noisy as hell, so we can't just integrate it...
+    # we need some sort of index of understeeringness
+    alpha = pseudorandn(N) * params.NOISE_STEER_s + params.NOISE_STEER_u
+    heading += alpha*(theta1 - heading)
+
+    S = np.sin(heading)
+    C = np.cos(heading)
 
     dx = ds + pseudorandn(N) * params.NOISE_LONG * ds * dt
     dy = pseudorandn(N) * params.NOISE_LAT * ds * dt
@@ -77,6 +85,7 @@ def step(X, dt, ds, gyro_dtheta, accel_y):
     X[0] += dx*C - dy*S
     X[1] += dx*S + dy*C
     X[2] = theta1
+    X[3] = heading
 
 
 def likeliest_lm(X, L, l):
@@ -135,14 +144,15 @@ def main(f):
     # bg = cv2.imread("cl.png")
 
     Np = 300
-    X = np.zeros((3, Np))
+    X = np.zeros((4, Np))
     # X[:2] = 100 * np.random.rand(2, Np)
     # X[1] -= 400
     X[0] = 0.25*pseudorandn(Np)
     X[1] = 0.25*pseudorandn(Np)
     X[2] = pseudorandn(Np) * 0.2
     print 'Lhome', Lhome
-    X.T[:, :] += Lhome
+    X.T[:, :3] += Lhome
+    X[3] = X[2]
     tstamp = None
     last_wheels = None
 
@@ -157,6 +167,7 @@ def main(f):
     Am, Ae = 0, 0
     Vlat = 0
     totalL = 0
+    vest2 = 0
     while not done:
         ok, framedata = recordreader.read_frame(f)
         if not ok:
@@ -184,12 +195,12 @@ def main(f):
         vest1 = np.mean(periods[:params.NUM_ENCODERS])
         if vest1 != 0:
             vest1 = params.WHEEL_TICK_LENGTH * 1e6 / vest1
-        vest2 = ds / dt
+        vest2 += 0.2*(ds / dt - vest2)
         # ds = 0.5*np.sum(dw[2:])
         # w = v k
         # a = v^2 k = v w
-        print 'accel', accel[1], ' expected ', gyroz * vest1 / 9.8, 'v', vest1, vest2, accel[0]*dt * 9.8
-        step(X, dt, ds, gyroz, accel[1])
+        print 'accel', accel[1], ' expected ', gyroz * vest2 / 9.8, 'v', vest1, vest2, accel[0]*dt * 9.8
+        step(X, dt, ds, gyroz, vest2, -accel[1]*9.8)
 
         if False:
             Am = 0.8*Am + 0.2*accel[1]*9.8
