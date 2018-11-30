@@ -7,7 +7,7 @@
 namespace coneslam {
 
 struct Particle {
-  float x, y, theta;
+  float x, y, theta, heading;
 };
 
 // for now we will assume all landmarks have the same (round) covariance

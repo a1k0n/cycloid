@@ -211,7 +211,7 @@ class Driver: public CameraReceiver {
 #else
     controller_.UpdateState(config_,
             carstate_.accel, carstate_.gyro,
-            carstate_.servo_pos, wheel_dt, dt);
+            carstate_.servo_pos, carstate_.wheel_dt, dt);
 #endif
   }
 

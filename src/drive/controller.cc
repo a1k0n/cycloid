@@ -80,7 +80,7 @@ void DriveController::UpdateLocation(const DriverConfig &config,
     float x, float y, float theta) {
   x_ = x;
   y_ = y;
-  theta_ = theta;
+  theta_ = theta; // NOTE: theta is meaningless here; I shouldn't be tracking it
   if (!track_.GetTarget(x_, y_, config.lookahead,
         &cx_, &cy_, &nx_, &ny_, &k_, &vk_)) {
     cx_ = cy_ = ny_ = 0;
@@ -178,6 +178,8 @@ bool DriveController::GetControl(const DriverConfig &config,
       //     frameno, vr_slip_target, vf_, vr_);
       target_v = vr_slip_target;
     }
+#else
+    target_v = clip(target_v, target_v + atarget, vmax);
 #endif
   }
 
