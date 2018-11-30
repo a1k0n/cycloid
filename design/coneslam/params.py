@@ -25,7 +25,7 @@ NOISE_ANGULAR = 0.4
 NOISE_LONG = 4
 NOISE_LAT = 2
 NOISE_STEER_u = 0.3
-NOISE_STEER_s = 0.2
+NOISE_STEER_s = 0.3
 LM_SELECTIVITY = 50
 
 #BOGON_THRESH = .21**2  # minimum radians^2 to a real landmark

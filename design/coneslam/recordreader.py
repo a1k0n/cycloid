@@ -26,19 +26,25 @@ def read_frame(f):
     nparticles, = struct.unpack("=I", buf[ptr:ptr+4])
 
     # for particles w/ heading
-    # particles = np.frombuffer(buf[55:55+nparticles*16], np.float32).reshape((-1, 4))
-    # ptr += 4 + nparticles*16
+    particles = np.frombuffer(buf[55:55+nparticles*16], np.float32).reshape((-1, 4))
+    ptr += 4 + nparticles*16
 
-    particles = np.frombuffer(buf[55:55+nparticles*12], np.float32).reshape((-1, 3))
-    ptr += 4 + nparticles*12
+    # previous version: particles without heading
+    # particles = np.frombuffer(buf[55:55+nparticles*12], np.float32).reshape((-1, 3))
+    # ptr += 4 + nparticles*12
 
     controldata = struct.unpack("=17f", buf[ptr:ptr+68])
+
+    ptr += 68
+    ncones, = struct.unpack("=I", buf[ptr:ptr+4])
+    conesx = np.frombuffer(buf[4:4+ncones*4], np.int32)
+    ptr += 4 + ncones*4
 
     frame = np.frombuffer(buf[-640*480 - 320*240*2:], np.uint8)
 
     carstate = (throttle, steering, accel, gyro, servo, wheels, periods)
 
-    record = (tstamp, carstate, particles, controldata, frame)
+    record = (tstamp, carstate, particles, controldata, conesx, frame)
 
     return True, record
 
@@ -46,6 +52,8 @@ def read_frame(f):
 if __name__ == '__main__':
     import sys
     import cv2
+    import params
+
     f = open(sys.argv[1])
     vidout = None
     if len(sys.argv) > 2:
@@ -58,7 +66,7 @@ if __name__ == '__main__':
         if not ok:
             break
 
-        tstamp, carstate, particles, controldata, frame = data
+        tstamp, carstate, particles, controldata, conesx, frame = data
         bgr = cv2.cvtColor(
             frame.reshape((-1, imgsiz[0])), cv2.COLOR_YUV2BGR_I420)
         if t0 is None:
@@ -80,6 +88,10 @@ if __name__ == '__main__':
                   (partxy[:, 1] <= 0) & (partxy[:, 1] > -240))
         partview[(-partxy[inview, 1], partxy[inview, 0])] = 255
         cv2.imshow("particles", partview)
+
+        for x in conesx:
+            cv2.line(bgr, (x, params.vpy), (x, params.vpy + params.bandheight),
+                     (0, 255, 255), 2)
 
         (x, y, theta, vf, vr, w, ierr_v, ierr_w, delta,
          target_k, target_v, target_w, ye, psie, k, bw_w, bw_v) = controldata

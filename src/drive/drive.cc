@@ -136,6 +136,7 @@ class Driver: public CameraReceiver {
     uint32_t flushlen = 12 + carstate_.SerializedSize() + length;
     flushlen += localizer_->SerializedSize();
     flushlen += controller_.SerializedSize();
+    flushlen += 4 + ncones_ * 4;
 
     // copy our frame, push it onto a stack to be flushed
     // asynchronously to sdcard
@@ -148,6 +149,11 @@ class Driver: public CameraReceiver {
     ptr += carstate_.Serialize(flushbuf+ptr, flushlen - ptr);
     ptr += localizer_->Serialize(flushbuf+ptr, flushlen - ptr);
     ptr += controller_.Serialize(flushbuf+ptr, flushlen - ptr);
+
+    // add the cone detection positions
+    memcpy(flushbuf+ptr, &ncones_, 4);
+    memcpy(flushbuf+ptr+4, &conesx_, ncones_*4);
+    ptr += 4 + ncones_*4;
 
     // write the 640x480 yuv420 buffer last
     memcpy(flushbuf+ptr, buf, length);
@@ -172,23 +178,23 @@ class Driver: public CameraReceiver {
     float ds = V_SCALE * (1.0/ACTIVE_ENCODERS) * (
         wheel_delta[0] + wheel_delta[1] +
         + wheel_delta[2] + wheel_delta[3]);
-    int conesx[10];
-    float conestheta[10];
-    int ncones = coneslam::FindCones(buf, config_.cone_thresh,
-        carstate_.gyro[2], 10, conesx, conestheta);
+
+    ncones_ = coneslam::FindCones(buf, config_.cone_thresh,
+            carstate_.gyro[2], sizeof(conesx_) / sizeof(conesx[0]),
+            conesx_, conestheta_);
 
     if (ds > 0) {  // only do coneslam updates while we're moving
       localizer_->Predict(ds, carstate_.gyro[2], dt);
-      for (int i = 0; i < ncones; i++) {
+      for (int i = 0; i < ncones_; i++) {
         localizer_->UpdateLM(conestheta[i], config_.lm_precision,
             config_.lm_bogon_thresh*0.01);
       }
-      if (ncones > 0) {
+      if (ncones_ > 0) {
         localizer_->Resample();
       }
     }
 
-    display_.UpdateConeView(buf, ncones, conesx);
+    display_.UpdateConeView(buf, ncones_, conesx);
     display_.UpdateEncoders(carstate_.wheel_pos);
     {
       coneslam::Particle meanp;
@@ -269,6 +275,10 @@ class Driver: public CameraReceiver {
 
   bool firstframe_;
   uint16_t last_encoders_[4];
+
+  int ncones_;
+  int conesx_[16];
+  float conestheta_[16];
 
   enum {
     CAL_NONE,

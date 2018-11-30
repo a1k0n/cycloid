@@ -16,7 +16,7 @@ const float NOISE_ANGULAR = 0.4;
 const float NOISE_LONG = 4;
 const float NOISE_LAT = 2;
 const float NOISE_STEER_u = 0.3;
-const float NOISE_STEER_s = 0.2;
+const float NOISE_STEER_s = 0.3;
 
 static double randn() {
   // #include <random> doesn't work in my ARM cross-compiler so I'm just
