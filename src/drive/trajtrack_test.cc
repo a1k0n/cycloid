@@ -12,14 +12,18 @@ int main() {
   }
 
   float cx, cy, nx, ny, k, t;
-  if (!tt.GetTarget(0, 0, &cx, &cy, &nx, &ny, &k, &t)) {
+  if (!tt.GetTarget(/*x=*/ 0, /*y=*/0, /*lookahead=*/12, /*closestx=*/&cx,
+          /*closesty=*/&cy, /*normx=*/&nx, /*normy=*/&ny, /*kappa=*/&k,
+          /*lookahead_kappa=*/&t)) {
     fprintf(stderr, "failed to get target?!");
     return 1;
   }
 
   printf("%f %f %f %f %f\n", cx, cy, nx, ny, k);
 
-  if (!tt.GetTarget(51, 20, &cx, &cy, &nx, &ny, &k, &t)) {
+  if (!tt.GetTarget(/*x=*/ 51, /*y=*/20, /*lookahead=*/42, /*closestx=*/&cx,
+            /*closesty=*/&cy, /*normx=*/&nx, /*normy=*/&ny, /*kappa=*/&k,
+            /*lookahead_kappa=*/&t)) {
     fprintf(stderr, "failed to get target?!");
     return 1;
   }
