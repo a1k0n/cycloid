@@ -180,13 +180,13 @@ class Driver: public CameraReceiver {
         + wheel_delta[2] + wheel_delta[3]);
 
     ncones_ = coneslam::FindCones(buf, config_.cone_thresh,
-            carstate_.gyro[2], sizeof(conesx_) / sizeof(conesx[0]),
+            carstate_.gyro[2], sizeof(conesx_) / sizeof(conesx_[0]),
             conesx_, conestheta_);
 
     if (ds > 0) {  // only do coneslam updates while we're moving
       localizer_->Predict(ds, carstate_.gyro[2], dt);
       for (int i = 0; i < ncones_; i++) {
-        localizer_->UpdateLM(conestheta[i], config_.lm_precision,
+        localizer_->UpdateLM(conestheta_[i], config_.lm_precision,
             config_.lm_bogon_thresh*0.01);
       }
       if (ncones_ > 0) {
@@ -194,7 +194,7 @@ class Driver: public CameraReceiver {
       }
     }
 
-    display_.UpdateConeView(buf, ncones_, conesx);
+    display_.UpdateConeView(buf, ncones_, conesx_);
     display_.UpdateEncoders(carstate_.wheel_pos);
     {
       coneslam::Particle meanp;

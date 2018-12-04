@@ -12,7 +12,7 @@ namespace coneslam {
 // const float NOISE_LAT = 8;
 
 const float CONE_RADIUS = 44.5/M_PI/200.;
-const float NOISE_ANGULAR = 0.4;
+const float NOISE_ANGULAR = 0.2;
 const float NOISE_LONG = 4;
 const float NOISE_LAT = 2;
 const float NOISE_STEER_u = 0.3;
@@ -36,9 +36,9 @@ Localizer::~Localizer() {
 
 void Localizer::Reset() {
   for (int i = 0; i < n_particles_; i++) {
-    particles_[i].x = 0.25*randn() + home_x_;
-    particles_[i].y = 0.25*randn() + home_y_;
-    particles_[i].theta = randn() * 0.2 + home_theta_;
+    particles_[i].x = 0.125*randn() + home_x_;
+    particles_[i].y = 0.125*randn() + home_y_;
+    particles_[i].theta = randn() * 0.1 + home_theta_;
     particles_[i].heading = particles_[i].theta;
   }
   ResetLikelihood();
@@ -93,6 +93,9 @@ void Localizer::Predict(float ds, float w, float dt) {
     float alpha = randn() * NOISE_STEER_s + NOISE_STEER_u;
     float h = particles_[i].heading;
     h += alpha*(t - h);
+
+    // disable for now
+    h = t;
 
     float S = sin(h);
     float C = cos(h);

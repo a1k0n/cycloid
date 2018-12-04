@@ -179,7 +179,7 @@ bool DriveController::GetControl(const DriverConfig &config,
       target_v = vr_slip_target;
     }
 #else
-    target_v = clip(target_v, target_v + atarget, vmax);
+    //target_v = clip(target_v, target_v + atarget, vmax);
 #endif
   }
 
