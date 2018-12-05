@@ -14,11 +14,14 @@ RUN apt-get install -yq --no-install-recommends \
 # Install debugging packages. TODO Remove once this Dockerfile is stable.
 RUN apt-get install -yq --no-install-recommends \
   cmake-curses-gui \
+  git \
   vim
 RUN apt-get clean 
 
 # Copy all the app source into docker context
 COPY . /usr/cycloid
+WORKDIR /usr/cycloid
+RUN git submodule update --init
 
 # Build our binary
 WORKDIR /usr/build
