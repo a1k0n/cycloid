@@ -411,6 +411,9 @@ static void MX_GPIO_Init(void)
 
 /* USER CODE BEGIN 4 */
 
+static const int COMMAND_TIMEOUT = 10;  // number of 10ms intervals to expect a command
+static volatile uint8_t command_timeout_ = 0;
+
 volatile union {
   struct {
     uint8_t leds;
@@ -451,7 +454,16 @@ static void update_from_i2cdata() {
   __HAL_TIM_SET_COMPARE(&htim3, TIM_CHANNEL_2, pwmtiming(i2cdata_.esc_pwm));
   HAL_GPIO_WritePin(GPIOA, GPIO_PIN_5, i2cdata_.leds & 1);
   HAL_GPIO_WritePin(GPIOB, GPIO_PIN_1, (i2cdata_.leds & 2) >> 1);
+  command_timeout_ = COMMAND_TIMEOUT;
+}
 
+// If we don't receive a command from the host, reset our outputs to zero so we
+// don't run away
+static void reset_commands() {
+  __HAL_TIM_SET_COMPARE(&htim3, TIM_CHANNEL_1, pwmtiming(0));
+  __HAL_TIM_SET_COMPARE(&htim3, TIM_CHANNEL_2, pwmtiming(0));
+  HAL_GPIO_WritePin(GPIOA, GPIO_PIN_5, 0);
+  HAL_GPIO_WritePin(GPIOB, GPIO_PIN_1, 1);
 }
 
 static void update_phase() {
@@ -565,6 +577,13 @@ void TIM3_IRQHandler(void) {
     USART1->TDR = 0xaa;
     SET_BIT(USART1->CR1, USART_CR1_TXEIE);
     usart_txptr = 0;
+
+    if (command_timeout_ > 0) {
+      command_timeout_--;
+      if (command_timeout_ == 0) {
+        reset_commands();
+      }
+    }
   }
 }
 
