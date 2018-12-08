@@ -11,6 +11,35 @@ it generates the PWM pulse for the servo and speed controller. This way, a
 control loop on the Raspberry Pi can be synchronized with the actual pulses
 sent to the car hardware.
 
+## Compiling the code
+
+Install `arm-none-eabi-gcc` on your host platform and type `make`. Copy
+build/cycloidp1.1.elf to the Pi and you can flash it right on there.
+
+## Flashing the code
+
+The Raspberry Pi can reflash the code on the HAT using
+[OpenOCD](http://openocd.org/). Raspbian has an `openocd` package, but it isn't
+new enough to work using the Pi's own GPIO pins. Adafruit has a [guide to
+compiling
+OpenOCD](https://learn.adafruit.com/programming-microcontrollers-using-openocd-on-raspberry-pi/compiling-openocd)
+which will get you up to speed. Once you have it installed, use the
+`openocd.cfg` here (or modify it for your needs; it's looking for
+`cycloidp1.1.elf` in the current working directory) and `sudo openocd -f openocd.cfg`. If you see
+```
+...
+
+** Verify Started **
+verified 8348 bytes in 0.035556s (229.282 KiB/s)
+** Verified OK **
+adapter speed: 1001 kHz
+Info : Listening on port 6666 for tcl connections
+Info : Listening on port 4444 for telnet connections
+```
+
+then it worked, and you can hit ^C, or if you really want to you can connect up
+gdb and poke around.
+
 ## I2C addresses
 
 `i2cdump 1 0x75` will show the "registers" exposed by the I2C slave; the first
@@ -59,3 +88,4 @@ It accepts 5-byte packets:
 
 If the receiver's checksum doesn't match, it will respond with 0xFE (if it was
 not already transmitting a packet; otherwise it will silently ignore the input)
+
