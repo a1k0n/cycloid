@@ -22,7 +22,7 @@
 #endif
 
 #ifdef STM32HAT
-#include "hw/car/stm32hat.h"
+#include "hw/car/stm32i2c.h"
 #endif
 
 // #undef this to disable camera, just to record w/ raspivid while
@@ -253,8 +253,9 @@ class Driver: public CameraReceiver {
           carstate_.throttle, carstate_.steering);
 #endif
 #ifdef STM32HAT
-      stm32hat.SetControls(frame_ & 4 ? 1 : 0,
-          carstate_.throttle, carstate_.steering);
+      uint8_t leds = (frame_ & 4) >> 1;  // blink green LED
+      leds |= IsRecording() ? 1 : 0;  // solid red when recording
+      stm32hat.SetControls(leds, carstate_.throttle, carstate_.steering);
 #endif
       // pca.SetPWM(PWMCHAN_STEERING, steering_);
       // pca.SetPWM(PWMCHAN_ESC, throttle_);

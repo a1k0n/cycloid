@@ -1,5 +1,5 @@
-#ifndef HW_CAR_STM32HAT_H_
-#define HW_CAR_STM32HAT_H_
+#ifndef HW_CAR_STM32I2C_H_
+#define HW_CAR_STM32I2C_H_
 
 #include "hw/gpio/i2c.h"
 
@@ -19,5 +19,5 @@ class STM32Hat {
   const I2C &i2c_;
 };
 
-#endif  // HW_CAR_STM32HAT_H_
+#endif  // HW_CAR_STM32I2C_H_
 

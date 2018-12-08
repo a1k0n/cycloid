@@ -1,4 +1,4 @@
-#include "hw/car/stm32hat.h"
+#include "hw/car/stm32i2c.h"
 
 static const int STM32HAT_ADDRESS = 0x75;
 
