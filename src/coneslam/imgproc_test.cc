@@ -2,6 +2,8 @@
 #include <string.h>
 #include "coneslam/imgproc.h"
 
+#include "drive/config.h"
+
 static const char *RECFILE =
   "../design/coneslam/home20180804/cycloid-20180804-194750.rec";
 int main() {
@@ -11,6 +13,9 @@ int main() {
     return 1;
   }
 
+  DriverConfig config;
+  config.Load();
+
   int frame = 0;
   int xbuf[10];
   uint8_t framebuf[55 + 640*(480+240)];
@@ -19,7 +24,7 @@ int main() {
     float gyroz;
     memcpy(&gyroz, framebuf+26+8, 4);
     printf("%d: gyroz=%f ", frame, gyroz);
-    int ncones = coneslam::FindCones(framebuf+55, gyroz, 10, xbuf, thetabuf);
+    int ncones = coneslam::FindCones(/*yuvimg=*/framebuf+55, /*thresh=*/config.cone_thresh, /*gyroz=*/gyroz, /*nout=*/10, /*x_out*/xbuf, /*bearing_out=*/thetabuf);
     if (ncones) {
       for (int i = 0; i < ncones; i++) {
         printf("[%d]%f ", xbuf[i], thetabuf[i]);
