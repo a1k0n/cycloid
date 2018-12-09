@@ -40,11 +40,12 @@ RUN cmake /usr/cycloid/src \
 RUN cmake --build . -- --jobs=$jobs
 RUN cmake --build . -- --jobs=$jobs install
 
-FROM resin/rpi-raspbian:stretch
-COPY --from=build /usr/local /usr/local
-
-RUN ldconfig
-#switch on systemd init system in container
-ENV INITSYSTEM on
-
-CMD drive
+# Travis fails on the resin image if 'RUN' is used with "exec format error".
+# FROM resin/rpi-raspbian:stretch
+# COPY --from=build /usr/local /usr/local
+# 
+# RUN ldconfig
+# #switch on systemd init system in container
+# ENV INITSYSTEM on
+# 
+# CMD drive
