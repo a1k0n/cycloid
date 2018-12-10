@@ -1,6 +1,6 @@
 Self-racing robot using traffic cones to localize. Very much a work in progress.
 
-
+[![Build Status](https://travis-ci.org/a1k0n/cycloid.svg?branch=master)](https://travis-ci.org/a1k0n/cycloid)
 
 [![Racing on a basketball court](https://img.youtube.com/vi/abS4v-PrAvE/0.jpg)](https://www.youtube.com/watch?v=abS4v-PrAvE)
 
