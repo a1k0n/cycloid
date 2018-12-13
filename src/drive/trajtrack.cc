@@ -52,7 +52,7 @@ bool TrajectoryTracker::LoadTrack(const char *fname) {
 bool TrajectoryTracker::GetTarget(float x, float y, int lookahead,
     float *closestx, float *closesty,
     float *normx, float *normy,
-    float *kappa, float *lookahead_kappa) {
+    float *kappa, float *lookahead_kappa, float *dist) {
 
   if (n_pts_ == 0) {
     return false;
@@ -61,16 +61,45 @@ bool TrajectoryTracker::GetTarget(float x, float y, int lookahead,
   int mini = 0;
   float mind = 1e12;
 
-  for (int i = 0; i < n_pts_; i++) {
+  for (int i = 0; i < n_pts_; i++) 
+  {
     const TrajectoryPoint &p = pts_[i];
     float dist = (p.x - x)*(p.x - x) + (p.y - y)*(p.y - y);
-    if (dist < mind) {
+    if (dist < mind) 
+    {
       mind = dist;
       mini = i;
     }
   }
 
-  int li = (mini + lookahead) % n_pts_;
+//So the idea is, we find the first local maxima of the curvature of the track ahead of us. The reason why 
+//we want the first local maxima is because the points under consideration might include 2 points where the kappa is high (like in a chicane). 
+//We only concern ourselves with the first instance of max kappa.
+  float del_k, last_del_k, braking_dist;
+  float max_k;
+  for (int i = mini; i < mini + n_pts_ ; i++) //circle around from the current target position.
+  {
+    int a = i%n_pts_ ; // prevent memory issues.
+    int b = (i-1)%n_pts_ ;
+    const TrajectoryPoint &p1 = pts_[a], &p2 = pts_[b]; 
+    del_k = p1.k - p2.k ; //derivative of curvature. (not really, its just change in curvature but its proportional to the derivative)
+    if(i == mini) //first pass. establish last_del_k
+    {
+      last_del_k = del_k;
+    }
+    if(i != mini)
+    {
+      if(del_k*last_del_k < 0) // the sign of the derivative of the curvature changes around the sharp turns. therefore if the product of successive derivatives is negative, it indicates a sharp turn
+      {
+        max_k = p2.k; //store value of max_k,distance and break the loop.
+        braking_dist = sqrt((p2.x - x)*(p2.x - x) + (p2.y - y)*(p2.y - y)); //get value of approximate distance to that point 
+        //I say approximate because it is the straight line distance and not the distance along the trajectory (while that would be ideal, it would take a while to figure out) 
+        break;
+      }
+    }
+  }
+
+  // int li = (mini + lookahead) % n_pts_; //didn't seem like this line was doing anything useful so I commented it.
 
   const TrajectoryPoint &p = pts_[mini];
   *closestx = p.x;
@@ -78,7 +107,8 @@ bool TrajectoryTracker::GetTarget(float x, float y, int lookahead,
   *normx = p.nx;
   *normy = p.ny;
   *kappa = p.k;
-  *lookahead_kappa = pts_[li].k;
+  *lookahead_kappa = max_k;
+  *dist = braking_dist; //will need this later 
   // printf("i %d pt %f %f norm %f %f k %f\n", mini, p.x, p.y, p.nx, p.ny, p.k);
 
   return true;
