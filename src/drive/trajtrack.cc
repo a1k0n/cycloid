@@ -61,12 +61,10 @@ bool TrajectoryTracker::GetTarget(float x, float y, int lookahead,
   int mini = 0;
   float mind = 1e12;
 
-  for (int i = 0; i < n_pts_; i++) 
-  {
+  for (int i = 0; i < n_pts_; i++) {
     const TrajectoryPoint &p = pts_[i];
     float dist = (p.x - x)*(p.x - x) + (p.y - y)*(p.y - y);
-    if (dist < mind) 
-    {
+    if (dist < mind) {
       mind = dist;
       mini = i;
     }
