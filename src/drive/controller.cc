@@ -82,7 +82,7 @@ void DriveController::UpdateLocation(const DriverConfig &config,
   y_ = y;
   theta_ = theta; // NOTE: theta is meaningless here; I shouldn't be tracking it
   if (!track_.GetTarget(x_, y_, config.lookahead,
-        &cx_, &cy_, &nx_, &ny_, &k_, &vk_)) {
+        &cx_, &cy_, &nx_, &ny_, &k_, &vk_, &dist)) {
     cx_ = cy_ = ny_ = 0;
     nx_ = 1;
     // circle left if you're confused
@@ -154,34 +154,50 @@ bool DriveController::GetControl(const DriverConfig &config,
   float vmax = throttle_in * config.speed_limit * 0.01;
   if (autodrive) {
     k = autok;
-    // use lookahead vk_ to slow down early
-    // maybe just use vk_ directly here? then we speed up at corner exit
-    vk = fmax(fabs(vk_), fabs(k));
+    // vk = fmax(fabs(vk_), fabs(k));
     vmax = config.speed_limit * 0.01;
-  }
-
-  float kmin = config.traction_limit * 0.01 / (vmax*vmax);
-
-  float target_v = vmax;
-  if (fabs(vk) > kmin) {  // any curvature more than this will reduce speed
-    target_v = sqrt(config.traction_limit * 0.01 / fabs(vk));
-    float atarget = config.accel_limit * 0.01;
-
-    // maintain an optimal slip ratio with 0 lateral velocity
-    // by adjusting speed until vf = vr*cos(delta) - w*Lf*sin(delta)
-    // vr = (vf + w*Lf*sin(delta)) / cos(delta)
-#if 0
-    float vr_slip_target = (vf_ + atarget + w_*GEOM_LF*sin(delta_)) /
-        cos(delta_);
-    if (vr_slip_target < target_v && vr_slip_target > 1.0) {
-      // printf("[%d] using slip target %f (vf=%f vr=%f)\n",
-      //     frameno, vr_slip_target, vf_, vr_);
-      target_v = vr_slip_target;
+   
+    float v2 = sqrt(config.traction_limit*0.01 / fabs(vk_) ) ;
+    float dV = vr_ -  v2 ; //if current velocity is high and v2 is low, the term dV will be positive. if it is negative, the if condition will not be met anyway
+    float decel_req = (dv/dist)*vr_ ; //dv/dx * dx/dt = dv/dt = deceleration required to hit that speed.
+    if(decel_req > 0.5*config.traction_limit) // why 0.5? Idk. Seemed like a good idea to leave at least 1/2 the traction for turning.
+    {
+      target_v = v2; //set target velocity as v2 if the deceleration required to achieve it is more than 1/2 the traction limit
     }
-#else
-    //target_v = clip(target_v, target_v + atarget, vmax);
-#endif
+    else//otherwise, set target velocity as sqrt(a/K) and compare with vmax to prevent problems.
+    {
+      target_v = sqrt(config.traction_limit*0.01 / fabs(k) );
+      if(target_v > vmax)
+      {
+        target_v = vmax; //prevent overspeeding 
+      }
+    }
   }
+
+
+
+//   float kmin = config.traction_limit * 0.01 / (vmax*vmax);
+
+//   float target_v = vmax;
+//   if (fabs(vk) > kmin) {  // any curvature more than this will reduce speed
+//     target_v = sqrt(config.traction_limit * 0.01 / fabs(vk));
+//     float atarget = config.accel_limit * 0.01;
+
+//     // maintain an optimal slip ratio with 0 lateral velocity
+//     // by adjusting speed until vf = vr*cos(delta) - w*Lf*sin(delta)
+//     // vr = (vf + w*Lf*sin(delta)) / cos(delta)
+// #if 0
+//     float vr_slip_target = (vf_ + atarget + w_*GEOM_LF*sin(delta_)) /
+//         cos(delta_);
+//     if (vr_slip_target < target_v && vr_slip_target > 1.0) {
+//       // printf("[%d] using slip target %f (vf=%f vr=%f)\n",
+//       //     frameno, vr_slip_target, vf_, vr_);
+//       target_v = vr_slip_target;
+//     }
+// #else
+//     //target_v = clip(target_v, target_v + atarget, vmax);
+// #endif
+//   }
 
   // use current velocity to determine target yaw rate
   // this yaw rate should be achievable with our tires given the slip rate
