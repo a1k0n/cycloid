@@ -52,6 +52,8 @@ class DriveController {
 
   float cx_, cy_, nx_, ny_;
 
+  float dist; //distance to the maximum curvature point.
+
  private:
   TrajectoryTracker track_;
 };
