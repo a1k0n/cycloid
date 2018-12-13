@@ -17,7 +17,7 @@ class TrajectoryTracker {
   bool GetTarget(float x, float y, int lookahead,
       float *closestx, float *closesty,
       float *normx, float *normy,
-      float *kappa, float *lookahead_kappa);
+      float *kappa, float *lookahead_kappa, float *dist);
 
  private:
   int n_pts_;
