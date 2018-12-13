@@ -152,6 +152,7 @@ bool DriveController::GetControl(const DriverConfig &config,
   float k = -steering_in * 2 * fabs(steering_in);
   float vk = k;  // curvature to use for velocity calc
   float vmax = throttle_in * config.speed_limit * 0.01;
+  float target_v = vmax;
   if (autodrive) {
     k = autok;
     // vk = fmax(fabs(vk_), fabs(k));
@@ -159,7 +160,7 @@ bool DriveController::GetControl(const DriverConfig &config,
    
     float v2 = sqrt(config.traction_limit*0.01 / fabs(vk_) ) ;
     float dV = vr_ -  v2 ; //if current velocity is high and v2 is low, the term dV will be positive. if it is negative, the if condition will not be met anyway
-    float decel_req = (dv/dist)*vr_ ; //dv/dx * dx/dt = dv/dt = deceleration required to hit that speed.
+    float decel_req = (dV/dist)*vr_ ; //dv/dx * dx/dt = dv/dt = deceleration required to hit that speed.
     if(decel_req > 0.5*config.traction_limit) // why 0.5? Idk. Seemed like a good idea to leave at least 1/2 the traction for turning.
     {
       target_v = v2; //set target velocity as v2 if the deceleration required to achieve it is more than 1/2 the traction limit
