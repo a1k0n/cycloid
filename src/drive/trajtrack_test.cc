@@ -14,7 +14,7 @@ int main() {
   float cx, cy, nx, ny, k, t,d;
   if (!tt.GetTarget(/*x=*/ 0, /*y=*/0, /*lookahead=*/12, /*closestx=*/&cx,
           /*closesty=*/&cy, /*normx=*/&nx, /*normy=*/&ny, /*kappa=*/&k,
-          /*lookahead_kappa=*/&t, /*breaking distance */&d)) {
+          /*lookahead_kappa=*/&t, /*breaking distance=*/&d)) {
     fprintf(stderr, "failed to get target?!");
     return 1;
   }
@@ -23,7 +23,7 @@ int main() {
 
   if (!tt.GetTarget(/*x=*/ 51, /*y=*/20, /*lookahead=*/42, /*closestx=*/&cx,
             /*closesty=*/&cy, /*normx=*/&nx, /*normy=*/&ny, /*kappa=*/&k,
-            /*lookahead_kappa=*/&t,/*breaking distance*/ &d)) {
+            /*lookahead_kappa=*/&t,/*breaking distance=*/ &d)) {
     fprintf(stderr, "failed to get target?!");
     return 1;
   }
