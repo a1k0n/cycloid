@@ -82,7 +82,7 @@ bool TrajectoryTracker::GetTarget(float x, float y, int lookahead,
   float del_k, last_del_k, braking_dist[2], pos_x[2], pos_y[2];
   float max_k[2]; //upto 2 local maximas. Why 2? because it is highly unlikely that an optimized trajectory would contain 3 local maximas in succession
                   //so close to each other and so drastically different that premature braking would be required for the 3rd local maxima. Thats just bad optimisation IMO
-  uint8_t count = 0; //sentinel variable
+  int count = 0; //sentinel variable
   float out_k, out_d; //these will be the final outputs.
 
   for (int i = mini; i < mini + n_pts_ ; i++) //circle around from the current target position.
