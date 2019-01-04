@@ -41,6 +41,13 @@ bool STM32HatSerial::Init() {
 
   tcflush(fd_, TCIOFLUSH);
 
+  // write junk to the port just to flush out the receive buffer on the remote
+  // end
+  {
+    uint8_t buf[6] = {0xaa, 0xaa, 0xaa, 0xaa, 0xaa, 0xaa};
+    write(fd_, buf, 6);
+  }
+
   return true;
 
 error:

@@ -621,7 +621,7 @@ void USART1_IRQHandler(void) {
     }
     if (usart_rxptr < 0 && chr == 0x55) {
       usart_rxptr = 0;
-    } else {
+    } else if (usart_rxptr >= 0) {
       usart_rxbuf[usart_rxptr++] = chr;
       if (usart_rxptr == 4) {
         process_serial_msg(usart_rxbuf);
