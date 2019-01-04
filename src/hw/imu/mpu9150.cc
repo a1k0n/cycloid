@@ -21,6 +21,10 @@ using Eigen::VectorXd;
 using Eigen::Matrix3f;
 using Eigen::MatrixXd;
 
+// acceleromter scale is 2g << ACCEL_SHIFT
+// readout is (16384 >> ACCEL_SHIFT) LSB/g
+const int ACCEL_SHIFT = 3;  // 0..3
+
 bool IMU::Init() {
   i2c_.Write(0x68, 107, 0x80);  // reset
   usleep(10000);
@@ -32,13 +36,13 @@ bool IMU::Init() {
   // samplerate divisor 4 -> 1kHz / 5 = 200Hz samplerate
   i2c_.Write(0x68, 25, 0x04);
 
-  // // dlpf_cfg = 3, no fsync; 41Hz gyro bandwidth, 5.9ms delay
-  // // 1kHz base sample rate
-  // i2c_.Write(0x68, 26, 0x03);
-
-  // dlpf_cfg = 5, no fsync; 10Hz gyro bandwidth, 13.8ms delay
+  // dlpf_cfg = 3, no fsync; 41Hz gyro bandwidth, 5.9ms delay
   // 1kHz base sample rate
-  i2c_.Write(0x68, 26, 0x05);
+  i2c_.Write(0x68, 26, 0x03);
+
+  // // dlpf_cfg = 5, no fsync; 10Hz gyro bandwidth, 13.8ms delay
+  // 1kHz base sample rate
+  // i2c_.Write(0x68, 26, 0x05);
 
   // fchoice: 11 (enables filter above)
   // gyro 1000deg/sec full scale
@@ -46,12 +50,11 @@ bool IMU::Init() {
   // 000 | 10 | 0 | 00
   i2c_.Write(0x68, 27, 0x10);
 
-  // accel_fs_sel +/- 4g (01)
-  i2c_.Write(0x68, 28, 0x08);
+  // accel_fs_sel +/- 16g (11)
+  i2c_.Write(0x68, 28, ACCEL_SHIFT << 3);
 
-  // a_dlpfcfg = 5, 10.2Hz accel bw, 16ms delay
-  i2c_.Write(0x68, 29, 0x05);
-
+  // a_dlpfcfg = 6, low pass filter as much as possible
+  i2c_.Write(0x68, 29, 0x06);
 
   i2c_.Write(0x68, 56, 1);  // DRDY int enable (for checking timing on scope)
 
@@ -212,8 +215,8 @@ bool IMU::ReadIMU(Vector3f *accel, Vector3f *gyro, float *temp) {
     int16_t gx = (readbuf[ 8] << 8) | readbuf[ 9],
             gy = (readbuf[10] << 8) | readbuf[11],
             gz = (readbuf[12] << 8) | readbuf[13];
-    // we are in 8192 LSB/g scale (+/- 4g)
-    *accel = Vector3f(ax, ay, az) / 8192.0;
+    // we are in 2048 LSB/g scale (+/- 16g)
+    *accel = Vector3f(ax, ay, az) / (16384 >> ACCEL_SHIFT);
     // TODO: temp calibration
     // we are in +/- 1000 degrees/second full scale range
     // return radians/second
