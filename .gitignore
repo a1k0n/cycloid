@@ -1,7 +1,6 @@
 *.pyc
 .*.sw*
 .ipynb_checkpoints
-*.txt
 *.rec
 *.ipynb
 *.mp4
