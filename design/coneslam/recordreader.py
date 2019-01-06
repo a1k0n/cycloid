@@ -1,9 +1,11 @@
 import annotate
 import numpy as np
 import struct
+from math import sqrt
 
 imgsiz = (640, 480)
 
+import argparse
 
 def read_frame(f):
     buf = f.read(4)
@@ -12,6 +14,7 @@ def read_frame(f):
     siz, = struct.unpack("=I", buf)
     buf = f.read(siz - 4)
     if len(buf) < siz - 4:
+        print("Failed to unpack: ", len(buf), siz)
         return False, None
     header = struct.unpack("=IIbbffffffBHHHHHHHH", buf[:51])
     tstamp = header[0] + header[1] / 1000000.
@@ -49,21 +52,38 @@ def read_frame(f):
     return True, record
 
 
+def parse_args():
+    p = argparse.ArgumentParser()
+    
+    p.add_argument('-i', '--interactive', dest='interactive', action='store_true',
+            help='Pause after every frame (default true)')
+    p.add_argument('-ni', '--no-interactive', dest='interactive', action='store_false')
+    p.set_defaults(feature=True)
+
+    p.add_argument('-o', '--output', type=str, default=None,
+            help='Video file to save to')
+    p.add_argument('recordfile', type=str, help='Recording file from car')
+    return p.parse_args()
+
 if __name__ == '__main__':
     import sys
     import cv2
     import params
 
-    f = open(sys.argv[1])
+    args = parse_args()
+
+    f = open(args.recordfile)
     vidout = None
-    if len(sys.argv) > 2:
-        vidout = cv2.VideoWriter("replay.h264", cv2.VideoWriter_fourcc(
+    if args.output: 
+        vidout = cv2.VideoWriter(args.output, cv2.VideoWriter_fourcc(
             'X', '2', '6', '4'), 28.8, (640, 480), True)
     t0 = None
     n = 0
+    variance = 0.0 
     while True:
         ok, data = read_frame(f)
         if not ok:
+            print("read_frame failed")
             break
 
         tstamp, carstate, particles, controldata, conesx, frame = data
@@ -71,8 +91,14 @@ if __name__ == '__main__':
             frame.reshape((-1, imgsiz[0])), cv2.COLOR_YUV2BGR_I420)
         if t0 is None:
             t0 = tstamp
+            tstamp_last = tstamp 
+            dt = 0
         else:
             n += 1
+            dt = tstamp - tstamp_last
+            tstamp_last = tstamp
+
+        variance += dt**2
 
         annotate.draw_steering(bgr, carstate[1], carstate[4])
         annotate.draw_speed(bgr, tstamp, carstate[5], carstate[6])
@@ -80,6 +106,7 @@ if __name__ == '__main__':
         cv2.imshow("camera", bgr)
         if vidout is not None:
             vidout.write(bgr)
+        print(carstate)
 
         # draw the particle filter state
         partview = np.zeros((240, 450), np.uint8)
@@ -99,9 +126,15 @@ if __name__ == '__main__':
         print 'target_k', target_k, 'target_v', target_v, target_k*target_v
         print 'target_w', target_w, 'w', w
 
-        k = cv2.waitKey()
-        if k == ord('q'):
-            break
-    print 'avg fps', float(n) / (tstamp - t0)
+        if args.interactive:
+            k = cv2.waitKey()
+            if k == ord('q'):
+                break
+    avg_hz = float(n) / (tstamp - t0)
+    avg = float(tstamp - t0) / n
+    stddev = sqrt(variance - avg**2 ) / n 
+    stddev_percent = 100. * stddev / avg
+    print("Average: {} (fps) / {} (ms), Standard Deviation: {} (ms) / {} (%), Total Frames: {}".format(
+        avg_hz, avg * 1000, stddev * 1000, stddev_percent, n))
 
     f.close()
