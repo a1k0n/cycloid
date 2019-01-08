@@ -80,6 +80,7 @@ if __name__ == '__main__':
     t0 = None
     n = 0
     variance = 0.0 
+    max_dt = 0.0
     while True:
         ok, data = read_frame(f)
         if not ok:
@@ -99,6 +100,7 @@ if __name__ == '__main__':
             tstamp_last = tstamp
 
         variance += dt**2
+        max_dt= max(dt, max_dt)
 
         annotate.draw_steering(bgr, carstate[1], carstate[4])
         annotate.draw_speed(bgr, tstamp, carstate[5], carstate[6])
@@ -134,7 +136,7 @@ if __name__ == '__main__':
     avg = float(tstamp - t0) / n
     stddev = sqrt(variance - avg**2 ) / n 
     stddev_percent = 100. * stddev / avg
-    print("Average: {} (fps) / {} (ms), Standard Deviation: {} (ms) / {} (%), Total Frames: {}".format(
-        avg_hz, avg * 1000, stddev * 1000, stddev_percent, n))
+    print("Average: {:.2f} (fps) / {:.2f} (ms), Standard Deviation: {:.2f} (ms) / {:.2f} (%), Max dT: {:.2f} (ms), Total Frames: {}".format(
+        avg_hz, avg * 1000, stddev * 1000, stddev_percent, max_dt * 1000,  n))
 
     f.close()
