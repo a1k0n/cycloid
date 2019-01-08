@@ -92,3 +92,10 @@ $ make -j4
 The main executable will be in `build/drive/drive`; scp that to your raspberry
 pi on the car, pair a bluetooth joystick, and run it.
 
+### Configurations
+If you are running version 1.2 or below of the Cycloid HAT board, you have a
+different IMU (MPU-9250/MPU-9150). You need to enable this in CMake. The option
+is called `MPU9250` and can be turned to `ON` by passing `-D MPU9250=ON` in a
+cmake call (like the inital configuration), or you can run enable it directly
+in `ccmake` or `cmake-gui`.
+
