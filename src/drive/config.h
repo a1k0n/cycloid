@@ -11,7 +11,6 @@ const float DRIVE_RATIO = 84./25. * 2.1;  // 84t spur, 25t pinion, 2.1 final dri
 const float MOTOR_POLES = 3;  // brushless sensor counts per motor revolution
 const float V_SCALE = WHEEL_DIAMETER*M_PI / DRIVE_RATIO / MOTOR_POLES;
 const float SERVO_DIRECTION = -1;  // 1 if +servo is left, -1 if +servo is right
-const int ACTIVE_ENCODERS = 1;
 
 // Dynamic configuration variables
 // can be changed via commandline or controller

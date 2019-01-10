@@ -12,13 +12,10 @@
 #include "drive/controller.h"
 #include "drive/flushthread.h"
 #include "hw/cam/cam.h"
+#include "hw/car/stm32rs232.h"
 #include "hw/imu/imu.h"
 #include "hw/input/js.h"
 #include "ui/display.h"
-
-#ifdef STM32HAT
-#include "hw/car/stm32i2c.h"
-#endif
 
 // #undef this to disable camera, just to record w/ raspivid while
 // driving around w/ controller
@@ -34,10 +31,12 @@ volatile bool done = false;
 void handle_sigint(int signo) { done = true; }
 
 I2C i2c;
-STM32Hat stm32hat(i2c);
+STM32HatSerial stm32hat;
 IMU imu(i2c);
 UIDisplay display_;
 FlushThread flush_thread_;
+pthread_mutex_t localizer_mutex_;
+coneslam::Localizer localizer_(NUM_PARTICLES);
 int16_t js_throttle_ = 0, js_steering_ = 0;
 
 struct CarState {
@@ -150,30 +149,24 @@ class Driver: public CameraReceiver {
     flush_thread_.AddEntry(output_fd_, flushbuf, flushlen);
   }
 
-  // Update controller and UI from camera, gyro, and wheel encoder inputs
-  void UpdateFromSensors(uint8_t *buf, float dt) {
+  // Update controller from gyro and wheel encoder inputs
+
+  // Update controller and UI from camera
+  void UpdateFromCamera(uint8_t *buf, float dt) {
     if (firstframe_) {
       memcpy(last_encoders_, carstate_.wheel_pos, 4*sizeof(uint16_t));
       firstframe_ = false;
       dt = 1.0 / 30.0;
     }
-    uint16_t wheel_delta[4];
-    for (int i = 0; i < 4; i++) {
-      wheel_delta[i] = carstate_.wheel_pos[i] - last_encoders_[i];
-    }
-    memcpy(last_encoders_, carstate_.wheel_pos, 4*sizeof(uint16_t));
-
-    // predict using front wheel distance
-    float ds = V_SCALE * (1.0/ACTIVE_ENCODERS) * (
-        wheel_delta[0] + wheel_delta[1] +
-        + wheel_delta[2] + wheel_delta[3]);
 
     ncones_ = coneslam::FindCones(buf, config_.cone_thresh,
             carstate_.gyro[2], sizeof(conesx_) / sizeof(conesx_[0]),
             conesx_, conestheta_);
 
-    if (ds > 0) {  // only do coneslam updates while we're moving
-      localizer_->Predict(ds, carstate_.gyro[2], dt);
+    pthread_mutex_lock(&localizer_mutex_);
+
+    uint16_t ds = last_encoders_[0] - carstate_.wheel_pos[0];
+    if (ds != 0) {  // only do coneslam updates while we're moving
       for (int i = 0; i < ncones_; i++) {
         localizer_->UpdateLM(conestheta_[i], config_.lm_precision,
             config_.lm_bogon_thresh*0.01);
@@ -185,31 +178,14 @@ class Driver: public CameraReceiver {
 
     display_.UpdateConeView(buf, ncones_, conesx_);
     display_.UpdateEncoders(carstate_.wheel_pos);
-    {
-      coneslam::Particle meanp;
-      localizer_->GetLocationEstimate(&meanp);
-      controller_.UpdateLocation(config_, meanp.x, meanp.y, meanp.theta);
-      const coneslam::Particle *ps = localizer_->GetParticles();
-      for (int i = 0; i < localizer_->NumParticles(); i++) {
-          controller_.AddSample(config_, ps[i].x, ps[i].y, ps[i].theta);
-      }
+    display_.UpdateParticleView(localizer_,
+        controller_.cx_, controller_.cy_,
+        controller_.nx_, controller_.ny_);
 
-      display_.UpdateParticleView(localizer_,
-              controller_.cx_, controller_.cy_,
-              controller_.nx_, controller_.ny_);
-    }
-
-#if 0
-    controller_.UpdateState(config_,
-            carstate_.accel, carstate_.gyro,
-            carstate_.servo_pos, wheel_delta, dt);
-#else
-    controller_.UpdateState(config_,
-            carstate_.accel, carstate_.gyro,
-            carstate_.servo_pos, carstate_.wheel_dt, dt);
-#endif
+    pthread_mutex_unlock(&localizer_mutex_);
   }
 
+  // Called each camera frame, 30Hz
   void OnFrame(uint8_t *buf, size_t length) {
     struct timeval t;
     gettimeofday(&t, NULL);
@@ -221,7 +197,37 @@ class Driver: public CameraReceiver {
           "%fs gap between frames?!\n", dt);
     }
 
-    UpdateFromSensors(buf, dt);
+    UpdateFromCamera(buf, dt);
+
+    if (IsRecording() && frame_ > frameskip_) {
+      frame_ = 0;
+      QueueRecordingData(t, buf, length);
+    }
+
+    last_t_ = t;
+  }
+
+  // Called each control loop frame, 100Hz
+  // N.B. this can be called concurrently with OnFrame in a separate thread
+  void OnControlFrame(float ds, float dt) {
+    if (pthread_mutex_lock(&localizer_mutex_)) {
+      perror("localize mutex");
+    } else {
+      localizer_->Predict(ds, carstate_.gyro[2], dt);
+
+      coneslam::Particle meanp;
+      localizer_->GetLocationEstimate(&meanp);
+      controller_.UpdateLocation(config_, meanp.x, meanp.y, meanp.theta);
+      const coneslam::Particle *ps = localizer_->GetParticles();
+      for (int i = 0; i < localizer_->NumParticles(); i++) {
+          controller_.AddSample(config_, ps[i].x, ps[i].y, ps[i].theta);
+      }
+      pthread_mutex_unlock(&localizer_mutex_);
+    }
+
+    controller_.UpdateState(config_,
+        carstate_.accel, carstate_.gyro,
+        carstate_.servo_pos, carstate_.wheel_dt, dt);
 
     float u_a = carstate_.throttle / 127.0;
     float u_s = carstate_.steering / 127.0;
@@ -237,17 +243,10 @@ class Driver: public CameraReceiver {
         carstate_.steering = 64;
       }
 
-      uint8_t leds = (frame_ & 4) >> 1;  // blink green LED
-      leds |= IsRecording() ? 1 : 0;  // solid red when recording
+      uint8_t leds = (frame_ & 4);  // blink green LED
+      leds |= IsRecording() ? 2 : 0;  // solid red when recording
       stm32hat.SetControls(leds, carstate_.throttle, carstate_.steering);
     }
-
-    if (IsRecording() && frame_ > frameskip_) {
-      frame_ = 0;
-      QueueRecordingData(t, buf, length);
-    }
-
-    last_t_ = t;
   }
 
   bool autodrive_;
@@ -275,7 +274,6 @@ class Driver: public CameraReceiver {
   coneslam::Localizer *localizer_;
 };
 
-coneslam::Localizer localizer_(NUM_PARTICLES);
 Driver driver_(&localizer_);
 
 
@@ -376,7 +374,6 @@ class DriverInputReceiver : public InputReceiver {
           fprintf(stderr, "%ld.%06ld autodrive ON\n", tv.tv_sec, tv.tv_usec);
           driver_.autodrive_ = true;
         }
-        // driver_.calibration_ = Driver::CAL_SRV_LEFT;
         break;
       case 'R':
         driver_.calibration_ = Driver::CAL_SRV_RIGHT;
@@ -471,6 +468,7 @@ int main(int argc, char *argv[]) {
   signal(SIGINT, handle_sigint);
 
   feenableexcept(FE_INVALID | FE_DIVBYZERO | FE_OVERFLOW | FE_UNDERFLOW);
+  pthread_mutex_init(&localizer_mutex_, NULL);
 
   int fps = 30;
 
@@ -525,19 +523,36 @@ int main(int argc, char *argv[]) {
   fprintf(stderr, "%ld.%06ld started camera\n", tv.tv_sec, tv.tv_usec);
 #endif
 
+  uint16_t last_wpos = 0;
+  stm32hat.Init();
+  stm32hat.AwaitSync(&last_wpos, carstate_.wheel_dt);
+  timeval last_t;
+  gettimeofday(&last_t, NULL);
+
   while (!done) {
-    if (has_joystick && js.ReadInput(&input_receiver)) {
-      // nothing to do here
+    if (!stm32hat.AwaitSync(carstate_.wheel_pos, carstate_.wheel_dt)) {
+      continue;
     }
-    // FIXME: predict step here?
-    // FIXME: update controls here?
+
+    if (has_joystick) {
+      js.ReadInput(&input_receiver);
+    }
+
     {
       float temp;
       imu.ReadIMU(&carstate_.accel, &carstate_.gyro, &temp);
-      // FIXME: imu EKF update step?
-      stm32hat.GetFeedback(carstate_.wheel_pos, carstate_.wheel_dt);
     }
-    usleep(1000);
+
+    timeval t;
+    gettimeofday(&t, NULL);
+
+    // predict using front wheel distance
+    uint16_t wheel_delta = carstate_.wheel_pos[0] - last_wpos;
+    float ds = V_SCALE * wheel_delta;
+    float dt = t.tv_sec - last_t.tv_sec + (t.tv_usec - last_t.tv_usec) * 1e-6;
+    last_wpos = carstate_.wheel_pos[0];
+
+    driver_.OnControlFrame(ds, dt);
   }
 
 #ifdef CAMERA
