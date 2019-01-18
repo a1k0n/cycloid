@@ -31,12 +31,11 @@ Electronics:
    right kind of SD card or it won't keep up with recordings, and it's hard to
    tell ahead of time which ones will work.
  - Arducam OV5647 Raspberry Pi 3 camera with LS-40180 fisheye lens ($30)
- - MPU-9250 9-DoF IMU (about $3 on eBay)
  - ILI9340 SPI 240x320 LCD display, via the fbtft device driver (about $7)
  - Some XT60 plugs and an extra 6-wire brushless sensor cable (~10)
  - Nintendo Wii U Pro Wireless controller (I use a genuine one connected via
    bluetooth -- apparently knockoffs don't connect to the RPi very well)
- - Custom HAT board w/ STM32F030: https://easyeda.com/a1k0n/cycloid (PCB +
+ - Custom HAT board w/ STM32F030 and ICM-20600 IMU: https://easyeda.com/a1k0n/cycloid (PCB +
    parts is about $5 apiece in qty 10 from JLPCB / LCSC, plus you have to
    solder it all together)
 
@@ -96,6 +95,6 @@ pi on the car, pair a bluetooth joystick, and run it.
 If you are running version 1.2 or below of the Cycloid HAT board, you have a
 different IMU (MPU-9250/MPU-9150). You need to enable this in CMake. The option
 is called `MPU9250` and can be turned to `ON` by passing `-D MPU9250=ON` in a
-cmake call (like the inital configuration), or you can run enable it directly
+cmake call (like the inital configuration), or you can enable it directly
 in `ccmake` or `cmake-gui`.
 
