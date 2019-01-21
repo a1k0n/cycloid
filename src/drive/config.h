@@ -7,6 +7,7 @@
 
 // circumference of tire (meters) / number of encoder ticks
 const float WHEEL_DIAMETER = 0.0666;
+// const float WHEEL_DIAMETER = 0.08;
 const float DRIVE_RATIO = 84./25. * 2.1;  // 84t spur, 25t pinion, 2.1 final drive
 const float MOTOR_POLES = 3;  // brushless sensor counts per motor revolution
 const float V_SCALE = WHEEL_DIAMETER*M_PI / DRIVE_RATIO / MOTOR_POLES;

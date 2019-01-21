@@ -9,7 +9,12 @@ using Eigen::Vector3f;
 const float V_ALPHA = 0.3;
 
 // servo closed loop response bandwidth (measured)
-const float BW_SRV = 2*M_PI*4;  // Hz
+const float BW_SRV = 0.2*M_PI*4;  // Hz
+
+const float SRV_A = -67.161224 / 127.0;
+const float SRV_B = -3.835942 / 127.0;
+const float SRV_C = 0.016797 / 127.0;
+const float SRV_D = 10.778385 / 127.0;
 
 const float M_K1 = 13.7;  // DC motor response constants (measured)
 const float M_K2 = 1.26;
@@ -18,6 +23,9 @@ const float M_OFFSET = 0.103;  // minimum control input (dead zone)
 
 const float GEOM_LF = 6.5*.0254;  // car geometry; A = CG to front axle length
 const float GEOM_LR = 5*.0254;  // CG to rear axle (m)
+
+const int STEER_LIMIT_LOW = -85;
+const int STEER_LIMIT_HIGH = 127;
 
 DriveController::DriveController() {
   ResetState();
@@ -141,7 +149,8 @@ bool DriveController::GetControl(const DriverConfig &config,
   // if we're braking or coasting, just control that manually
   if (!autodrive && throttle_in <= 0) {
     *throttle_out = throttle_in;
-    *steering_out = -steering_in;  // yaw is backwards
+    // yaw is backwards
+    *steering_out = clip(-steering_in, STEER_LIMIT_LOW/127.0, STEER_LIMIT_HIGH/127.0);
     ierr_w_ = 0;  // also reset integrators
     ierr_v_ = 0;
     return true;
@@ -186,17 +195,27 @@ bool DriveController::GetControl(const DriverConfig &config,
   // use current velocity to determine target yaw rate
   // this yaw rate should be achievable with our tires given the slip rate
   // limit above
+  float target_k = k;
   float target_w = k*vr_;
 
   float err_v = vr_ - target_v;
-  float err_w = w_ - target_w;
+  float kerr = 0;
+  if (vr_ > 0.5) {
+    kerr = target_k - w_/vr_;
+  } else {
+    ierr_w_ = 0;
+  }
 
   float BW_w = 2*M_PI*0.01*config.yaw_bw;
 
   // *steering_out = clip(-BW_w/target_v * (ierr_w_ + err_w / BW_SRV), -1, 1);
   // why did i divide by target_v? that seems crazy and in practice it goes nuts
   // at low speeds unless BW_w is tiny.
-  *steering_out = clip(-BW_w * (ierr_w_ + err_w / BW_SRV), -1, 1);
+  // *steering_out = clip(-BW_w * (ierr_w_ + err_w / BW_SRV),
+  //    STEER_LIMIT_LOW/127.0, STEER_LIMIT_HIGH/127.0);
+
+  *steering_out = SERVO_DIRECTION*clip(target_k*SRV_A + SRV_D + BW_w * (ierr_w_*SRV_A + kerr*SRV_B),
+     STEER_LIMIT_LOW/127.0, STEER_LIMIT_HIGH/127.0);
 
   float BW_v = 2*M_PI*0.01*config.motor_bw;
   float Kp = BW_v / (M_K1 - M_K2*vr_);
@@ -215,8 +234,8 @@ bool DriveController::GetControl(const DriverConfig &config,
   }
 
   if ((*steering_out > -1 && *steering_out < 1) ||
-      (err_w > 0 && ierr_w_ < 0) || (err_w < 0 && ierr_w_ > 0)) {
-    ierr_w_ += dt*err_w;
+      (kerr > 0 && ierr_w_ < 0) || (kerr < 0 && ierr_w_ > 0)) {
+    ierr_w_ += dt*kerr;
   }
 
   // update state for datalogging

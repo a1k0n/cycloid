@@ -550,6 +550,7 @@ int main(int argc, char *argv[]) {
     uint16_t wheel_delta = carstate_.wheel_pos[0] - last_wpos;
     float ds = V_SCALE * wheel_delta;
     float dt = t.tv_sec - last_t.tv_sec + (t.tv_usec - last_t.tv_usec) * 1e-6;
+    last_t = t;
     last_wpos = carstate_.wheel_pos[0];
 
     driver_.OnControlFrame(ds, dt);
