@@ -3,9 +3,23 @@
 import cv2
 import numpy as np
 
-
-side = 8.0*142.2/7.0 / 10.0  # size of markers, in cm
+# foam board markers
 aruco_dict = cv2.aruco.Dictionary_get(cv2.aruco.DICT_APRILTAG_36h11)
+side = 8.0*142.2/7.0 / 10.0  # size of markers, in cm
+fidu_height = 101 / 10.0  # height from center of marker to floor
+
+#side = 4.64
+#aruco_dict = cv2.aruco.Dictionary_get(cv2.aruco.DICT_4X4_50)
+
+parameters = cv2.aruco.DetectorParameters_create()
+#parameters.cornerRefinementMethod = cv2.aruco.CORNER_REFINE_SUBPIX
+#parameters.cornerRefinementMethod = cv2.aruco.CORNER_REFINE_APRILTAG
+#parameters.cornerRefinementWinSize = 9
+# parameters.minDistanceToBorder = 1
+parameters.minMarkerPerimeterRate = 0.003
+#parameters.minCornerDistanceRate = 0.01
+#parameters.maxErroneousBitsInBorderRate = 0.5
+parameters.minMarkerDistanceRate = 0.0005
 
 # intrinsic camera matrix and distortion from earlier calibration run
 K = np.float32(
@@ -17,7 +31,7 @@ D = np.float32([0.1038389, 0, 0.00073556, -0.00040451, 0])
 
 def reproject(img, centerid=None, xshift=0, yshift=0, scale=1, size=1000, show=False):
     # first step: find the AprilTag markers (using the ArUco library)
-    corners, ids, rejectedImgPoints = cv2.aruco.detectMarkers(img, aruco_dict)
+    corners, ids, rejectedImgPoints = cv2.aruco.detectMarkers(img, aruco_dict, parameters=parameters)
     ids = ids.reshape(-1)
     print 'detected', len(ids), 'markers:', list(ids)
     idx = None
@@ -29,32 +43,40 @@ def reproject(img, centerid=None, xshift=0, yshift=0, scale=1, size=1000, show=F
         corners, side, K, D)
 
     if show:
-        im2 = img.copy()
+        im2 = img[::5, ::5].copy()
+        K2 = K.copy()
+        K2[:2] /= 5
         for i in range(len(tvecs)):
-            cv2.aruco.drawAxis(im2, K, D, rvecs[i], tvecs[i], side)
-        cv2.imshow("axes", im2[::5, ::5])
+            cv2.aruco.drawAxis(im2, K2, D, rvecs[i], tvecs[i], side)
+        cv2.imwrite("preview.png", im2)
+        cv2.imshow("axes", im2)
         cv2.waitKey()
         cv2.destroyAllWindows()
         cv2.waitKey(1)
 
     # compute relative rotation to bird's eye view
     R2 = np.eye(3)
+    if idx is not None:
+        # use initial orientation from selected center marker
+        R2 = cv2.Rodrigues(rvecs[idx])[0].T
     if len(ids) < 4:
-        # use average z vector as ground plane reference if we don't have enough markers
-        z = np.mean([cv2.Rodrigues(r)[0][:, 2] for r in rvecs[:, 0, ]], axis=0)
+        # use average z vector as ground plane reference if we don't have
+        # enough markers
+        # wait, we're going to use the -y vector for upright markers
+        z = -np.mean([cv2.Rodrigues(r)[0][:, 1] for r in rvecs[:, 0, ]], axis=0)
         z /= np.linalg.norm(z)
         R2[2] = z
     else:
         # compute the best-fit plane from the marker centers
+        # best z vector is the eigenvector corresponding to the smallest
+        # eigenvalue of the marker center matrix with centroid removed
         R1 = np.linalg.svd((tvecs[:, 0, :] - np.mean(tvecs[:, 0, :], axis=0)).T)[0]
-        R2 = np.eye(3)
-        if idx is not None:
-            # use orientation from selected center marker
-            R2 = cv2.Rodrigues(rvecs[idx])[0].T
         R2[2] = R1[:, 2]
-    R2[1] = -np.cross(R2[0], R2[2])
+
+    # orthonormalize
+    R2[1] = np.cross(R2[0], R2[2])
     R2[1] /= np.linalg.norm(R2[1])
-    R2[0] = np.cross(R2[1], R2[2])
+    R2[0] = np.cross(R2[2], R2[1])
     R2[0] /= np.linalg.norm(R2[0])
 
     T = np.eye(3)
@@ -68,7 +90,8 @@ def reproject(img, centerid=None, xshift=0, yshift=0, scale=1, size=1000, show=F
         ])
 
     # get mean z-distance from camera for all markers
-    dist = np.mean(np.dot(R2, tvecs[:, 0, :].T)[2])
+    # we could adjust this with args for upright fiducials
+    dist = np.mean(np.dot(R2, tvecs[:, 0, :].T)[2]) - fidu_height
 
     # desired scale is 1cm/pixel
     # x' = f*x/dist; dx'/dx = 1/scale = f/dist; f = dist/scale
@@ -99,7 +122,8 @@ if __name__ == '__main__':
 
     args = parser.parse_args()
 
-    out = reproject(cv2.imread(args.img), args.centerid, args.x, args.y, args.scale, args.size, args.show)
+    im = cv2.imread(args.img)
+    out = reproject(im, args.centerid, args.x, args.y, args.scale, args.size, args.show)
     if args.out is None:
         cv2.imshow("output", out)
         cv2.waitKey()

@@ -11,7 +11,7 @@ import params
 import time
 
 
-VIDEO = False
+VIDEO = True
 np.set_printoptions(suppress=True)
 
 # length from back axle to camera in encoder ticks (2cm)
@@ -76,6 +76,7 @@ def step(X, dt, ds, gyro_dtheta, v, accel_y):
     alpha = pseudorandn(N) * params.NOISE_STEER_s + params.NOISE_STEER_u
     heading += alpha*(theta1 - heading)
 
+    heading = theta0
     S = np.sin(heading)
     C = np.cos(heading)
 
@@ -140,16 +141,17 @@ def main(f):
     np.random.seed(1)
     # bg = cv2.imread("trackmap.jpg")
     # bg = cv2.imread("drtrack-2cm.png")
-    bg = cv2.imread("bball-2cm.png")
-    # bg = cv2.imread("cl.png")
+    # bg = cv2.imread("bball-2cm.png")
+    bg = cv2.imread("cl.png")
+    # bg = cv2.imread("voyage-top.png")
 
     Np = 300
     X = np.zeros((4, Np))
     # X[:2] = 100 * np.random.rand(2, Np)
     # X[1] -= 400
-    X[0] = 0.25*pseudorandn(Np)
-    X[1] = 0.25*pseudorandn(Np)
-    X[2] = pseudorandn(Np) * 0.2
+    X[0] = 0.125*pseudorandn(Np)
+    X[1] = 0.125*pseudorandn(Np)
+    X[2] = pseudorandn(Np) * 0.1
     print 'Lhome', Lhome
     X.T[:, :3] += Lhome
     X[3] = X[2]
@@ -162,7 +164,9 @@ def main(f):
         # vidout = cv2.VideoWriter("particlefilter.h264", cv2.VideoWriter_fourcc(
         #    'X', '2', '6', '4'), 30, (bg.shape[1], bg.shape[0]), True)
         vidout = cv2.VideoWriter("particlefilter.h264", cv2.VideoWriter_fourcc(
-            'X', '2', '6', '4'), 28.8, (640, 480), True)
+            'X', '2', '6', '4'), 32.4, (640, 480), True)
+        if not vidout:
+            return 'video out fail?'
 
     Am, Ae = 0, 0
     Vlat = 0
@@ -199,7 +203,7 @@ def main(f):
         # ds = 0.5*np.sum(dw[2:])
         # w = v k
         # a = v^2 k = v w
-        print 'accel', accel[1], ' expected ', gyroz * vest2 / 9.8, 'v', vest1, vest2, accel[0]*dt * 9.8
+        print 'accel', accel, ' expected ', gyroz * vest1 / 9.8, 'v', vest1, vest2, accel[0]*dt * 9.8
         step(X, dt, ds, gyroz, vest2, -accel[1]*9.8)
 
         if False:
@@ -306,6 +310,7 @@ def main(f):
         annotate.draw_throttle(bgr, throttle)
         annotate.draw_speed(bgr, tstamp, wheels, periods)
         annotate.draw_steering(bgr, steering, servo, center=(200, 420))
+        annotate.draw_accelerometer(bgr, accel, gyro, center=(320, 420))
         # TODO: also annotate gyroz and lateral accel
 
         # get steering angle, front and rear wheel velocities
