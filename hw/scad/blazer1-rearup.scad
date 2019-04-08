@@ -2,8 +2,8 @@ $fs = 0.05;
 thickness = 2;
 cam_border = 3;
 
-rpi_mount_height = 23;
-rpi_mount_x = 0;
+rpi_mount_height = 23 + 3.5;
+rpi_mount_x = -4;
 
 cam_mount_height = 23 + 53 - 9.25;
 cam_mount_x = 105;
@@ -23,8 +23,13 @@ RPi3MountingScrews = [
   [3.5, 49.0/2], [3.5 + 58, 49.0/2]
 ];
 
-//screw_diam = 2.26;  // #4-40
+// #4-40 sizes:
+//screw_diam = ???
+//screw_drill = .0890 * 25.4;  // (2.2606)
+//screw_clearance = ???
+
 screw_diam = 2.5;
+screw_drill = 2.05;
 screw_clearance = 3.4;
 screw_wall_thickness = 1.6;  // must be a multiple of nozzle size 0.4
 
@@ -117,6 +122,7 @@ module OffsetMount(p0, p1, r) {
 module RpiBoardThing() {
   r = screw_wall_thickness + screw_diam/2;
   o=5;
+  stand=4;
 
   OffsetMount([0, -12], [0+o, -12-o], r);
   OffsetMount([39, -12], [39-o, -12-o], r);
@@ -124,23 +130,24 @@ module RpiBoardThing() {
   OffsetMount([39, 12], [39-o, 12+o], r);
 
   difference() {
+    h = rpi_mount_height - stand;
     union() {
       for (i = [0, 1]) {
-        beam([0+o, -12-o, 0], [rpi_mount_x + RPi3MountingScrews[i][0], RPi3MountingScrews[i][1], rpi_mount_height], r);
-        beam([39-o, -12-o, 0], [rpi_mount_x + RPi3MountingScrews[i][0], RPi3MountingScrews[i][1], rpi_mount_height], r);
+        beam([0+o, -12-o, 0], [rpi_mount_x + RPi3MountingScrews[i][0], RPi3MountingScrews[i][1], h], r);
+        beam([39-o, -12-o, 0], [rpi_mount_x + RPi3MountingScrews[i][0], RPi3MountingScrews[i][1], h], r);
       }
       for (i = [2, 3]) {
-        beam([0+o, 12+o, 0], [rpi_mount_x + RPi3MountingScrews[i][0], RPi3MountingScrews[i][1], rpi_mount_height], r);
-        beam([39-o, 12+o, 0], [rpi_mount_x + RPi3MountingScrews[i][0], RPi3MountingScrews[i][1], rpi_mount_height], r);
+        beam([0+o, 12+o, 0], [rpi_mount_x + RPi3MountingScrews[i][0], RPi3MountingScrews[i][1], h], r);
+        beam([39-o, 12+o, 0], [rpi_mount_x + RPi3MountingScrews[i][0], RPi3MountingScrews[i][1], h], r);
       }
       for (s = RPi3MountingScrews) {
-        translate([rpi_mount_x + s[0], s[1], rpi_mount_height - 4])
-          cylinder(r=r, h=4);
+        translate([rpi_mount_x + s[0], s[1], rpi_mount_height - stand - 0.1])
+          cylinder(r=r, h=stand+0.1);
       }
     }
     for (s = RPi3MountingScrews) {
       translate([rpi_mount_x + s[0], s[1], rpi_mount_height - 20])
-        cylinder(d=screw_diam, h=20.1);
+        cylinder(d=screw_drill, h=20.1);
     }
   }
 }
@@ -181,7 +188,7 @@ module CamBoardThing() {
     // cut screw holes
     for (p1 = arducam_mount) {
       translate([p1[0] + cam_mount_x, p1[1], cam_mount_height - 5.1])
-        cylinder(h=5.2, d=screw_diam);
+        cylinder(h=5.2, d=screw_drill);
     }
   }
 }
@@ -190,5 +197,5 @@ module CamBoardThing() {
 %translate([rpi_mount_x, 0, rpi_mount_height]) RaspiMountReference();
 %translate([cam_mount_x, 0, cam_mount_height]) CamMountReference();
 
-%RpiBoardThing();
-CamBoardThing();
+RpiBoardThing();
+%CamBoardThing();
