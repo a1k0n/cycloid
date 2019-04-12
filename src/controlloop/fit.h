@@ -44,4 +44,38 @@ class SysIdentifier {
   float last_y;
 };
 
+class MotorSysId {
+ public:
+  MotorSysId() { Reset(); }
+
+  void Reset(float scale=1) {
+    lastv_ = 0;
+    XTX.setIdentity();
+    XTY << 100*scale, 0, 0, 0, -1;
+  }
+
+  void AddObservation(float v, float u, float dt) {
+    Eigen::Matrix<float, 5, 1> X;
+    float V = u > 0 ? 1 : 0;
+    float dc = fabs(u);
+    float dc2 = dc*dc;
+    X << dc*V, dc2*V, dc*v, dc2*v, v;
+    XTX *= 0.999;
+    XTY *= 0.999;
+    XTX += X * X.transpose();
+    XTY += X * (v - lastv_) / dt;
+    lastv_ = v;
+  }
+
+  Eigen::Matrix<float, 5, 1> Solve() {
+    return XTX.ldlt().solve(XTY);
+  }
+
+  Eigen::Matrix<float, 5, 5> XTX;
+  Eigen::Matrix<float, 5, 1> XTY;
+
+ private:
+  float lastv_;
+};
+
 #endif  // CONTROLLOOP_FIT_H_

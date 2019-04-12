@@ -10,6 +10,7 @@
 
 #include "controlloop/fit.h"
 #include "controlloop/pid.h"
+#include "controlloop/motorcontrol.h"
 
 const int STEER_LIMIT_LOW = -85;
 const int STEER_LIMIT_HIGH = 127;
@@ -19,17 +20,11 @@ const float DRIVE_RATIO = 84./25. * 2.1;  // 84t spur, 25t pinion, 2.1 final dri
 const float MOTOR_POLES = 3;  // brushless sensor counts per motor revolution
 const float V_SCALE = WHEEL_DIAMETER*M_PI / DRIVE_RATIO / MOTOR_POLES;
 
-const float MOTOR_BW = 0.5 * 6.28;  // motor control loop bandwidth
+const float MOTOR_BW = 2 * 6.28;  // motor control loop bandwidth
 const float YAW_BW = 0.5 * 6.28;  // yaw control loop bandwidth
 
 using Eigen::Vector3f;
 using Eigen::Matrix3f;
-
-static float clipf(float x, float min, float max) {
-  if (x < min) x = min;
-  if (x > max) x = max;
-  return x;
-}
 
 static int16_t clipi16(int16_t x, int16_t min, int16_t max) {
   if (x < min) x = min;
@@ -66,7 +61,7 @@ class CFIR : public InputReceiver {
   }
 
   virtual void OnAxisMove(int axis, int16_t value) {
-    switch(axis) {
+    switch (axis) {
       case 1:  // left stick y axis
         js_throttle_ = -value;
         break;
@@ -81,7 +76,7 @@ class CFIR : public InputReceiver {
       StopRecording();
     }
     char fnamebuf[256];
-    sprintf(fnamebuf, "log-%ld.txt", time(NULL));
+    snprintf(fnamebuf, sizeof(fnamebuf), "log-%ld.txt", time(NULL));
     recording_ = fopen(fnamebuf, "w");
     if (recording_ == NULL) {
       perror(fnamebuf);
@@ -234,8 +229,9 @@ int main(int argc, char *argv[]) {
 
   CFIR ir;
 
-  SysIdentifier motor_id, steer_id;
-  PIDLoop motor_pid, steer_pid;
+  SysIdentifier steer_id;
+  PIDLoop steer_pid;
+  SelfTuningMotorControl motor_control(V_SCALE);
 
   bool was_learning = true;
   setlinebuf(stdout);
@@ -274,12 +270,12 @@ int main(int argc, char *argv[]) {
               STEER_LIMIT_LOW, STEER_LIMIT_HIGH);
           if (v > 0) {
             // separate brake_id is unsafe for now
-            motor_id.AddObservation(v, 1, u_esc, dt);
+            motor_control.AddObservation(v, u_esc, dt);
             steer_id.AddObservation(gyro[2], v, u_steer, dt);
           }
         }
         // hold PID loops in reset while learning
-        motor_pid.Reset();
+        motor_control.ResetControl();
         steer_pid.Reset();
         was_learning = true;
         break;
@@ -294,22 +290,17 @@ int main(int argc, char *argv[]) {
           float k_target = -ir.Steering() / 32768.0;  // +-1m turning radius
 
           if (was_learning) {
-            Eigen::Vector4f k = motor_id.Solve();
-            fprintf(stderr, "motor sysid: %f %f %f %f\n", k[0], k[1], k[2], k[3]);
-            k = steer_id.Solve();
-            fprintf(stderr, "steer sysid: %f %f %f %f\n", k[0], k[1], k[2], k[3]);
+            auto km = motor_control.sysid_.Solve();
+            fprintf(stderr, "motor sysid: %f %f %f %f %f\n", km[0], km[1],
+                    km[2], km[3], km[4]);
+            auto k = steer_id.Solve();
+            fprintf(stderr, "steer sysid: %f %f %f %f\n", k[0], k[1], k[2],
+                    k[3]);
             was_learning = false;
           }
 
-          Eigen::Vector4f k = motor_id.Solve();
-#if 0
-          motor_pid.SetK(MOTOR_BW*k[0], MOTOR_BW*k[1], MOTOR_BW*k[2]);
-          u_esc = clipi16(k[3] + motor_pid.Control(v_target - v, dt), -100, 127);
-#else
-          motor_pid.SetK(0, MOTOR_BW*k[1], MOTOR_BW*k[2]);
-          u_esc = clipi16(v_target*k[0] + k[3] + motor_pid.Control(v_target - v, dt), -32, 127);
-#endif
-          k = steer_id.Solve();
+          u_esc = motor_control.Control(v_target, v, MOTOR_BW, dt);
+          auto k = steer_id.Solve();
           steer_pid.SetK(YAW_BW*k[0], YAW_BW*k[1], YAW_BW*k[2]);
           float kerr = 0;
           if (v > 0.5) {  // must be going at least 0.5 m/s for closed loop yaw control
@@ -317,9 +308,6 @@ int main(int argc, char *argv[]) {
           } else {
             // reset wind-up at low speeds
             steer_pid.Reset();
-          }
-          if (v == 0) {
-            motor_pid.Reset();
           }
           u_steer = clipi16(k_target*k[0] + k[3] + steer_pid.Control(kerr, dt),
               STEER_LIMIT_LOW, STEER_LIMIT_HIGH);
