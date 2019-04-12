@@ -22,11 +22,11 @@ for jpg in os.listdir("."):
     if len(res[0]) > 0:
         _, corners, ids = cv2.aruco.interpolateCornersCharuco(res[0], res[1], gray, board)
         if corners is not None and ids is not None and len(corners) > 3:
-            print board.chessboardCorners[ids[:, 0]]
-            print corners[:, 0]
+            print(board.chessboardCorners[ids[:, 0]])
+            print(corners[:, 0])
             object_points.append(board.chessboardCorners[ids[:, 0]].reshape((1,len(ids),3)))
             image_points.append(corners.reshape(1,len(ids),2))
-            print jpg, len(object_points), 'calibration frames'
+            print(jpg, len(object_points), 'calibration frames')
 
 
 imsize = gray.shape
@@ -47,9 +47,9 @@ cal = cv2.fisheye.calibrate(object_points, image_points, imsize[::-1], _K, _D, r
 # cal = cv2.calibrateCamera(object_points, image_points, imsize[::-1], cam, None)
 
 retval, cameraMatrix, distCoeffs, rvecs, tvecs = cal
-print retval
-print cameraMatrix
-print distCoeffs
+print(retval)
+print(cameraMatrix)
+print(distCoeffs)
 
 np.save("camera_matrix", cameraMatrix, False)
 np.save("dist_coeffs", distCoeffs, False)

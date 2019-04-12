@@ -11,7 +11,7 @@ import params
 import time
 
 
-VIDEO = True
+VIDEO = False
 np.set_printoptions(suppress=True)
 
 # length from back axle to camera in encoder ticks (2cm)
