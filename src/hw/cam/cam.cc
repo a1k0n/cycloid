@@ -93,6 +93,14 @@ bool Camera::Init(int width, int height, int fps) {
 
   mmal_port_parameter_set(camera_->control, &cam_config.hdr);
 
+  // use matrix metering mode
+  MMAL_PARAMETER_EXPOSUREMETERINGMODE_T meter_mode = {
+    {MMAL_PARAMETER_EXP_METERING_MODE, sizeof(meter_mode)},
+    MMAL_PARAM_EXPOSUREMETERINGMODE_MATRIX
+  };
+  mmal_port_parameter_set(camera_->control, &meter_mode.hdr);
+
+
   MMAL_PORT_T *video_port = camera_->output[1];
 
   video_port->format->encoding = MMAL_ENCODING_I420;
