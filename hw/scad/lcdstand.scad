@@ -59,30 +59,31 @@ module anglebeamorig(p0, p1, r) {
 
 module anglebeam(p0, p1, r) {
   hull() {
-    translate(p0) cylinder(h=2, r=r);
+    translate(p0) cylinder(h=4, r=r);
     translate([0, 0, disp_rise]) rotate([0, -disp_angle, 0]) translate([-disp_fall, disp_offset, -4]) translate(p1) cylinder(h=4, r=r);
   }
 }
 
 module Riser() {
-  o = 8;
+  oy = 8;
+  ox = 4;
   r = screw_wall_thickness + screw_drill/2;
-  OffsetMount([0, 0], [0, -o], r);
-  OffsetMount([dispW, 0], [dispW, -o], r);
-  flatcapsule([0, -o], [dispW, -o], r);
-
-  OffsetMount([0, dispL], [0, dispL+o], r);
-  OffsetMount([dispW, dispL], [dispW, dispL+o], r);
-  flatcapsule([0, dispL+o], [dispW, dispL+o], r);
 
   difference() {
     union() {
-      anglebeam([0, -o, 2], [0, 0], r);
-      anglebeam([dispW, -o, 2], [dispW, 0], r);
-      anglebeam([0, dispL+o, 2], [0, dispL], r);
-      anglebeam([dispW, dispL+o, 2], [dispW, dispL], r);
+      flatcapsule([0, 0], [ox, -oy], r);
+      flatcapsule([ox, -oy], [dispW-ox, -oy], r);
+      flatcapsule([dispW-ox, -oy], [dispW, 0], r);
+
+      flatcapsule([0, dispL], [ox, dispL+oy], r);
+      flatcapsule([ox, dispL+oy], [dispW-ox, dispL+oy], r);
+      flatcapsule([dispW-ox, dispL+oy], [dispW, dispL], r);
+      for (m = disp_mount) {
+        anglebeam(m, m, r);
+      }
     }
     for (m = disp_mount) {
+      translate([m[0], m[1], -0.1]) cylinder(h=5.1, d=screw_drill);
       translate([0, 0, disp_rise]) rotate([0, -disp_angle, 0])
         translate([-disp_fall, disp_offset, -5]) translate(m)
         cylinder(h=5.1, d=screw_drill);
