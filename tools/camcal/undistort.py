@@ -19,8 +19,8 @@ for jpgname in os.listdir("."):
     cv2.imwrite(jpgname+'_undistort.jpg', jpg_undist)
     jpg_undist = cv2.fisheye.undistortImage(jpg, camera_matrix, D=np.zeros(4), Knew=new_camera_matrix)
     cv2.imwrite(jpgname+'_undistort_nodist.jpg', jpg_undist)
-    cv2.imshow('img', jpg_undist)
-    cv2.waitKey()
+    # cv2.imshow('img', jpg_undist)
+    # cv2.waitKey()
 
-cv2.destroyAllWindows()
-cv2.waitKey(1)
+# cv2.destroyAllWindows()
+# cv2.waitKey(1)

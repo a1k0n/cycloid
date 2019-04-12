@@ -105,12 +105,11 @@ def replay(fname, f):
         bgrbig = cv2.resize(bgr[::-1], None, fx=8, fy=8,
                             interpolation=cv2.INTER_NEAREST)
         frame = np.int32(frame)
-        print 'frame.shape', frame.shape
         cv2.imshow("frame", bgrbig)
         # cv2.waitKey()
 
         frameno += 1
-        print fname, 'frame', frameno
+        print(fname, 'frame', frameno)
 
         if t0 is not None:
             dt = tstamp - t0
