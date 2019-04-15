@@ -5,7 +5,6 @@ import cv2
 
 import annotate
 import recordreader
-import coneclassify
 import caldata
 import params
 import time
@@ -80,37 +79,54 @@ def step(X, dt, ds, gyro_dtheta, v, accel_y):
     X[2] = theta1
 
 
-def likeliest_lm(X, L, l):
-    # X is [Np, 3]
-    # L is [Nl, 2]
-    # we need to check Np x Nl combinations
-
-    # dxy[l, :, p] is the relative position between particle p and landmark l
-    S, C = np.sin(X[2]), np.cos(X[2])
-    dxy = L[:, :, None] - (X[:2] + carlength*np.array([C, S]))
-    # rotate each landmark into each particle's frame (y, z)
-    z = dxy[:, 0]*C + dxy[:, 1]*S
-    y = dxy[:, 0]*S - dxy[:, 1]*C
-    # get the relative angle^2
-    d = np.linalg.norm(dxy, axis=1)
-    # print( 'd', d.shape, d)
-    coneangle = 2*np.arcsin(np.minimum(params.CONE_RADIUS/d, 1))
-    # print( 'coneangle', coneangle)
-    angledist = np.maximum(np.abs(np.arctan2(y, z) - l) - coneangle, 0)
-    e = np.minimum(angledist**2, params.BOGON_THRESH)
-    LL = -params.LM_SELECTIVITY*e
-
-    # normalize probabilities so that resampling among landmarks is fair
-    #LL -= np.max(LL)
-    #LL -= np.log(np.sum(np.exp(LL))) - np.log(X.shape[0])
-
-    j = np.argmax(LL, axis=0)
-    return j, np.max(LL, axis=0)
-
-
 def likelihood(X, acts):
-    A = np.cumsum(acts)
-    
+    angratio = len(acts)/(2*np.pi)  # range of angles, 0..2*pi mapped to 0..len(acts)
+    A = np.cumsum(np.concatenate([acts, acts]))
+    S, C = np.sin(X[2]), np.cos(X[2])
+    dxy = L[:, :, None] - X[:2]
+    # counter-rotate each landmark into each particle's frame (y, z)
+    z = dxy[:, 0]*C + dxy[:, 1]*S
+    y = -dxy[:, 0]*S + dxy[:, 1]*C
+    # distance to cone
+    d = np.linalg.norm(dxy, axis=1)
+    # visible cone angle (radius)
+    visibleradius = angratio*np.arcsin(np.minimum(params.CONE_RADIUS/d, 1))
+    # expected angle to center of cone for each particle
+    coneangle = angratio*np.arctan2(y, z)
+    # ...and the range of angles
+    c0 = np.round(coneangle - visibleradius).astype(np.int)
+    c1 = np.round(coneangle + visibleradius).astype(np.int)
+    # move negative angles back up into second copy of table
+    shift = c0 < 0
+    c0[shift] += len(acts)
+    c1[shift] += len(acts)
+    # finally use the cumsum to get the sum of activations for expected
+    # cone angle ranges
+    LL = np.sum((A[c1] - A[c0]), axis=0) * params.PF_TEMP
+    LL -= np.max(LL)
+    return LL, coneangle
+
+
+# generate remap table for fisheye camera calibration
+# generates table for a wxh image
+# for a given latitude range (specified in pixels above horizon / equator)
+def camcal(w, h, lat0, lat1, lon0=0, lon1=2*np.pi):
+    scale = h / 1944.0
+    camera_matrix = np.load("../../tools/camcal/camera_matrix.npy")
+    dist_coeffs = np.load("../../tools/camcal/dist_coeffs.npy")
+    fx, fy = np.diag(camera_matrix)[:2] * scale
+    cx, cy = camera_matrix[:2, 2] * scale
+    k1 = dist_coeffs[0]
+
+    theta = np.pi/2 + np.arange(-lat0, -lat1) / fx
+    theta = theta*(1 + k1*theta**2)
+    midtheta = np.pi/2*(1 + k1*(np.pi/2)**2)
+    npix = int(2 * np.pi * fx * midtheta + 0.5)
+    t = np.linspace(lon0, lon1, npix)[:-1]
+    x = fx*np.outer(theta, np.cos(t)) + cx
+    y = fy*np.outer(theta, np.sin(t)) + cy
+    return np.stack([x, y])[:, :-1].transpose(1, 2, 0).astype(np.float32)
+
 
 # return a new set of samples drawn from log-likelihood distribution LL
 def resample_particles(X, LL):
@@ -140,6 +156,17 @@ def main(f):
     bg = cv2.imread("cl.png")
     # bg = cv2.imread("voyage-top.png")
 
+    m1 = camcal(320, 240, 10, -5)
+    ym1, ym2 = cv2.convertMaps(m1*2, None, cv2.CV_16SC2)
+    uvm1, uvm2 = cv2.convertMaps(m1, None, cv2.CV_16SC2)
+
+    def yuvremap(yuv):
+        # assumes 640x480 YUV420 image
+        y = cv2.remap(yuv[:480], ym1, ym2, cv2.INTER_LINEAR)
+        u = cv2.remap(yuv[480:480+120].reshape((240, 320)), uvm1, uvm2, cv2.INTER_LINEAR)
+        v = cv2.remap(yuv[480+120:].reshape((240, 320)), uvm1, uvm2, cv2.INTER_LINEAR)
+        return np.stack([y, u, v]).transpose(1, 2, 0)
+
     Np = 300
     X = np.zeros((4, Np))
     # X[:2] = 100 * np.random.rand(2, Np)
@@ -147,7 +174,6 @@ def main(f):
     X[0] = 0.125*pseudorandn(Np)
     X[1] = 0.125*pseudorandn(Np)
     X[2] = pseudorandn(Np) * 0.1
-    print('Lhome', Lhome)
     X.T[:, :3] += Lhome
     tstamp = None
     last_wheels = None
@@ -155,10 +181,10 @@ def main(f):
     done = False
     i = 0
     if VIDEO:
-        # vidout = cv2.VideoWriter("particlefilter.h264", cv2.VideoWriter_fourcc(
-        #    'X', '2', '6', '4'), 30, (bg.shape[1], bg.shape[0]), True)
         vidout = cv2.VideoWriter("particlefilter.h264", cv2.VideoWriter_fourcc(
-            'X', '2', '6', '4'), 32.4, (640, 480), True)
+           'X', '2', '6', '4'), 30, (bg.shape[1], bg.shape[0]), True)
+        # vidout = cv2.VideoWriter("particlefilter.h264", cv2.VideoWriter_fourcc(
+        #     'X', '2', '6', '4'), 32.4, (640, 480), True)
         if not vidout:
             return 'video out fail?'
 
@@ -248,35 +274,13 @@ def main(f):
             cv2.circle(mapview, lxy, 3, (0, 128, 255), 3)
             cv2.putText(mapview, "%d" % l, (lxy[0] + 3, lxy[1] + 3), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 0, 0), 1, cv2.LINE_AA)
 
-        conecenters, origcenters, cone_acts = coneclassify.classify(yuv, gyroz)
-        LLs = np.zeros(Np)
-        for n, z in enumerate(conecenters):
-            # mark the cone on the original view
-            p = origcenters[n]
-            cv2.circle(bgr, (int(p[0]), int(p[1])), 8, (255, 200, 0), cv2.FILLED)
-
-            zz = np.arctan(z[0])
-            j, LL = likeliest_lm(X, L, zz)
-            LLs += LL
-            totalL += np.sum(LL)
-            # print('frame', i, 'cone', n, 'LL', np.min(LL), np.mean(LL), '+-', np.std(LL), np.max(LL))
-
-            # we could also update the landmarks at this point
-
-            # TODO: visualize the various landmarks being hit by the various particles
-            # we could draw thicker lines for more hits and thinner for fewer
-
-            # cv2.line(mapview, (XOFF+int(x0), YOFF-int(y0)), (XOFF+int(ll[0]), YOFF-int(ll[1])), (255,128,0), 1)
-            # ll = L[j]
-            # x, P, LL = ekf.update_lm_bearing(x, P, -zz, ll[0], ll[1], R)
-
         bgr[params.vpy, ::2][cone_acts] = 255
         bgr[params.vpy, 1::2][cone_acts] = 255
         bgr[params.vpy+1, ::2][cone_acts] = 255
         bgr[params.vpy+1, 1::2][cone_acts] = 255
 
-        if ds > 0 and len(conecenters) > 0:
-            # resample the particles based on their landmark likelihood
+        if ds > 0:
+            LL = likelihood(X, activation)
             X = resample_particles(X, LL)
 
         cv2.putText(mapview, "%d" % i, (20, 30), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 255, 255), 2, cv2.LINE_AA)
