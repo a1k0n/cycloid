@@ -13,7 +13,7 @@ namespace coneslam {
 
 const float CONE_RADIUS = 44.5/M_PI/200.;
 const float NOISE_ANGULAR = 0.2*3.3;
-const float NOISE_LONG = 4*3.3;
+const float NOISE_LONG = 8*3.3;
 const float NOISE_LAT = 2*3.3;
 const float NOISE_STEER_u = 0.3*3.3;
 const float NOISE_STEER_s = 0.3*3.3;
@@ -148,6 +148,74 @@ void Localizer::UpdateLM(float lm_bearing, float precision, float bogon_thresh) 
 #ifdef PF_DEBUG
   printf("LLmax=%f (%d landmarks)\n", LLmax_, n_landmarks_);
 #endif
+}
+
+// FIXME: this is all hardcoded from OpenCV until we can integrate with the
+// fisheye class and just load the calibration params off disk
+static const int kFisheyeLUT_w = 947;
+static const int kFisheyeLUT_h = 14;
+static const int16_t fisheyeLUT[] = {
+#include "uvmap1.txt"
+};
+
+void Localizer::Update(const uint8_t *yuvimg, float temperature) {
+  const uint8_t *V = yuvimg+(640*480 + 320*240);
+  int32_t activations[kFisheyeLUT_w*2];
+  memset(activations, 0, sizeof(activations));
+  int idx = 0;
+  // remap fisheye into an array of pixel activations
+  for (int j = 0; j < kFisheyeLUT_h; j++) {
+    for (int i = 0; i < kFisheyeLUT_w; i++) {
+      int16_t x = fisheyeLUT[idx++];
+      int16_t y = fisheyeLUT[idx++];
+      if (x < 0 || x >= 320 || y < 0 || y >= 240) continue;
+      // an activation is just the signed V channel magnitude
+      activations[i] += V[y*320 + x] - 128;
+    }
+  }
+  // make a second copy of the activations to handle angular wraparound
+  for (int i = 0; i < kFisheyeLUT_w; i++) {
+    activations[2 * i] = activations[i];
+  }
+  // now do a cumulative sum
+  for (int i = 1; i < 2 * kFisheyeLUT_w; i++) {
+    activations[i] += activations[i-1];
+  }
+
+  const float angratio = kFisheyeLUT_w / (2*M_PI);
+  // next, get the likelihood of each particle by looking up the expected
+  // position of each cone and adding up the summed activations
+  for (int i = 0; i < n_particles_; i++) {
+    const Particle &p = particles_[i];
+    float S = sin(p.theta),
+          C = cos(p.theta);
+
+    LL_[i] = 0;
+    for (int j = 0; j < n_landmarks_; j++) {
+      const Landmark &l = landmarks_[j];
+      float dx = l.x - p.x,
+            dy = l.y - p.y;
+      float z = dx*C + dy*S,
+            y = -dx*S + dy*C;
+      float d = sqrt(dx*dx + dy*dy);
+      float visibleradius = angratio * asin(fmin(CONE_RADIUS / d, 1));
+      float coneangle = angratio * atan2f(y, z);
+      int c0 = roundf(coneangle - visibleradius);
+      int c1 = roundf(coneangle + visibleradius);
+      if (c0 < 0) {
+        c0 += kFisheyeLUT_w;
+        c1 += kFisheyeLUT_w;
+      }
+      assert(c0 >= 0);
+      assert(c0 < kFisheyeLUT_w*2);
+      assert(c1 >= 0);
+      assert(c1 < kFisheyeLUT_w*2);
+      LL_[i] += (activations[c1] - activations[c0]) * temperature;
+    }
+    if (LL_[i] > LLmax_) {
+      LLmax_ = LL_[i];
+    }
+  }
 }
 
 void Localizer::Resample() {

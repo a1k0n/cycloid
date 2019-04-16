@@ -25,23 +25,25 @@ mounts = [  // x, y, diam
 offsetmounts = [  // x, y, diam
   [-17.75/2 - 7, 0],
   [17.75/2 + 7, 0],
-  [11-4, 11.7+8],
+  //[11-4, 11.7+8],
+  [5, 35],
 
-  [20, 63.5+6],
-  [-24, 63.5+6],
+  [20, 63.5-10],
+  [-25, 63.5-30],
   [5, 35]
 ];
 
-RPi3MountSizX = 49;
-RPi3MountSizY = 58;
-RPi3MountOffsetY = 25;
-RPi3MountOffsetZ = 25;
+RPi3MountSizX = 58;
+RPi3MountSizY = 49;
+RPi3MountOffsetX = 5;
+RPi3MountOffsetY = 10;
+RPi3MountOffsetZ = 15;
 
 RPi3Mounts = [
-  [-RPi3MountSizX/2, RPi3MountOffsetY, RPi3MountOffsetZ],
-  [ RPi3MountSizX/2, RPi3MountOffsetY, RPi3MountOffsetZ],
-  [-RPi3MountSizX/2, RPi3MountOffsetY+RPi3MountSizY, RPi3MountOffsetZ],
-  [ RPi3MountSizX/2, RPi3MountOffsetY+RPi3MountSizY, RPi3MountOffsetZ],
+  [-RPi3MountSizX/2 + RPi3MountOffsetX, RPi3MountOffsetY, RPi3MountOffsetZ],
+  [ RPi3MountSizX/2 + RPi3MountOffsetX, RPi3MountOffsetY, RPi3MountOffsetZ],
+  [-RPi3MountSizX/2 + RPi3MountOffsetX, RPi3MountOffsetY+RPi3MountSizY, RPi3MountOffsetZ],
+  [ RPi3MountSizX/2 + RPi3MountOffsetX, RPi3MountOffsetY+RPi3MountSizY, RPi3MountOffsetZ],
 ];
 
 arducam_mount = [
@@ -69,11 +71,9 @@ module BaseplateMounts() {
 }
 
 module RpiMounts() {
-  for (x = [-RPi3MountSizX/2, RPi3MountSizX/2]) {
-    for (y = [0, RPi3MountSizY]) {
-      translate([0, RPi3MountOffsetY, RPi3MountOffsetZ])
-        mountpoint(x, y);
-    }
+  for (m = RPi3Mounts) {
+    translate([0, 0, RPi3MountOffsetZ])
+      mountpoint(m[0], m[1]);
   }
 }
 

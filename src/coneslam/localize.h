@@ -39,7 +39,10 @@ class Localizer {
   void Predict(float ds, float w, float dt);
 
   // update after landmark measurement
+  // (deprecated)
   void UpdateLM(float lm_bearing, float precision, float bogon_thresh);
+
+  void Update(const uint8_t *yuvimg, float temperature);
   void Resample();  // implicitly resets internal likelihoods
 
   bool GetLocationEstimate(Particle *mean) const;

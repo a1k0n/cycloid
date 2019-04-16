@@ -75,7 +75,7 @@ struct CarState {
 
 class Driver: public CameraReceiver {
  public:
-  Driver(coneslam::Localizer *loc) {
+  explicit Driver(coneslam::Localizer *loc) {
     output_fd_ = -1;
     frame_ = 0;
     frameskip_ = 0;
@@ -86,6 +86,7 @@ class Driver: public CameraReceiver {
     }
     localizer_ = loc;
     firstframe_ = true;
+    ncones_ = 0;
   }
 
   bool StartRecording(const char *fname, int frameskip) {
@@ -124,7 +125,7 @@ class Driver: public CameraReceiver {
     uint32_t flushlen = 12 + carstate_.SerializedSize() + length;
     flushlen += localizer_->SerializedSize();
     flushlen += controller_.SerializedSize();
-    flushlen += 4 + ncones_ * 4;
+    flushlen += 4;
 
     // copy our frame, push it onto a stack to be flushed
     // asynchronously to sdcard
@@ -138,9 +139,8 @@ class Driver: public CameraReceiver {
     ptr += localizer_->Serialize(flushbuf+ptr, flushlen - ptr);
     ptr += controller_.Serialize(flushbuf+ptr, flushlen - ptr);
 
-    // add the cone detection positions
+    // DEPRECATED: add the cone detection positions
     memcpy(flushbuf+ptr, &ncones_, 4);
-    memcpy(flushbuf+ptr+4, &conesx_, ncones_*4);
     ptr += 4 + ncones_*4;
 
     // write the 640x480 yuv420 buffer last
@@ -159,30 +159,22 @@ class Driver: public CameraReceiver {
       dt = 1.0 / 30.0;
     }
 
-    ncones_ = coneslam::FindCones(buf, config_.cone_thresh,
-            carstate_.gyro[2], sizeof(conesx_) / sizeof(conesx_[0]),
-            conesx_, conestheta_);
-
     pthread_mutex_lock(&localizer_mutex_);
 
     uint16_t ds = last_encoders_[0] - carstate_.wheel_pos[0];
     if (ds != 0) {  // only do coneslam updates while we're moving
-      for (int i = 0; i < ncones_; i++) {
-        localizer_->UpdateLM(conestheta_[i], config_.lm_precision,
-            config_.lm_bogon_thresh*0.01);
-      }
-      if (ncones_ > 0) {
-        localizer_->Resample();
-      }
+      localizer_->Update(buf, config_.lm_precision * 1e-6);
+      localizer_->Resample();
     }
 
-    display_.UpdateConeView(buf, ncones_, conesx_);
+    display_.UpdateConeView(buf, 0, NULL);
     display_.UpdateEncoders(carstate_.wheel_pos);
     display_.UpdateParticleView(localizer_,
         controller_.cx_, controller_.cy_,
         controller_.nx_, controller_.ny_);
 
     pthread_mutex_unlock(&localizer_mutex_);
+    memcpy(last_encoders_, carstate_.wheel_pos, 4 * sizeof(uint16_t));
   }
 
   // Called each camera frame, 30Hz

@@ -3,6 +3,8 @@
 
 #include <stdint.h>
 
+namespace coneslam {
+
 // Camera calibration for fisheye lenses;
 // generates lookup tables and reprojects images
 
@@ -12,7 +14,7 @@ class Fisheye {
   // focal length (fx, fy),
   // optical center (cx, cy),
   // and distortion k1
-  Fisheye(float w, float h, float fx, float fy, float cx, float cy, float k1);
+  Fisheye();
 
   ~Fisheye() {
     delete[] lut_linear_;
@@ -26,5 +28,7 @@ class Fisheye {
   uint32_t *lut_remap_;
   int remap_w_, remap_h_;  // remap size
 };
+
+}  // namespace coneslam
 
 #endif  // CONESLAM_FISHEYE_H_

@@ -154,7 +154,7 @@ void UIDisplay::UpdateConfig(const char *configmenu[], int nconfigs,
     const char *configname = configmenu[configoffset];
     int16_t configvalue = config_values[configoffset];
     int16_t absvalue = configvalue < 0 ? -configvalue : configvalue;
-    char numbuf[8];  // "-327.67\0"
+    char numbuf[11];  // "-327.67\0"
     snprintf(numbuf, sizeof(numbuf)-1, "%c%d.%02d",
         configvalue < 0 ? '-' : ' ',
         absvalue / 100, absvalue % 100);
