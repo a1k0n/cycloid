@@ -53,3 +53,11 @@ print(distCoeffs)
 
 np.save("camera_matrix", cameraMatrix, False)
 np.save("dist_coeffs", distCoeffs, False)
+
+fx, fy = np.diag(cameraMatrix)[:2]
+cx, cy = cameraMatrix[:2, 2]
+k1 = distCoeffs[0]
+f = open("caldata.txt", "w")
+f.write("# fx fy cx cy k1\n")
+f.write("%f %f %f %f %f\n" % (fx, fy, cx, cy, k1))
+f.close()

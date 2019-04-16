@@ -111,6 +111,8 @@ def likelihood(X, acts):
 # generates table for a wxh image
 # for a given latitude range (specified in pixels above horizon / equator)
 def camcal(w, h, lat0, lat1, lon0=0, lon1=2*np.pi):
+    # assume camera calibration was for native raspberry pi camera resolution,
+    # rescale as necessary
     scale = h / 1944.0
     camera_matrix = np.load("../../tools/camcal/camera_matrix.npy")
     dist_coeffs = np.load("../../tools/camcal/dist_coeffs.npy")
@@ -152,8 +154,8 @@ def main(f):
     np.random.seed(1)
     # bg = cv2.imread("trackmap.jpg")
     # bg = cv2.imread("drtrack-2cm.png")
-    # bg = cv2.imread("bball-2cm.png")
-    bg = cv2.imread("cl.png")
+    bg = cv2.imread("bball-2cm.png")
+    # bg = cv2.imread("cl.png")
     # bg = cv2.imread("voyage-top.png")
 
     m1 = camcal(320, 240, 10, -5)
@@ -273,11 +275,6 @@ def main(f):
             lxy = (XOFF+int(L[l, 0]/a), YOFF-int(L[l, 1]/a))
             cv2.circle(mapview, lxy, 3, (0, 128, 255), 3)
             cv2.putText(mapview, "%d" % l, (lxy[0] + 3, lxy[1] + 3), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 0, 0), 1, cv2.LINE_AA)
-
-        bgr[params.vpy, ::2][cone_acts] = 255
-        bgr[params.vpy, 1::2][cone_acts] = 255
-        bgr[params.vpy+1, ::2][cone_acts] = 255
-        bgr[params.vpy+1, 1::2][cone_acts] = 255
 
         if ds > 0:
             LL = likelihood(X, activation)
