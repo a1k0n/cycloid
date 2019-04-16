@@ -20,14 +20,14 @@ carlength = 0  # 12*.0254/.02
 
 def read_landmarks():
     L = None
-    f = open("lm.txt")
+    f = open("lm.txt", "r")
     home = np.zeros(3)
     i = 0
     for line in f:
         if line.strip() == '':
             continue
         if line[:4] == "home":
-            home[:] = map(float, line.strip().split()[1:])
+            home[:] = list(map(float, line.strip().split()[1:]))
             continue
         if L is None:
             L = np.zeros((int(line.strip()), 2))
@@ -102,9 +102,9 @@ def likeliest_lm(X, L, l):
     y = dxy[:, 0]*S - dxy[:, 1]*C
     # get the relative angle^2
     d = np.linalg.norm(dxy, axis=1)
-    # print 'd', d.shape, d
+    # print( 'd', d.shape, d)
     coneangle = 2*np.arcsin(np.minimum(params.CONE_RADIUS/d, 1))
-    # print 'coneangle', coneangle
+    # print( 'coneangle', coneangle)
     angledist = np.maximum(np.abs(np.arctan2(y, z) - l) - coneangle, 0)
     e = np.minimum(angledist**2, params.BOGON_THRESH)
     LL = -params.LM_SELECTIVITY*e
@@ -152,7 +152,7 @@ def main(f):
     X[0] = 0.125*pseudorandn(Np)
     X[1] = 0.125*pseudorandn(Np)
     X[2] = pseudorandn(Np) * 0.1
-    print 'Lhome', Lhome
+    print('Lhome', Lhome)
     X.T[:, :3] += Lhome
     X[3] = X[2]
     tstamp = None
@@ -187,14 +187,14 @@ def main(f):
         ts = framedata[0]
         dt = framedata[0] - tstamp
         if dt > 0.1:
-            print 'WARNING: frame', i, 'has a', dt, 'second gap'
+            print('WARNING: frame', i, 'has a', dt, 'second gap')
         tstamp = ts
         tsfrac = tstamp - int(tstamp)
         tstring = time.strftime("%H:%M:%S.", time.localtime(tstamp)) + "%02d" % (tsfrac*100)
         gyroz = gyro[2]  # we only need the yaw rate from the gyro
         dw = wheels - last_wheels
         last_wheels = wheels
-        print 'wheels', dw, 'periods', periods, 'gyro', gyroz, 'dt', dt
+        print('wheels', dw, 'periods', periods, 'gyro', gyroz, 'dt', dt)
         ds = np.sum(dw) * params.WHEEL_TICK_LENGTH / params.NUM_ENCODERS
         vest1 = np.mean(periods[:params.NUM_ENCODERS])
         if vest1 != 0:
@@ -203,16 +203,16 @@ def main(f):
         # ds = 0.5*np.sum(dw[2:])
         # w = v k
         # a = v^2 k = v w
-        print 'accel', accel, ' expected ', gyroz * vest1 / 9.8, 'v', vest1, vest2, accel[0]*dt * 9.8
+        print('accel', accel, ' expected ', gyroz * vest1 / 9.8, 'v', vest1, vest2, accel[0]*dt * 9.8)
         step(X, dt, ds, gyroz, vest2, -accel[1]*9.8)
 
         if False:
             Am = 0.8*Am + 0.2*accel[1]*9.8
             Ae = 0.8*Ae + 0.2*ds*gyroz/dt*0.02
             Vlat = 0.8*Vlat + dt*accel[1]*9.8 - ds*gyroz
-            print 'alat', accel[1]*9.8, 'estimated', ds*gyroz/dt*0.02
-            print 'Vlat estimate', Vlat
-            print 'measured alat', Am, 'estimated alat', Ae
+            print('alat', accel[1]*9.8, 'estimated', ds*gyroz/dt*0.02)
+            print('Vlat estimate', Vlat)
+            print('measured alat', Am, 'estimated alat', Ae)
 
         yuv = yuv.copy()
         yuv[480+120:] = np.maximum(yuv[480+120:], 128)  # filter out blue
@@ -238,7 +238,7 @@ def main(f):
         # draw mean/covariance also
         x = np.mean(X, axis=1)
         P = np.cov(X)
-        # print "%d: %f %f %f" % (i, x[0], x[1], x[2])
+        # print("%d: %f %f %f" % (i, x[0], x[1], x[2]))
 
         x0, y0 = x[:2] / a
         dx, dy = 20*np.cos(x[2]), 20*np.sin(x[2])
@@ -265,7 +265,7 @@ def main(f):
             j, LL = likeliest_lm(X, L, zz)
             LLs += LL
             totalL += np.sum(LL)
-            # print 'frame', i, 'cone', n, 'LL', np.min(LL), np.mean(LL), '+-', np.std(LL), np.max(LL)
+            # print('frame', i, 'cone', n, 'LL', np.min(LL), np.mean(LL), '+-', np.std(LL), np.max(LL))
 
             # we could also update the landmarks at this point
 
@@ -317,11 +317,11 @@ def main(f):
         delta = caldata.wheel_angle(servo)
         vf = 0.5*np.sum(dw[:2])
         vr = 0.5*np.sum(dw[2:])
-        # print 'vf', vf, 'vr', vr, 'vr-vf', vr-vf, 'vr/vf', vr/(vf + 0.001)
+        # print('vf', vf, 'vr', vr, 'vr-vf', vr-vf, 'vr/vf', vr/(vf + 0.001))
         if np.abs(delta) > 0.08:
             # estimate lateral velocity
             vy = (vr*np.cos(delta) + gyroz*a*np.sin(delta) - vf)
-            # print 'lateral velocity *', np.sin(delta), '=', vy
+            # print('lateral velocity *', np.sin(delta), '=', vy)
 
         if VIDEO:
             vidout.write(bgr)
@@ -331,7 +331,7 @@ def main(f):
             k = cv2.waitKey()
             if k == ord('q'):
                 break
-        print 'frame', i, 'L', totalL
+        print('frame', i, 'L', totalL)
 
         i += 1
 
@@ -340,7 +340,7 @@ if __name__ == '__main__':
     import sys
 
     if len(sys.argv) < 2:
-        print "need input!\n%s [cycloid-yyyymmdd-hhmmss.rec]" % sys.argv[0]
+        print("need input!\n%s [cycloid-yyyymmdd-hhmmss.rec]" % sys.argv[0])
         sys.exit(1)
 
     f = open(sys.argv[1])
