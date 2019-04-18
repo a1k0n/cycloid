@@ -1,4 +1,5 @@
 import annotate
+import chunk
 import numpy as np
 import struct
 from math import sqrt
@@ -8,48 +9,56 @@ imgsiz = (640, 480)
 import argparse
 
 def read_frame(f):
-    buf = f.read(4)
-    if len(buf) < 4:
+    try:
+        ck = chunk.Chunk(f, False, False, True)
+    except EOFError:
         return False, None
-    siz, = struct.unpack("=I", buf)
-    buf = f.read(siz - 4)
-    if len(buf) < siz - 4:
-        print("Failed to unpack: ", len(buf), siz)
+    if ck.getname() != b'CYCF':
+        print("Not a cycloid IFF log file (got ", ck.getname(), "?)")
         return False, None
-    header = struct.unpack("=IIbbffffffBHHHHHHHH", buf[:51])
-    tstamp = header[0] + header[1] / 1000000.
-    throttle, steering = header[2:4]
-    accel = np.float32(header[4:7])
-    gyro = np.float32(header[7:10])
-    servo = header[10]
-    wheels = np.uint16(header[11:15])
-    periods = np.uint16(header[15:19])
 
-    ptr = 51
-    nparticles, = struct.unpack("=I", buf[ptr:ptr+4])
+    # read timestamp header
+    ts = struct.unpack("=II", ck.read(8))
 
-    # for particles w/ heading
-    particles = np.frombuffer(buf[55:55+nparticles*16], np.float32).reshape((-1, 4))
-    ptr += 4 + nparticles*16
+    framedata = {
+        'tstamp': ts[0] + ts[1] / 1000000.
+    }
 
-    # previous version: particles without heading
-    # particles = np.frombuffer(buf[55:55+nparticles*12], np.float32).reshape((-1, 3))
-    # ptr += 4 + nparticles*12
+    # read all embedded chunks
+    while True:
+        try:
+            ick = chunk.Chunk(ck, False, False, True)
+        except EOFError:
+            break
+        n = ick.getname()
+        if n == b'CSta':  # car state
+            data = struct.unpack("=bbffffffBHHHHHHHH", ick.read())
+            throttle, steering = data[0:2]
+            accel = np.float32(data[2:5])
+            gyro = np.float32(data[5:8])
+            servo = data[8]
+            wheels = np.uint16(data[9:13])
+            periods = np.uint16(data[13:17])
+            framedata['carstate'] = (throttle, steering, accel, gyro, servo, wheels, periods)
+        elif n == b'MCL4':  # monte carlo localization, 4-float state (particles w/ heading)
+            framedata['particles'] = np.frombuffer(ick.read(), np.float32).reshape((-1, 4))
+        elif n == b'aCDF':  # activation CDF, new thing
+            framedata['activations'] = np.frombuffer(ick.read(), np.int32)
+        elif n == b'LM01':  # expected landmark location
+            numL, = struct.unpack('B', ick.read(1))
+            c0c1 = np.frombuffer(ick.read(), np.uint16).reshape((-1, numL))
+            nP = c0c1.shape[0] // 2
+            framedata['c0'] = c0c1[:nP]
+            framedata['c1'] = c0c1[nP:]
+        elif n == b'CTLs':  # controller state
+            framedata['controldata'] = struct.unpack("=17f", ick.read())
+        elif n == b'Y420':  # YUV420 frame
+            w, = struct.unpack('=H', ick.read(2))
+            framedata['yuv420'] = np.frombuffer(ick.read(), np.uint8).reshape((-1, w))
+        else:
+            ick.skip()
 
-    controldata = struct.unpack("=17f", buf[ptr:ptr+68])
-
-    ptr += 68
-    ncones, = struct.unpack("=I", buf[ptr:ptr+4])
-    conesx = np.frombuffer(buf[4:4+ncones*4], np.int32)
-    ptr += 4 + ncones*4
-
-    frame = np.frombuffer(buf[-640*480 - 320*240*2:], np.uint8)
-
-    carstate = (throttle, steering, accel, gyro, servo, wheels, periods)
-
-    record = (tstamp, carstate, particles, controldata, conesx, frame)
-
-    return True, record
+    return True, framedata
 
 
 def parse_args():
@@ -118,9 +127,12 @@ if __name__ == '__main__':
             print("read_frame failed")
             break
 
-        tstamp, carstate, particles, controldata, conesx, frame = data
-        bgr = cv2.cvtColor(
-            frame.reshape((-1, imgsiz[0])), cv2.COLOR_YUV2BGR_I420)
+        tstamp = data['tstamp']
+        carstate = data['carstate']
+        particles = data['particles']
+        controldata = data['controldata']
+        frame = data['yuv420']
+        bgr = cv2.cvtColor(frame, cv2.COLOR_YUV2BGR_I420)
         bgr = np.clip(bgr * args.exposure, 0, 255).astype(np.uint8)
         if remap is not None:
             bgr = cv2.remap(bgr, remap[0], remap[1], cv2.INTER_LINEAR)
@@ -146,6 +158,17 @@ if __name__ == '__main__':
             vidout.write(bgr)
         print(carstate)
 
+        if 'activations' in data:
+            a = data['activations'][1:] - data['activations'][:-1]
+            a += 128*14
+            a = np.clip(a / 14, 0, 255).astype(np.uint8)
+            N = a.shape[0]
+            a = cv2.resize(a[None, :], (N, 30))
+            if 'c0' in data:
+                a[21:, data['c0'] % N] = 255
+                a[11:20, data['c1'] % N] = 255
+            cv2.imshow("acts", a)
+
         # draw the particle filter state
         partview = np.zeros((240, 450), np.uint8)
         partxy = (25*particles[:, :2]).astype(np.int)
@@ -154,10 +177,6 @@ if __name__ == '__main__':
         partview[(-partxy[inview, 1], partxy[inview, 0])] = 255
         if args.interactive:
             cv2.imshow("particles", partview)
-
-        for x in conesx:
-            cv2.line(bgr, (x, params.vpy), (x, params.vpy + params.bandheight),
-                     (0, 255, 255), 2)
 
         (x, y, theta, vf, vr, w, ierr_v, ierr_w, delta,
          target_k, target_v, target_w, ye, psie, k, bw_w, bw_v) = controldata
