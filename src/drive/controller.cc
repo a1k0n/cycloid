@@ -247,33 +247,36 @@ bool DriveController::GetControl(const DriverConfig &config,
   return true;
 }
 
-int DriveController::SerializedSize() const {
-  return sizeof(float)*17;
-}
+int DriveController::SerializedSize() const { return 8 + sizeof(float) * 17; }
 
 int DriveController::Serialize(uint8_t *buf, int buflen) const {
-  assert(buflen >= 68);
+  uint32_t len = SerializedSize();
+  assert(buflen >= len);
+
+  memcpy(buf, "CTLs", 4);  // controller state
+  memcpy(buf + 4, &len, 4);
+  buf += 8;
 
   memcpy(buf, &x_, 4);
-  memcpy(buf+4, &y_, 4);
-  memcpy(buf+8, &theta_, 4);
-  memcpy(buf+12, &vf_, 4);
-  memcpy(buf+16, &vr_, 4);
-  memcpy(buf+20, &w_, 4);
-  memcpy(buf+24, &ierr_v_, 4);
-  memcpy(buf+28, &ierr_w_, 4);
-  memcpy(buf+32, &delta_, 4);
+  memcpy(buf + 4, &y_, 4);
+  memcpy(buf + 8, &theta_, 4);
+  memcpy(buf + 12, &vf_, 4);
+  memcpy(buf + 16, &vr_, 4);
+  memcpy(buf + 20, &w_, 4);
+  memcpy(buf + 24, &ierr_v_, 4);
+  memcpy(buf + 28, &ierr_w_, 4);
+  memcpy(buf + 32, &delta_, 4);
 
-  memcpy(buf+36, &target_k_, 4);
-  memcpy(buf+40, &target_v_, 4);
-  memcpy(buf+44, &target_w_, 4);
-  memcpy(buf+48, &ye_, 4);
-  memcpy(buf+52, &psie_, 4);
-  memcpy(buf+56, &k_, 4);
-  memcpy(buf+60, &bw_w_, 4);
-  memcpy(buf+64, &bw_v_, 4);
+  memcpy(buf + 36, &target_k_, 4);
+  memcpy(buf + 40, &target_v_, 4);
+  memcpy(buf + 44, &target_w_, 4);
+  memcpy(buf + 48, &ye_, 4);
+  memcpy(buf + 52, &psie_, 4);
+  memcpy(buf + 56, &k_, 4);
+  memcpy(buf + 60, &bw_w_, 4);
+  memcpy(buf + 64, &bw_v_, 4);
 
-  return 68;
+  return len;
 }
 
 void DriveController::Dump() const {

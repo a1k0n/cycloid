@@ -55,21 +55,26 @@ struct CarState {
   }
 
   // 2 3-float vectors, 3 uint8s, 2 4-uint16 arrays
-  int SerializedSize() { return 4*3*2 + 3 + 2*4*2; }
+  int SerializedSize() { return 8 + 4 * 3 * 2 + 3 + 2 * 4 * 2; }
+
   int Serialize(uint8_t *buf, int bufsiz) {
-    assert(bufsiz >= 43);
-    memcpy(buf+0, &throttle, 1);
-    memcpy(buf+1, &steering, 1);
-    memcpy(buf+2, &accel[0], 4);
-    memcpy(buf+2+4, &accel[1], 4);
-    memcpy(buf+2+8, &accel[2], 4);
-    memcpy(buf+14, &gyro[0], 4);
-    memcpy(buf+14+4, &gyro[1], 4);
-    memcpy(buf+14+8, &gyro[2], 4);
-    memcpy(buf+26, &servo_pos, 1);
-    memcpy(buf+27, wheel_pos, 2*4);
-    memcpy(buf+35, wheel_dt, 2*4);
-    return 43;
+    uint32_t len = SerializedSize();
+    assert(bufsiz >= len);
+    memcpy(buf, "CSta", 4);
+    memcpy(buf + 4, &len, 4);
+    buf += 8;
+    memcpy(buf + 0, &throttle, 1);
+    memcpy(buf + 1, &steering, 1);
+    memcpy(buf + 2, &accel[0], 4);
+    memcpy(buf + 2 + 4, &accel[1], 4);
+    memcpy(buf + 2 + 8, &accel[2], 4);
+    memcpy(buf + 14, &gyro[0], 4);
+    memcpy(buf + 14 + 4, &gyro[1], 4);
+    memcpy(buf + 14 + 8, &gyro[2], 4);
+    memcpy(buf + 26, &servo_pos, 1);
+    memcpy(buf + 27, wheel_pos, 2 * 4);
+    memcpy(buf + 35, wheel_dt, 2 * 4);
+    return len;
   }
 } carstate_;
 
@@ -121,32 +126,41 @@ class Driver: public CameraReceiver {
     StopRecording();
   }
 
+  // recording data is in IFF format, can be read with python chunk interface:
+  // ck = chunk.Chunk(file, align=False, bigendian=False, inclheader=True)
+  // each frame is stored in a CYCF chunk which includes an 8-byte timestamp,
+  // and further set of chunks encoded by each piece below.
   void QueueRecordingData(const timeval &t, uint8_t *buf, size_t length) {
-    uint32_t flushlen = 12 + carstate_.SerializedSize() + length;
-    flushlen += localizer_->SerializedSize();
-    flushlen += controller_.SerializedSize();
-    flushlen += 4;
+    uint32_t chunklen = 8 + 8;  // iff header, timestamp
+    uint32_t yuvcklen = length + 8 + 2; // iff header, width, camera frame
+    // each of the following entries is expected to be a valid
+    // IFF chunk on its own
+    chunklen += carstate_.SerializedSize();
+    chunklen += localizer_->SerializedSize();
+    chunklen += controller_.SerializedSize();
+    chunklen += yuvcklen;
 
     // copy our frame, push it onto a stack to be flushed
     // asynchronously to sdcard
-    uint8_t *flushbuf = new uint8_t[flushlen];
+    uint8_t *chunkbuf = new uint8_t[chunklen];
     // write length + timestamp header
-    memcpy(flushbuf, &flushlen, 4);
-    memcpy(flushbuf+4, &t.tv_sec, 4);
-    memcpy(flushbuf+8, &t.tv_usec, 4);
-    int ptr = 12;
-    ptr += carstate_.Serialize(flushbuf+ptr, flushlen - ptr);
-    ptr += localizer_->Serialize(flushbuf+ptr, flushlen - ptr);
-    ptr += controller_.Serialize(flushbuf+ptr, flushlen - ptr);
-
-    // DEPRECATED: add the cone detection positions
-    memcpy(flushbuf+ptr, &ncones_, 4);
-    ptr += 4 + ncones_*4;
+    memcpy(chunkbuf, "CYCF", 4);
+    memcpy(chunkbuf+4, &chunklen, 4);
+    memcpy(chunkbuf+8, &t.tv_sec, 4);
+    memcpy(chunkbuf+12, &t.tv_usec, 4);
+    int ptr = 16;
+    ptr += carstate_.Serialize(chunkbuf+ptr, chunklen - ptr);
+    ptr += localizer_->Serialize(chunkbuf+ptr, chunklen - ptr);
+    ptr += controller_.Serialize(chunkbuf+ptr, chunklen - ptr);
 
     // write the 640x480 yuv420 buffer last
-    memcpy(flushbuf+ptr, buf, length);
+    memcpy(chunkbuf+ptr, "Y420", 4);
+    memcpy(chunkbuf+ptr+4, &yuvcklen, 4);
+    uint16_t framewidth = 640;  // hardcoded, fixme
+    memcpy(chunkbuf+ptr+8, &framewidth, 2);
+    memcpy(chunkbuf+ptr+10, buf, length);
 
-    flush_thread_.AddEntry(output_fd_, flushbuf, flushlen);
+    flush_thread_.AddEntry(output_fd_, chunkbuf, chunklen);
   }
 
   // Update controller from gyro and wheel encoder inputs

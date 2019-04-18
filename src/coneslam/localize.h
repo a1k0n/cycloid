@@ -6,6 +6,10 @@
 
 namespace coneslam {
 
+// hack hack hack
+static const int kFisheyeLUT_w = 947;
+static const int kFisheyeLUT_h = 14;
+
 struct Particle {
   float x, y, theta, heading;
 };
@@ -69,6 +73,8 @@ class Localizer {
 
   float *LL_;  // particle log-likelihood
   float LLmax_;
+  int32_t activations_[kFisheyeLUT_w*2];
+  uint16_t *c0_, *c1_;
 };
 
 }  // namespace coneslam

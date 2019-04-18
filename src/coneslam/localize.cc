@@ -32,6 +32,8 @@ Localizer::~Localizer() {
   delete[] particles_;
   delete[] landmarks_;
   delete[] LL_;
+  delete[] c0_;
+  delete[] c1_;
 }
 
 void Localizer::Reset() {
@@ -79,6 +81,8 @@ bool Localizer::LoadLandmarks(const char *filename) {
         home_x_, home_y_, home_theta_);
   }
   fclose(fp);
+  c0_ = new uint16_t[n_particles_ * n_landmarks_];
+  c1_ = new uint16_t[n_particles_ * n_landmarks_];
   Reset();
   return true;
 }
@@ -152,16 +156,13 @@ void Localizer::UpdateLM(float lm_bearing, float precision, float bogon_thresh) 
 
 // FIXME: this is all hardcoded from OpenCV until we can integrate with the
 // fisheye class and just load the calibration params off disk
-static const int kFisheyeLUT_w = 947;
-static const int kFisheyeLUT_h = 14;
 static const int16_t fisheyeLUT[] = {
 #include "uvmap1.txt"
 };
 
 void Localizer::Update(const uint8_t *yuvimg, float temperature) {
   const uint8_t *V = yuvimg+(640*480 + 320*240);
-  int32_t activations[kFisheyeLUT_w*2];
-  memset(activations, 0, sizeof(activations));
+  memset(activations_, 0, sizeof(activations_));
   int idx = 0;
   // remap fisheye into an array of pixel activations
   for (int j = 0; j < kFisheyeLUT_h; j++) {
@@ -170,21 +171,22 @@ void Localizer::Update(const uint8_t *yuvimg, float temperature) {
       int16_t y = fisheyeLUT[idx++];
       if (x < 0 || x >= 320 || y < 0 || y >= 240) continue;
       // an activation is just the signed V channel magnitude
-      activations[i] += V[y*320 + x] - 128;
+      activations_[i] += static_cast<int32_t>(V[y*320 + x]) - 128;
     }
   }
   // make a second copy of the activations to handle angular wraparound
   for (int i = 0; i < kFisheyeLUT_w; i++) {
-    activations[2 * i] = activations[i];
+    activations_[kFisheyeLUT_w + i] = activations_[i];
   }
   // now do a cumulative sum
   for (int i = 1; i < 2 * kFisheyeLUT_w; i++) {
-    activations[i] += activations[i-1];
+    activations_[i] += activations_[i-1];
   }
 
   const float angratio = kFisheyeLUT_w / (2*M_PI);
   // next, get the likelihood of each particle by looking up the expected
   // position of each cone and adding up the summed activations
+  int c0idx = 0;
   for (int i = 0; i < n_particles_; i++) {
     const Particle &p = particles_[i];
     float S = sin(p.theta),
@@ -210,7 +212,10 @@ void Localizer::Update(const uint8_t *yuvimg, float temperature) {
       assert(c0 < kFisheyeLUT_w*2);
       assert(c1 >= 0);
       assert(c1 < kFisheyeLUT_w*2);
-      LL_[i] += (activations[c1] - activations[c0]) * temperature;
+      c0_[c0idx] = c0;
+      c1_[c0idx] = c1;
+      c0idx++;
+      LL_[i] += (activations_[c1] - activations_[c0]) * temperature;
     }
     if (LL_[i] > LLmax_) {
       LLmax_ = LL_[i];
@@ -286,16 +291,42 @@ bool Localizer::GetLocationEstimate(Particle *mean) const {
 }
 
 int Localizer::SerializedSize() const {
-  // todo: we could put the cone detection locations in here also
-  return 4 + n_particles_ * sizeof(Particle);
+  // Saves two chunks out: particle positions and activations
+  // we should also show the particle lookups done...?
+  int len = 8 + n_particles_ * sizeof(Particle);  // IFF header + particles
+  len += 8 + kFisheyeLUT_w * sizeof(int32_t);  // IFF header + activations
+
+  // IFF header + #landmarks + per-particle expectations
+  len += 8 + 1 + 2 * n_landmarks_ * n_particles_ * sizeof(uint16_t);
+  return len;
 }
 
 int Localizer::Serialize(uint8_t *buf, int buflen) const {
-  int len = SerializedSize();
-  assert(buflen > len);
-  memcpy(buf, &n_particles_, 4);
-  memcpy(buf+4, particles_, n_particles_ * sizeof(Particle));
-  return len;
+  int totallen = SerializedSize();
+  assert(buflen > totallen);
+  uint32_t len = n_particles_ * sizeof(Particle) + 8;
+  memcpy(buf, "MCL4", 4);  // monte carlo localizer, 4-dim particles
+  memcpy(buf+4, &len, 4);
+  memcpy(buf+8, particles_, n_particles_ * sizeof(Particle));
+  buf += 8 + n_particles_ * sizeof(Particle);
+
+  len = kFisheyeLUT_w * sizeof(int32_t) + 8;
+  memcpy(buf, "aCDF", 4);  // activation cumulative distribution function
+  memcpy(buf+4, &len, 4);
+  memcpy(buf+8, activations_, kFisheyeLUT_w * sizeof(int32_t));
+  buf += 8 + kFisheyeLUT_w * sizeof(int32_t);
+
+  len = 8 + 1 + 2 * n_landmarks_ * n_particles_* sizeof(uint16_t);
+  memcpy(buf, "LM01", 4);  // landmark location
+  memcpy(buf+4, &len, 4);
+  buf[8] = n_landmarks_;
+  buf += 9;
+  memcpy(buf, c0_, n_landmarks_ * n_particles_ * sizeof(uint16_t));
+  buf += n_landmarks_ * n_particles_ * 2;
+  memcpy(buf, c1_, n_landmarks_ * n_particles_ * sizeof(uint16_t));
+  buf += n_landmarks_ * n_particles_ * 2;
+
+  return totallen;
 }
 
 }  // namespace coneslam
