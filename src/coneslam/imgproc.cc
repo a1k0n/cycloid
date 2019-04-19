@@ -18,6 +18,7 @@ float GetVpy() {
   return lut::conedetect_vpy;
 }
 
+// XXX: deprecated
 int FindCones(const uint8_t *yuvimg, int thresh, float gyroz, int nout,
     int *x_out, float *bearing_out) {
   int32_t accumbuf[321];

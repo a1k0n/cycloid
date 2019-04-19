@@ -180,7 +180,7 @@ def OptimizeTrack(x, lanewidth=1.8, kcurv=0.2, kdist=0.5):
         return kcurv*np.sum(kmag) + curvediff + kdist*np.sum(dist)
 
     dye = autograd.grad(ye_cost)
-    bounds = zip(*ye_limit(x, lanewidth))
+    bounds = list(zip(*ye_limit(x, lanewidth)))
 
     return scipy.optimize.fmin_l_bfgs_b(
         ye_cost, np.zeros(len(x)), lambda x: np.array(dye(x)), bounds=bounds, disp=True)
@@ -205,7 +205,7 @@ def OptimizeTrack2(x, ye, lanewidth=0.8, vmax=10, acmax=9, Ta=3.):
         return T
 
     dye = autograd.grad(ye_cost)
-    bounds = zip(*ye_limit(x, lanewidth))
+    bounds = list(zip(*ye_limit(x, lanewidth)))
 
     return scipy.optimize.fmin_l_bfgs_b(
         ye_cost, ye, dye, bounds=bounds, disp=True)
@@ -252,5 +252,5 @@ if __name__ == '__main__':
     np.savetxt("raceline_ds.txt", np.abs(  # distance between successive points
         np.concatenate([rx[1:] - rx[:-1], rx[:1] - rx[-1:]])), newline=",\n")
 
-    print "saved track_k.txt"
-    print "saved raceline_{k, ye, psie}.txt"
+    print("saved track_k.txt")
+    print("saved raceline_{k, ye, psie}.txt")

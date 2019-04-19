@@ -44,7 +44,7 @@ def read_track():
     for line in f:
         line = line.strip().split()
         if len(line) == 5:
-            T.append(map(float, line))
+            T.append(list(map(float, line)))
     f.close()
     return np.array(T)
 
@@ -103,7 +103,7 @@ def likelihood(X, acts):
     # finally use the cumsum to get the sum of activations for expected
     # cone angle ranges
     LL = np.sum((A[c1] - A[c0]), axis=0) * params.PF_TEMP
-    LL -= np.max(LL)
+    # LL *= -len(LL) / (params.PF_VAR * np.sum(LL) + 1)
     return LL, coneangle
 
 
@@ -125,8 +125,9 @@ def camcal(w, h, lat0, lat1, lon0=0, lon1=2*np.pi):
     midtheta = np.pi/2*(1 + k1*(np.pi/2)**2)
     npix = int(2 * np.pi * fx * midtheta + 0.5)
     t = np.linspace(lon0, lon1, npix)[:-1]
-    x = fx*np.outer(theta, np.cos(t)) + cx
-    y = fy*np.outer(theta, np.sin(t)) + cy
+    # offset by -90 degrees for camera orientation
+    x = fx*np.outer(theta, np.sin(t)) + cx
+    y = -fy*np.outer(theta, np.cos(t)) + cy
     return np.stack([x, y])[:, :-1].transpose(1, 2, 0).astype(np.float32)
 
 
@@ -150,7 +151,7 @@ def resample_particles(X, LL):
     return X[:, js]
 
 
-def main(f):
+def main(f, VIDEO, interactive):
     np.random.seed(1)
     # bg = cv2.imread("trackmap.jpg")
     # bg = cv2.imread("drtrack-2cm.png")
@@ -173,8 +174,8 @@ def main(f):
     X = np.zeros((4, Np))
     # X[:2] = 100 * np.random.rand(2, Np)
     # X[1] -= 400
-    X[0] = 0.125*pseudorandn(Np)
-    X[1] = 0.125*pseudorandn(Np)
+    X[0] = 4*0.125*pseudorandn(Np)
+    X[1] = 4*0.125*pseudorandn(Np)
     X[2] = pseudorandn(Np) * 0.1
     X.T[:, :3] += Lhome
     tstamp = None
@@ -182,11 +183,11 @@ def main(f):
 
     done = False
     i = 0
-    if VIDEO:
-        vidout = cv2.VideoWriter("particlefilter.h264", cv2.VideoWriter_fourcc(
-           'X', '2', '6', '4'), 30, (bg.shape[1], bg.shape[0]), True)
-        # vidout = cv2.VideoWriter("particlefilter.h264", cv2.VideoWriter_fourcc(
-        #     'X', '2', '6', '4'), 32.4, (640, 480), True)
+    if VIDEO is not None:
+        #vidout = cv2.VideoWriter(VIDEO, cv2.VideoWriter_fourcc(
+        #   'X', '2', '6', '4'), 30, (bg.shape[1], bg.shape[0]), True)
+        vidout = cv2.VideoWriter(VIDEO, cv2.VideoWriter_fourcc(
+            'X', '2', '6', '4'), 32.4, (640, 480), True)
         if not vidout:
             return 'video out fail?'
 
@@ -199,15 +200,15 @@ def main(f):
         if not ok:
             break
 
-        throttle, steering, accel, gyro, servo, wheels, periods = framedata[1]
-        savedparticles = framedata[2]
-        yuv = framedata[-1].reshape((-1, 640))
+        throttle, steering, accel, gyro, servo, wheels, periods = framedata['carstate']
+        savedparticles = framedata['particles']
+        yuv = framedata['yuv420']
+        ts = framedata['tstamp']
         if tstamp is None:
-            tstamp = framedata[0] - 1.0 / 30
+            tstamp = ts - 1.0 / 30
         if last_wheels is None:
             last_wheels = wheels
-        ts = framedata[0]
-        dt = framedata[0] - tstamp
+        dt = ts - tstamp
         if dt > 0.1:
             print('WARNING: frame', i, 'has a', dt, 'second gap')
         tstamp = ts
@@ -216,7 +217,7 @@ def main(f):
         gyroz = gyro[2]  # we only need the yaw rate from the gyro
         dw = wheels - last_wheels
         last_wheels = wheels
-        print('wheels', dw, 'periods', periods, 'gyro', gyroz, 'dt', dt)
+        # print('wheels', dw, 'periods', periods, 'gyro', gyroz, 'dt', dt)
         ds = np.sum(dw) * params.WHEEL_TICK_LENGTH / params.NUM_ENCODERS
         vest1 = np.mean(periods[:params.NUM_ENCODERS])
         if vest1 != 0:
@@ -225,7 +226,7 @@ def main(f):
         # ds = 0.5*np.sum(dw[2:])
         # w = v k
         # a = v^2 k = v w
-        print('accel', accel, ' expected ', gyroz * vest1 / 9.8, 'v', vest1, vest2, accel[0]*dt * 9.8)
+        # print('accel', accel, ' expected ', gyroz * vest1 / 9.8, 'v', vest1, vest2, accel[0]*dt * 9.8)
         step(X, dt, ds, gyroz, vest2, -accel[1]*9.8)
 
         if False:
@@ -236,8 +237,6 @@ def main(f):
             print('Vlat estimate', Vlat)
             print('measured alat', Am, 'estimated alat', Ae)
 
-        yuv = yuv.copy()
-        yuv[480+120:] = np.maximum(yuv[480+120:], 128)  # filter out blue
         bgr = cv2.cvtColor(yuv, cv2.COLOR_YUV2BGR_I420)
         mapview = bg.copy()
         # mapview = 200*np.ones(bg.shape, np.uint8)
@@ -265,7 +264,7 @@ def main(f):
         x0, y0 = x[:2] / a
         dx, dy = 20*np.cos(x[2]), 20*np.sin(x[2])
         U, V, _ = np.linalg.svd(P[:2, :2])
-        axes = np.sqrt(V)
+        axes = np.sqrt(V) / a
         angle = -np.arctan2(U[0, 1], U[0, 0]) * 180 / np.pi
         cv2.ellipse(mapview, (XOFF+int(x0), YOFF-int(y0)), (int(axes[0]), int(axes[1])),
                     angle, 0, 360, (0, 0, 220), 1)
@@ -277,13 +276,24 @@ def main(f):
             cv2.putText(mapview, "%d" % l, (lxy[0] + 3, lxy[1] + 3), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 0, 0), 1, cv2.LINE_AA)
 
         if ds > 0:
-            LL = likelihood(X, activation)
+            #yuv1 = yuvremap(yuv)
+            #uv = yuv1[:, :, 1:3].astype(np.int32) - 128
+            #activation = uv[:, :, 1]
+            #activation[yuv1[:, :, 1] == 0] = 0
+            #activation = np.sum(activation, axis=0)
+            activation = framedata['activations'].copy()
+            activation[1:] = activation[1:] - activation[:-1]
+            # acts = np.cumsum(np.concatenate([activation, activation]))
+            # LL = np.sum(acts[framedata['c1']] - acts[framedata['c0']], axis=1) * params.PF_TEMP
+            LL, coneangle = likelihood(X, activation)
+            totalL += np.sum(LL)
+            LL -= np.max(LL)
             X = resample_particles(X, LL)
 
         cv2.putText(mapview, "%d" % i, (20, 30), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 255, 255), 2, cv2.LINE_AA)
         cv2.putText(bgr, tstring, (20, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 1, cv2.LINE_AA)
 
-        if VIDEO:
+        if VIDEO is not None:
             #s = mapview[::2, ::2].shape
             #bgr[-s[0]:, -s[1]:] = mapview[::2, ::2]
             pass
@@ -297,6 +307,7 @@ def main(f):
         for l in range(len(L)):
             lxy = (400+int(L[l, 0]/.08), 0-int(L[l, 1]/.08))
             cv2.circle(bgr, lxy, 2, (0, 128, 255), 2)
+
         for t in range(0, len(Track), 2):
             txy1 = (400+int(Track[t, 0]/.08), 0-int(Track[t, 1]/.08))
             txy2 = (400+int(Track[t+1, 0]/.08), 0-int(Track[t+1, 1]/.08))
@@ -318,9 +329,9 @@ def main(f):
             vy = (vr*np.cos(delta) + gyroz*a*np.sin(delta) - vf)
             # print('lateral velocity *', np.sin(delta), '=', vy)
 
-        if VIDEO:
+        if VIDEO is not None:
             vidout.write(bgr)
-        else:
+        if interactive:
             cv2.imshow("map", mapview)
             cv2.imshow("raw", bgr)
             k = cv2.waitKey()
@@ -333,11 +344,21 @@ def main(f):
 
 if __name__ == '__main__':
     import sys
+    import argparse
 
-    if len(sys.argv) < 2:
+    p = argparse.ArgumentParser()
+    p.add_argument('-v', '--video', type=str, default=None,
+            help='Video file to save to')
+    p.add_argument('-i', '--interactive', dest='interactive', action='store_true',
+            help='Pause after every frame (default true)')
+    p.add_argument('-ni', '--no-interactive', dest='interactive', action='store_false')
+    p.add_argument('recordfile', type=str, help='Recording file from car')
+    args = p.parse_args()
+
+    if args.recordfile is None:
         print("need input!\n%s [cycloid-yyyymmdd-hhmmss.rec]" % sys.argv[0])
         sys.exit(1)
 
-    f = open(sys.argv[1])
-    main(f)
+    f = open(args.recordfile, 'rb')
+    main(f, args.video, args.interactive)
     f.close()

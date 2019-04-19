@@ -59,14 +59,10 @@ def tracksubdiv(T, N):
     totallen = np.sum(L)
     seglen = totallen / N
     offsets = np.cumsum(L/seglen)
-    print offsets
-
-    print 'seglen', seglen, (r*angles)/seglen
 
     a0 = np.arctan2(lp[1], lp[0])  # not actually sure this is right
 
     # n1 = np.ceil((r*angles)[0] / seglen)
-    # print offsets % 1.0
 
     # norm = np.linalg.norm(T[5:7, 0] - T[3:5, 0])
     # n2 = np.ceil((L[1] - offsets[0]) / seglen)

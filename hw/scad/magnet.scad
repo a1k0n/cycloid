@@ -28,7 +28,7 @@ offsetmounts = [  // x, y, diam
   //[11-4, 11.7+8],
   [5, 35],
 
-  [20, 63.5-10],
+  [20, 63.5+10],
   [-25, 63.5-30],
   [5, 35]
 ];
@@ -53,8 +53,8 @@ arducam_mount = [
   [28.5/2, 28.5/2],
 ];
 
-CamMountOffsetY = 118;
-CamMountOffsetZ = 50;
+CamMountOffsetY = 82;
+CamMountOffsetZ = 71;
 
 module BaseplateMounts() {
   for (m = mounts) {
@@ -86,7 +86,7 @@ module Beam(p0, p1) {
       }
       translate(p1) translate([0, 0, -4]) cylinder(r=beam_radius, h=4);
     }
-    translate(p1) translate([0, 0, -7]) cylinder(h=7.1, d=screw_drill);
+    translate(p1) translate([0, 0, -20]) cylinder(h=20.1, d=screw_drill);
   }
 }
 
@@ -146,7 +146,7 @@ module PiMount() {
   mounttable = [
     [0, [0]],
     [1, [1]],
-    [2, [0, 1]],
+    [2, [0, 1, 2]],
     [3, [3]],
     [4, [0, 2]],
     [5, [1, 3]],
@@ -166,6 +166,7 @@ module CamMount() {
     [20, 104],
     [12, 119.5],
     [-12, 119.5],
+    [20, 63.5+10],
   ];
 
   OffsetMount(mounts[4], offsetmounts2[0], beam_radius);
@@ -174,10 +175,10 @@ module CamMount() {
   OffsetMount(mounts[6], offsetmounts2[2], beam_radius);
 
   mounttable = [
-    [0, [2], 0],
+    [0, [3], 0],
     [1, [2, 3], 0],
-    [2, [0, 3], 0],
-    [2, [1, 2], 20],
+    [2, [0, 1, 2, 3], 20],
+    [3, [0, 1, 2, 3], 20],
   ];
 
   for (m = mounttable) {

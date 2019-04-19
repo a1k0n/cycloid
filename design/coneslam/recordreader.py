@@ -6,8 +6,6 @@ from math import sqrt
 
 imgsiz = (640, 480)
 
-import argparse
-
 def read_frame(f):
     try:
         ck = chunk.Chunk(f, False, False, True)
@@ -62,12 +60,13 @@ def read_frame(f):
 
 
 def parse_args():
+    import argparse
+
     p = argparse.ArgumentParser()
     
     p.add_argument('-i', '--interactive', dest='interactive', action='store_true',
             help='Pause after every frame (default true)')
     p.add_argument('-ni', '--no-interactive', dest='interactive', action='store_false')
-    p.set_defaults(feature=True)
 
     p.add_argument('-o', '--output', type=str, default=None,
             help='Video file to save to')
@@ -96,8 +95,8 @@ if __name__ == '__main__':
         def ang2pix(lat, lon):
             theta = np.pi/2 - lat
             theta = theta*(1 + dist_coeffs[0]*theta**2)
-            x = (fx*np.outer(theta, np.cos(-lon)) + cx)
-            y = (fy*np.outer(theta, np.sin(-lon)) + cy)
+            x = (fx*np.outer(theta, np.sin(-lon)) + cx)
+            y = (-fy*np.outer(theta, np.cos(-lon)) + cy)
             return np.stack([x, y]).transpose(1, 2, 0).astype(np.float32)
 
         f32map = ang2pix(np.linspace(np.pi/2, -np.pi/2, 1024),

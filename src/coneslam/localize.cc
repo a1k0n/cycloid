@@ -12,9 +12,9 @@ namespace coneslam {
 // const float NOISE_LAT = 8;
 
 const float CONE_RADIUS = 44.5/M_PI/200.;
-const float NOISE_ANGULAR = 0.2*3.3;
+const float NOISE_ANGULAR = 0.8*3.3;
 const float NOISE_LONG = 8*3.3;
-const float NOISE_LAT = 2*3.3;
+const float NOISE_LAT = 8*3.3;
 const float NOISE_STEER_u = 0.3*3.3;
 const float NOISE_STEER_s = 0.3*3.3;
 

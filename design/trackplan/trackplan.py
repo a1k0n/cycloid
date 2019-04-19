@@ -75,7 +75,6 @@ def gettrack(xy, T):
 def step(X, u, targetv, dt):
     # X = [x y theta v w]
     # velocity control
-    print 'u', u, X[4], 'v', targetv, X[3]
     if targetv > X[3]:
         ebw = np.exp(-bw_v * dt)
     else:
@@ -111,7 +110,7 @@ def drive(X, dt):
     # print n, C, S, ye, psie, k
     Cp = np.cos(psie)
     Sp = np.sin(psie)
-    print psie, Cp, Sp
+    # print psie, Cp, Sp
     Cpy = Cp / (1 - k * ye)
     Kpy = 1.0
     Kvy = 5.0
@@ -146,9 +145,9 @@ def trackexport(T):
     output[5:7] = Pn
     output[7:9] = Nn
 
-    print output.shape[1]
+    print(output.shape[1])
     for i in range(output.shape[1]):
-        print ' '.join(map(str, output[:, i]))
+        print(' '.join(map(str, output[:, i])))
 
     return output
 
@@ -174,7 +173,7 @@ if __name__ == '__main__':
     T[1] += 102
     T *= 0.02
 
-    print trackexport(T)
+    print(trackexport(T))
 
     if False:
         plt.plot(T[0], T[1], 'o')
@@ -218,7 +217,7 @@ if __name__ == '__main__':
             xy[:, i] = X[:2]
             totalS += ds
 
-        print 'distance around track', totalS
+        print('distance around track', totalS)
         plt.plot(T[0], T[1], 'o')
         t = np.linspace(0, 2*np.pi, 100)
         for x in range(T.shape[1]):
