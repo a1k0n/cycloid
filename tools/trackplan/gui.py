@@ -163,27 +163,39 @@ class RemapWindow:
     def start_optimization(self):
         self.start_opt = True
 
-    def render_opttrack(self, s):
-        N = s.shape[0]
+    def render_opttrack(self, scale, rectmin):
+        turns = self.pts['turn']
+        Nturns = len(turns)
+        if Nturns < 3:
+            return
+        t = np.float32(turns).T
+        t[1] = -t[1]  # invert y
+        tx = tapetrack.trackexport(t)
+        s = tapetrack.tracksubdiv(tx, 100)
         if self.start_opt:
             self.start_opt = False
-            scale = np.max(s[:, :2]) - np.min(s[:, :2])
-            u = s[:, 0] - 1j*s[:, 1]
+            sscale = np.max(s[:, :2]) - np.min(s[:, :2])
+            u = s[:, 0] + 1j*s[:, 1]
             ye, val, stuff = track_opt.OptimizeTrack(
-                u/scale, lanewidth=2*self.lanewidth/scale, kcurv=self.kcurv, kdist=self.kdist)
-            print(u[:30]/scale)
+                u/sscale, lanewidth=2*self.lanewidth/sscale, kcurv=self.kcurv, kdist=self.kdist)
+            print(u[:30]/sscale)
             print(ye[:30])
-            print(ye[:30]*scale)
-            print(self.lanewidth / scale)
-            self.opttrack = ye*scale
+            print(ye[:30]*sscale)
+            print(self.lanewidth / sscale)
+            self.opttrack = ye*sscale
 
         if self.opttrack is None:
             return
 
         ye = self.opttrack
-        L = s[:, :2] - (s[:, 2:4].T*ye.T).T
+        s *= scale
+        s[:, 0] += rectmin[0]
+        s[:, 1] = rectmin[1] - s[:, 1]  # uninvert y
+        s[:, 3] = -s[:, 3]
+        L = s[:, :2] + (s[:, 2:4].T*ye.T).T
         dl = imgui.get_window_draw_list()
         magenta = imgui.get_color_u32_rgba(1, 0, 1, 1)
+        N = len(ye)
         for i in range(1+N):
             a = i % N
             b = (i+1) % N
@@ -282,7 +294,7 @@ class RemapWindow:
         imgui.same_line()
         _, ks = imgui.slider_float2(
             "kcurv, kdist", self.kcurv, self.kdist,
-            min_value=0, max_value=10.0, power=2)
+            min_value=0, max_value=100.0, power=2)
         self.kcurv, self.kdist = ks
         _, self.lanewidth = imgui.slider_float(
             "lane width", self.lanewidth, min_value=10, max_value=1000,
@@ -334,8 +346,8 @@ class RemapWindow:
                            imgui.get_color_u32_rgba(1, 1, 1, 1), 10,
                            self.editmode == 'home')
 
-        trackdat = self.render_turns(scale, rectmin)
-        self.render_opttrack(trackdat)
+        self.render_turns(scale, rectmin)
+        self.render_opttrack(scale, rectmin)
 
         if self.editmode == "cone":
             zoomtip(self.remappedtex, self.remappedim.shape, 2)
