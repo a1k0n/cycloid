@@ -28,6 +28,26 @@ def unload_texture(texid):
     gl.glDeleteTextures([texid])
 
 
+def zoomtip(imtex, imdim, mag=1.0):
+    if imgui.is_item_hovered():
+        w, h = imgui.get_window_size()
+        h = imdim[0] * w / imdim[1]
+        rectmin = imgui.get_item_rect_min()
+        mousepos = imgui.get_mouse_pos()
+        u = float(mousepos[0] - rectmin[0]) / w
+        v = float(mousepos[1] - rectmin[1]) / h
+        imgui.begin_tooltip()
+        tw = 32. / imdim[1] / mag
+        th = 32. / imdim[0] / mag
+        imgui.image(imtex, 64, 64, uv0=(u-tw, v-th), uv1=(u+tw, v+th))
+        dl = imgui.get_window_draw_list()
+        rm = imgui.get_item_rect_min()
+        col = imgui.get_color_u32_rgba(1, 1, 0, 1)
+        dl.add_line(rm[0], rm[1]+32, rm[0]+64, rm[1]+32, col)
+        dl.add_line(rm[0]+32, rm[1], rm[0]+32, rm[1]+64, col)
+        imgui.end()
+
+
 def imagepicker(name, im, imtex, ptlist):
     imgui.begin(name)
     changed = False
@@ -49,20 +69,8 @@ def imagepicker(name, im, imtex, ptlist):
         dl.add_rect(u - 4.5, v - 4.5, u + 4.5, v + 4.5,
                     imgui.get_color_u32_rgba(0, 0, 0, 1), 5)
 
-    if imgui.is_item_hovered():
-        mousepos = imgui.get_mouse_pos()
-        u = float(mousepos[0] - rectmin[0]) / w
-        v = float(mousepos[1] - rectmin[1]) / h
-        imgui.begin_tooltip()
-        tw = 32. / im.shape[1]
-        th = 32. / im.shape[0]
-        imgui.image(imtex, 64, 64, uv0=(u-tw, v-th), uv1=(u+tw, v+th))
-        dl = imgui.get_window_draw_list()
-        rm = imgui.get_item_rect_min()
-        col = imgui.get_color_u32_rgba(1, 1, 0, 1)
-        dl.add_line(rm[0], rm[1]+32, rm[0]+64, rm[1]+32, col)
-        dl.add_line(rm[0]+32, rm[1], rm[0]+32, rm[1]+64, col)
-        imgui.end()
+    zoomtip(imtex, im.shape)
+
     if imgui.is_item_clicked(0):
         # print("clicked", name, imgui.get_mouse_pos(), imgui.get_item_rect_min())
         # fixme: drag points
@@ -136,32 +144,41 @@ class RemapWindow:
 
         _, self.scaleref = imgui.input_float("scale reference dist (m)", self.scaleref)
 
-        # i don't think we actually need this button now
+        # i don't think we actually need the button now
         if imgui.button("recompute mapping") or changed or offsetchanged:
-            H, _ = cv2.findHomography(np.float32(ptlist1), np.float32(ptlist2))
-            n, R, t, N = cv2.decomposeHomographyMat(H, self.K)
-            # refpts = np.hstack([ptlist1, np.ones((len(ptlist1), 1))])
-            n = N[np.argmin(np.array(N)[:, 1, 0])]
-            R2 = Rmatrix(n)
-            scale = 200
-            size = 1000
-            M2 = np.float32([
-                [-scale, 0, size/2 - scale*self.offxy[0]],
-                [0, scale, size/2 - scale*self.offxy[1]],
-                [0, 0, 1]
-            ])
-            MM = np.dot(M2, np.dot(R2, np.linalg.inv(self.K)))
-            self.remappedim = cv2.warpPerspective(self.im1, MM, (size, size))
-            if self.remappedtex is not None:
-                unload_texture(self.remappedtex)
-            self.remappedtex = load_texture(self.remappedim)
+            self.recompute(ptlist1, ptlist2)
 
         if self.remappedtex is not None:
-            w, h = imgui.get_window_size()
-            h = self.remappedim.shape[0] * w / self.remappedim.shape[1]
-            imgui.image(self.remappedtex, w, h)
+            self.render_editor()
 
         imgui.end()
+
+    def render_editor(self):
+        w, h = imgui.get_window_size()
+        h = self.remappedim.shape[0] * w / self.remappedim.shape[1]
+        imgui.image_button(self.remappedtex, w, h, frame_padding=0)
+
+        if self.editmode == "cone" or self.editmode == "scaleref":
+            zoomtip(self.remappedtex, self.remappedim.shape, 5)
+
+    def recompute(self, ptlist1, ptlist2):
+        H, _ = cv2.findHomography(np.float32(ptlist1), np.float32(ptlist2))
+        n, R, t, N = cv2.decomposeHomographyMat(H, self.K)
+        # refpts = np.hstack([ptlist1, np.ones((len(ptlist1), 1))])
+        n = N[np.argmin(np.array(N)[:, 1, 0])]
+        R2 = Rmatrix(n)
+        scale = 200
+        size = 1000
+        M2 = np.float32([
+            [-scale, 0, size/2 - scale*self.offxy[0]],
+            [0, scale, size/2 - scale*self.offxy[1]],
+            [0, 0, 1]
+        ])
+        MM = np.dot(M2, np.dot(R2, np.linalg.inv(self.K)))
+        self.remappedim = cv2.warpPerspective(self.im1, MM, (size, size))
+        if self.remappedtex is not None:
+            unload_texture(self.remappedtex)
+        self.remappedtex = load_texture(self.remappedim)
 
 
 def main(im1, im2, K):
