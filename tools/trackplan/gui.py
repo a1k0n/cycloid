@@ -102,11 +102,21 @@ def Rmatrix(N):
 
 class RemapWindow:
     def __init__(self, im1, K):
+        # state on init
         self.remappedtex = None
         self.remappedim = None
         self.im1 = im1
         self.K = K
+
+        # ephemeral state
         self.editmode = 'cone'
+        self.selectedpt = None
+        self.kcurv = 0.5
+        self.kdist = 0.5
+        self.opttrack = None
+        self.start_opt = False
+
+        # state to save
         self.offxy = (0, 0)
         self.remapscale = 200
         self.lanewidth = 100
@@ -118,19 +128,15 @@ class RemapWindow:
         }
         self.scaleref = 1.0
         self.offsetlock = False
-        self.selectedpt = None
-        self.kcurv = 0.5
-        self.kdist = 0.5
-        self.opttrack = None
-        self.start_opt = False
+        self.homeangle = 0.0
 
     def getstate(self):
         return (self.offxy, self.remapscale, self.lanewidth, self.pts,
-                self.scaleref, self.offsetlock)
+                self.scaleref, self.offsetlock, self.homeangle)
 
     def setstate(self, s):
         (self.offxy, self.remapscale, self.lanewidth, self.pts, self.scaleref,
-         self.offsetlock) = s
+         self.offsetlock, self.homeangle) = s
         self.selectedpt = None
 
     def render_turns(self, scale, rectmin):
@@ -372,6 +378,51 @@ class RemapWindow:
             unload_texture(self.remappedtex)
         self.remappedtex = load_texture(self.remappedim)
 
+    def get_scaleref(self):
+        pts = np.array(self.pts['scaleref'])
+        if len(pts) < 2:
+            return 1.0
+        mapdist = np.sqrt(np.sum((pts[1] - pts[0])**2))
+        return self.scaleref / mapdist
+
+    def save_cones(self, fname):
+        scale = self.get_scaleref()
+        cones = np.array(self.pts['cone']) * scale
+        f = open(fname, "w")
+        f.write("%d\n" % len(cones))
+        for c in cones:
+            f.write("%f %f\n" % (c[0], -c[1]))
+        home = np.array(self.pts['home']) * scale
+        if len(home) > 0:
+            f.write("home %f %f %f\n" % (
+                home[0][0], -home[0][1], self.homeangle))
+        f.close()
+
+    def save_track(self, fname):
+        scale = self.get_scaleref()
+        turns = self.pts['turn']
+        Nturns = len(turns)
+        if Nturns < 3:
+            return
+        t = np.float32(turns).T
+        t[1] = -t[1]  # invert y
+        tx = tapetrack.trackexport(t)
+        s = tapetrack.tracksubdiv(tx, 100)
+        u = (s[:, 0] + 1j*s[:, 1]) * scale
+        ye = self.opttrack * scale
+        N = 1j*track_opt.TrackNormal(u)
+        x = x = u + ye*N
+        TN = 1j*track_opt.TrackNormal(x)
+        traj = np.vstack([np.real(x), np.imag(x), np.real(TN),
+                          np.imag(TN), track_opt.TrackCurvature(x)]).T
+
+        f = open(fname, "w")
+        f.write("%d\n" % len(traj))
+        for t in traj:
+            f.write(" ".join(map(str, t)))
+            f.write("\n")
+        f.close()
+
 
 def main(im1, im2, K):
     im1 = cv2.imread(im1)
@@ -413,12 +464,27 @@ def main(im1, im2, K):
                         f.close()
                     except IOError:
                         status = 'Unable to load ptlist.pkl'
+
                 save1, _ = imgui.menu_item("Save pts")
                 if save1:
                     f = open("ptlist.pkl", "wb")
                     pickle.dump((ptlist1, ptlist2, rw.getstate()), f)
                     f.close()
                     status = 'Saved point list'
+
+                exportlm, _ = imgui.menu_item("Export landmarks")
+                if exportlm:
+                    rw.save_cones("lm.txt")
+                    status = 'Exported lm.txt'
+
+                exporttrack, _ = imgui.menu_item("Export track")
+                if exporttrack:
+                    if rw.opttrack is None:
+                        status = 'Optimized track not defined!'
+                    else:
+                        rw.save_track("track.txt")
+                        status = 'Exported track.txt'
+
                 imgui.end_menu()
             imgui.end_main_menu_bar()
 
