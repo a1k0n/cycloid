@@ -276,9 +276,8 @@ class RemapWindow:
         self.pts[self.editmode][self.selectedpt][0] = u
         self.pts[self.editmode][self.selectedpt][1] = v
 
-    def render_ptlist(self, ptlist, rectmin, scale, col, r,
+    def render_ptlist(self, dl, ptlist, rectmin, scale, col, r,
                       select=False, lines=False):
-        dl = imgui.get_window_draw_list()
         lastuv = None
         for i, p in enumerate(ptlist):
             u = p[0] * scale + rectmin[0]
@@ -315,6 +314,9 @@ class RemapWindow:
             _, T[i][2] = imgui.slider_float(
                 "turn %d radius" % (i+1), T[i][2], min_value=-1000.,
                 max_value=1000., power=1.2)
+        if self.editmode == 'home':
+            _, self.homeangle = imgui.slider_float(
+                "home position angle", self.homeangle, -3.141, 3.141)
         imgui.end_child()
 
         w, h = imgui.get_window_size()
@@ -339,18 +341,27 @@ class RemapWindow:
             self.move_point(u, v)
 
         scale = w / self.im1.shape[1]
-        self.render_ptlist(self.pts['cone'], rectmin, scale,
+        dl = imgui.get_window_draw_list()
+        self.render_ptlist(dl, self.pts['cone'], rectmin, scale,
                            imgui.get_color_u32_rgba(1, 0.7, 0, 1), 4,
                            self.editmode == 'cone')
-        self.render_ptlist(self.pts['scaleref'], rectmin, scale,
+        self.render_ptlist(dl, self.pts['scaleref'], rectmin, scale,
                            imgui.get_color_u32_rgba(0, 1, 0.3, 1), 2,
                            self.editmode == 'scaleref', True)
-        self.render_ptlist(self.pts['turn'], rectmin, scale,
+        self.render_ptlist(dl, self.pts['turn'], rectmin, scale,
                            imgui.get_color_u32_rgba(0, 0.3, 1, 1), 3,
                            self.editmode == 'turn')
-        self.render_ptlist(self.pts['home'], rectmin, scale,
+        self.render_ptlist(dl, self.pts['home'], rectmin, scale,
                            imgui.get_color_u32_rgba(1, 1, 1, 1), 10,
                            self.editmode == 'home')
+        # render home position angle
+        if len(self.pts['home']) > 0:
+            h = self.pts['home'][0]
+            S = 100*np.sin(self.homeangle)
+            C = 100*np.cos(self.homeangle)
+            dl.add_line(rectmin[0] + h[0]*scale, rectmin[1] + h[1]*scale,
+                        rectmin[0] + h[0]*scale + C, rectmin[1] + h[1]*scale - S,
+                        imgui.get_color_u32_rgba(1, 1, 1, 1))
 
         self.render_turns(scale, rectmin)
         self.render_opttrack(scale, rectmin)
@@ -450,10 +461,6 @@ def main(im1, im2, K):
         loaded = False
         if imgui.begin_main_menu_bar():
             if imgui.begin_menu("File", True):
-                clicked_quit, _ = imgui.menu_item(
-                    "Quit", 'Cmd+Q', False, True)
-                if clicked_quit:
-                    exit(0)
                 load1, _ = imgui.menu_item("Load pts")
                 if load1:
                     try:
@@ -472,7 +479,7 @@ def main(im1, im2, K):
                     f.close()
                     status = 'Saved point list'
 
-                exportlm, _ = imgui.menu_item("Export landmarks")
+                exportlm, _ = imgui.menu_item("Export cones / home")
                 if exportlm:
                     rw.save_cones("lm.txt")
                     status = 'Exported lm.txt'
@@ -484,6 +491,11 @@ def main(im1, im2, K):
                     else:
                         rw.save_track("track.txt")
                         status = 'Exported track.txt'
+
+                clicked_quit, _ = imgui.menu_item(
+                    "Quit", 'Cmd+Q', False, True)
+                if clicked_quit:
+                    exit(0)
 
                 imgui.end_menu()
             imgui.end_main_menu_bar()
