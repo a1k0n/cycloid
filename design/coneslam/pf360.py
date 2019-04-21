@@ -155,8 +155,8 @@ def main(f, VIDEO, interactive):
     np.random.seed(1)
     # bg = cv2.imread("trackmap.jpg")
     # bg = cv2.imread("drtrack-2cm.png")
-    bg = cv2.imread("bball-2cm.png")
-    # bg = cv2.imread("cl.png")
+    # bg = cv2.imread("bball-2cm.png")
+    bg = cv2.imread("cl.png")
     # bg = cv2.imread("voyage-top.png")
 
     m1 = camcal(320, 240, 10, -5)
@@ -174,8 +174,8 @@ def main(f, VIDEO, interactive):
     X = np.zeros((4, Np))
     # X[:2] = 100 * np.random.rand(2, Np)
     # X[1] -= 400
-    X[0] = 4*0.125*pseudorandn(Np)
-    X[1] = 4*0.125*pseudorandn(Np)
+    X[0] = 0.125*pseudorandn(Np)
+    X[1] = 0.125*pseudorandn(Np)
     X[2] = pseudorandn(Np) * 0.1
     X.T[:, :3] += Lhome
     tstamp = None
@@ -304,6 +304,11 @@ def main(f, VIDEO, interactive):
         xin = (xi >= 0) & (xi < bgr.shape[1]) & (xj >= 0) & (xj < bgr.shape[0])
         bgr[xj[xin], xi[xin], :] = 0
         bgr[xj[xin], xi[xin], 1] = 255
+        xi = np.uint32(400 + X[0]/.08)
+        xj = np.uint32(-X[1]/.08)
+        xin = (xi >= 0) & (xi < bgr.shape[1]) & (xj >= 0) & (xj < bgr.shape[0])
+        bgr[xj[xin], xi[xin], :] = 255
+        bgr[xj[xin], xi[xin], 0] = 0
         for l in range(len(L)):
             lxy = (400+int(L[l, 0]/.08), 0-int(L[l, 1]/.08))
             cv2.circle(bgr, lxy, 2, (0, 128, 255), 2)
