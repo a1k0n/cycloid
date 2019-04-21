@@ -8,13 +8,16 @@ rpi_mount_x = -3;
 cam_mount_height = 23 + 53 - 3.25;
 cam_mount_x = 107;
 
+r2 = 1.0/sqrt(2);
+function rot45(x) = [x[0]*r2 + x[1]*r2, -x[0]*r2 + x[1]*r2];
+
 arducam_width = 37;
 arducam_height = 37;
 arducam_mount = [
-  [-28.5/2, 28.5/2],
-  [-28.5/2, -28.5/2],
-  [28.5/2, -28.5/2],
-  [28.5/2, 28.5/2],
+  rot45([-28.5/2, 28.5/2]),
+  rot45([-28.5/2, -28.5/2]),
+  rot45([28.5/2, -28.5/2]),
+  rot45([28.5/2, 28.5/2]),
 ];
 arducam_lens_diam = 18;
 
@@ -198,7 +201,7 @@ module CamBoardThing() {
       for (p0 = offpts) {
         for (p1 = arducam_mount) {
           p = p0;
-          if (p1[1] > 0) {
+          if (p1[1] > -20) {
             beam(p0, [p1[0] + cam_mount_x, p1[1], cam_mount_height-3], beam_size);
           } else {
             beam(otherside(p0), [p1[0] + cam_mount_x, p1[1], cam_mount_height-3], beam_size);
