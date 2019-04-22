@@ -21,17 +21,20 @@ CONE_RADIUS = 44.5/3.1415/200.  # cone radius in meters
 #NOISE_LONG = 10
 #NOISE_LAT = 0.5
 
-NOISE_ANGULAR = 0.8
-NOISE_LONG = 8
-NOISE_LAT = 8
+NOISE_ANGULAR = 3
+NOISE_LONG = 63
+NOISE_LAT = 50
 NOISE_STEER_u = 0.3
 NOISE_STEER_s = 0.3
 LM_SELECTIVITY = 50
 
 # "temperature" for particle filter resampling
 # (depends on magnitude of activations, which are summed pixel intensity values)
-PF_TEMP = 200e-6
-PF_VAR = 6
+PF_TEMP = 100e-6
+PF_VAR = 10
+V_THRESHOLD = 30
+
+# 2.6889650239916953 lon 38.60174828208218 lat 85.65356704908227
 
 #BOGON_THRESH = .21**2  # minimum radians^2 to a real landmark
 #BOGON_THRESH = .1**2  # minimum radians^2 to a real landmark

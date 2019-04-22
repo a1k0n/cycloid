@@ -80,7 +80,12 @@ def step(X, dt, ds, gyro_dtheta, v, accel_y):
 
 
 def likelihood(X, acts):
-    angratio = len(acts)/(2*np.pi)  # range of angles, 0..2*pi mapped to 0..len(acts)
+    angratio = (len(acts)+1)/(2*np.pi)  # range of angles, 0..2*pi mapped to 0..len(acts)+1
+
+    filt = acts != 0
+    acts[filt] -= params.V_THRESHOLD
+    # acts[filt] = -1 + 2*(acts[filt] > params.V_THRESHOLD)
+
     A = np.cumsum(np.concatenate([acts, acts]))
     S, C = np.sin(X[2]), np.cos(X[2])
     dxy = L[:, :, None] - X[:2]
@@ -102,9 +107,9 @@ def likelihood(X, acts):
     c1[shift] += len(acts)
     # finally use the cumsum to get the sum of activations for expected
     # cone angle ranges
-    LL = np.sum((A[c1] - A[c0]), axis=0) * params.PF_TEMP
+    LL = np.sum((A[c1] - A[c0]), axis=0).astype(np.float32)
     # LL *= -len(LL) / (params.PF_VAR * np.sum(LL) + 1)
-    return LL, coneangle
+    return LL, c0, c1
 
 
 # generate remap table for fisheye camera calibration
@@ -124,7 +129,7 @@ def camcal(w, h, lat0, lat1, lon0=0, lon1=2*np.pi):
     theta = theta*(1 + k1*theta**2)
     midtheta = np.pi/2*(1 + k1*(np.pi/2)**2)
     npix = int(2 * np.pi * fx * midtheta + 0.5)
-    t = np.linspace(lon0, lon1, npix)[:-1]
+    t = np.linspace(lon0, lon1, npix+1)[:npix]
     # offset by -90 degrees for camera orientation
     x = fx*np.outer(theta, np.sin(t)) + cx
     y = -fy*np.outer(theta, np.cos(t)) + cy
@@ -134,7 +139,7 @@ def camcal(w, h, lat0, lat1, lon0=0, lon1=2*np.pi):
 # return a new set of samples drawn from log-likelihood distribution LL
 def resample_particles(X, LL):
     N = X.shape[1]
-    LL = np.exp(LL - np.max(LL))
+    LL = np.exp(params.PF_TEMP*(LL - np.max(LL)))
     totalP = np.sum(LL)
     deltaP = totalP / N
     randP = np.random.random() * totalP
@@ -156,7 +161,8 @@ def main(f, VIDEO, interactive):
     # bg = cv2.imread("trackmap.jpg")
     # bg = cv2.imread("drtrack-2cm.png")
     # bg = cv2.imread("bball-2cm.png")
-    bg = cv2.imread("cl.png")
+    if interactive:
+        bg = cv2.imread("cl.png")
     # bg = cv2.imread("voyage-top.png")
 
     m1 = camcal(320, 240, 10, -5)
@@ -227,112 +233,154 @@ def main(f, VIDEO, interactive):
         # w = v k
         # a = v^2 k = v w
         # print('accel', accel, ' expected ', gyroz * vest1 / 9.8, 'v', vest1, vest2, accel[0]*dt * 9.8)
-        step(X, dt, ds, gyroz, vest2, -accel[1]*9.8)
+        step(X, dt*0.3, ds*0.3, gyroz, vest2, -accel[1]*9.8)
+        step(X, dt*0.3, ds*0.3, gyroz, vest2, -accel[1]*9.8)
+        step(X, dt*0.3, ds*0.3, gyroz, vest2, -accel[1]*9.8)
+        step(X, dt*0.1, ds*0.1, gyroz, vest2, -accel[1]*9.8)
 
         if False:
             Am = 0.8*Am + 0.2*accel[1]*9.8
             Ae = 0.8*Ae + 0.2*ds*gyroz/dt*0.02
             Vlat = 0.8*Vlat + dt*accel[1]*9.8 - ds*gyroz
-            print('alat', accel[1]*9.8, 'estimated', ds*gyroz/dt*0.02)
-            print('Vlat estimate', Vlat)
-            print('measured alat', Am, 'estimated alat', Ae)
+            # print('alat', accel[1]*9.8, 'estimated', ds*gyroz/dt*0.02)
+            # print('Vlat estimate', Vlat)
+            # print('measured alat', Am, 'estimated alat', Ae)
 
-        bgr = cv2.cvtColor(yuv, cv2.COLOR_YUV2BGR_I420)
-        mapview = bg.copy()
-        # mapview = 200*np.ones(bg.shape, np.uint8)
+        if interactive or VIDEO is not None:
+            bgr = cv2.cvtColor(yuv, cv2.COLOR_YUV2BGR_I420)
+            mapview = bg.copy()
+            # mapview = 200*np.ones(bg.shape, np.uint8)
 
-        # draw all particles
-        xi = np.uint32(XOFF + X[0]/a)
-        xj = np.uint32(YOFF - X[1]/a)
-        xin = (xi >= 0) & (xi < mapview.shape[1]) & (xj >= 0) & (xj < mapview.shape[0])
-        mapview[xj[xin], xi[xin], :] = 0
-        mapview[xj[xin], xi[xin], 1] = 255
-        mapview[xj[xin], xi[xin], 2] = 255
+            # draw all particles
+            xi = np.uint32(XOFF + X[0]/a)
+            xj = np.uint32(YOFF - X[1]/a)
+            xin = (xi >= 0) & (xi < mapview.shape[1]) & (xj >= 0) & (xj < mapview.shape[0])
+            mapview[xj[xin], xi[xin], :] = 0
+            mapview[xj[xin], xi[xin], 1] = 255
+            mapview[xj[xin], xi[xin], 2] = 255
 
-        xi = np.uint32(XOFF + savedparticles[:, 0]/.02)
-        xj = np.uint32(YOFF - savedparticles[:, 1]/.02)
-        xin = (xi >= 0) & (xi < mapview.shape[1]) & (xj >= 0) & (xj < mapview.shape[0])
-        mapview[xj[xin], xi[xin], :] = 0
-        mapview[xj[xin], xi[xin], 1] = 255
-        mapview[xj[xin], xi[xin], 2] = 0
+            xi = np.uint32(XOFF + savedparticles[:, 0]/.02)
+            xj = np.uint32(YOFF - savedparticles[:, 1]/.02)
+            xin = (xi >= 0) & (xi < mapview.shape[1]) & (xj >= 0) & (xj < mapview.shape[0])
+            mapview[xj[xin], xi[xin], :] = 0
+            mapview[xj[xin], xi[xin], 1] = 255
+            mapview[xj[xin], xi[xin], 2] = 0
 
-        # draw mean/covariance also
-        x = np.mean(X, axis=1)
-        P = np.cov(X)
-        # print("%d: %f %f %f" % (i, x[0], x[1], x[2]))
+            # draw mean/covariance also
+            x = np.mean(X, axis=1)
+            P = np.cov(X)
+            # print("%d: %f %f %f" % (i, x[0], x[1], x[2]))
 
-        x0, y0 = x[:2] / a
-        dx, dy = 20*np.cos(x[2]), 20*np.sin(x[2])
-        U, V, _ = np.linalg.svd(P[:2, :2])
-        axes = np.sqrt(V) / a
-        angle = -np.arctan2(U[0, 1], U[0, 0]) * 180 / np.pi
-        cv2.ellipse(mapview, (XOFF+int(x0), YOFF-int(y0)), (int(axes[0]), int(axes[1])),
-                    angle, 0, 360, (0, 0, 220), 1)
-        cv2.circle(mapview, (XOFF+int(x0), YOFF-int(y0)), 3, (0, 0, 220), 2)
-        cv2.line(mapview, (XOFF+int(x0), YOFF-int(y0)), (XOFF+int(x0+dx), YOFF-int(y0+dy)), (0, 0, 220), 2)
-        for l in range(len(L)):
-            lxy = (XOFF+int(L[l, 0]/a), YOFF-int(L[l, 1]/a))
-            cv2.circle(mapview, lxy, 3, (0, 128, 255), 3)
-            cv2.putText(mapview, "%d" % l, (lxy[0] + 3, lxy[1] + 3), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 0, 0), 1, cv2.LINE_AA)
+            x0, y0 = x[:2] / a
+            dx, dy = 20*np.cos(x[2]), 20*np.sin(x[2])
+            U, V, _ = np.linalg.svd(P[:2, :2])
+            axes = np.sqrt(V) / a
+            angle = -np.arctan2(U[0, 1], U[0, 0]) * 180 / np.pi
+            cv2.ellipse(mapview, (XOFF+int(x0), YOFF-int(y0)), (int(axes[0]), int(axes[1])),
+                        angle, 0, 360, (0, 0, 220), 1)
+            cv2.circle(mapview, (XOFF+int(x0), YOFF-int(y0)), 3, (0, 0, 220), 2)
+            cv2.line(mapview, (XOFF+int(x0), YOFF-int(y0)), (XOFF+int(x0+dx), YOFF-int(y0+dy)), (0, 0, 220), 2)
+            for l in range(len(L)):
+                lxy = (XOFF+int(L[l, 0]/a), YOFF-int(L[l, 1]/a))
+                cv2.circle(mapview, lxy, 3, (0, 128, 255), 3)
+                cv2.putText(mapview, "%d" % l, (lxy[0] + 3, lxy[1] + 3), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 0, 0), 1, cv2.LINE_AA)
 
+        # stored activations
+        activation = framedata['activations'].copy()
+        activation[1:] = activation[1:] - activation[:-1]
+
+        # recompute activations from video
+        yuv1 = yuvremap(yuv)
+        uv = yuv1[:, :, 1:3].astype(np.int32) - 128
+        myactivation = uv[:, :, 1]
+        myactivation[yuv1[:, :, 1] == 0] = 0
+        myactivation = np.sum(myactivation, axis=0)
+
+        if interactive or VIDEO is not None:
+            angles = np.linspace(0, 2*np.pi, len(activation)+1)[:-1]
+            C = np.cos(angles[activation > params.V_THRESHOLD])
+            S = np.sin(angles[activation > params.V_THRESHOLD])
+            ai = np.round(320+280*S).astype(np.int)
+            aj = np.clip(np.round(240-280*C).astype(np.int), 0, 479)
+            #ai = np.clip(uvm1[10, activation > params.V_THRESHOLD, 0]*2, 0, 639)
+            #aj = np.clip(uvm1[10, activation > params.V_THRESHOLD, 1]*2, 0, 479)
+            bgr[aj, ai, :] = 255
+            bgr[aj, ai, 2] = 0
+
+            angles = np.linspace(0, 2*np.pi, len(myactivation)+1)[:-1]
+            C = np.cos(angles[myactivation > params.V_THRESHOLD])
+            S = np.sin(angles[myactivation > params.V_THRESHOLD])
+            ai = np.round(320+275*S).astype(np.int)
+            aj = np.clip(np.round(240-275*C).astype(np.int), 0, 479)
+            bgr[aj, ai, :] = 255
+            bgr[aj, ai, 0] = 0
+            ai = np.clip(uvm1[0, myactivation > params.V_THRESHOLD, 0]*2, 0, 639)
+            aj = np.clip(uvm1[0, myactivation > params.V_THRESHOLD, 1]*2, 0, 479)
+            bgr[aj, ai, :] = 255
+            bgr[aj, ai, 0] = 0
+
+            #print('act', activation[300:350])
+            #print('myact', myactivation[300:350])
+
+
+        LL, c0, c1 = likelihood(X, myactivation)
+        totalL += np.sum(LL)
+        LL -= np.max(LL)
         if ds > 0:
-            #yuv1 = yuvremap(yuv)
-            #uv = yuv1[:, :, 1:3].astype(np.int32) - 128
-            #activation = uv[:, :, 1]
-            #activation[yuv1[:, :, 1] == 0] = 0
-            #activation = np.sum(activation, axis=0)
-            activation = framedata['activations'].copy()
-            activation[1:] = activation[1:] - activation[:-1]
-            # acts = np.cumsum(np.concatenate([activation, activation]))
-            # LL = np.sum(acts[framedata['c1']] - acts[framedata['c0']], axis=1) * params.PF_TEMP
-            LL, coneangle = likelihood(X, activation)
-            totalL += np.sum(LL)
-            LL -= np.max(LL)
             X = resample_particles(X, LL)
+        if interactive:
+            ml = np.argmax(LL)
+            Na = uvm1.shape[1]
+            for s, e in zip(c0[:, ml] % Na, c1[:, ml] % Na):
+                x0 = uvm1[5, s]*2
+                x1 = uvm1[5, e]*2
+                cv2.line(bgr, (x0[0], np.clip(x0[1], 2, 477)), (x1[0], np.clip(x1[1], 2, 477)), (255, 170, 0), 2, cv2.LINE_AA)
 
-        cv2.putText(mapview, "%d" % i, (20, 30), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 255, 255), 2, cv2.LINE_AA)
-        cv2.putText(bgr, tstring, (20, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 1, cv2.LINE_AA)
 
-        if VIDEO is not None:
-            #s = mapview[::2, ::2].shape
-            #bgr[-s[0]:, -s[1]:] = mapview[::2, ::2]
-            pass
+        if interactive or VIDEO is not None:
+            cv2.putText(mapview, "%d" % i, (20, 30), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 255, 255), 2, cv2.LINE_AA)
+            cv2.putText(bgr, tstring, (20, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 1, cv2.LINE_AA)
 
-        # draw particle map on front view too
-        xi = np.uint32(400 + savedparticles[:, 0]/.08)
-        xj = np.uint32(-savedparticles[:, 1]/.08)
-        xin = (xi >= 0) & (xi < bgr.shape[1]) & (xj >= 0) & (xj < bgr.shape[0])
-        bgr[xj[xin], xi[xin], :] = 0
-        bgr[xj[xin], xi[xin], 1] = 255
-        xi = np.uint32(400 + X[0]/.08)
-        xj = np.uint32(-X[1]/.08)
-        xin = (xi >= 0) & (xi < bgr.shape[1]) & (xj >= 0) & (xj < bgr.shape[0])
-        bgr[xj[xin], xi[xin], :] = 255
-        bgr[xj[xin], xi[xin], 0] = 0
-        for l in range(len(L)):
-            lxy = (400+int(L[l, 0]/.08), 0-int(L[l, 1]/.08))
-            cv2.circle(bgr, lxy, 2, (0, 128, 255), 2)
+            if VIDEO is not None:
+                #s = mapview[::2, ::2].shape
+                #bgr[-s[0]:, -s[1]:] = mapview[::2, ::2]
+                pass
 
-        for t in range(0, len(Track), 2):
-            txy1 = (400+int(Track[t, 0]/.08), 0-int(Track[t, 1]/.08))
-            txy2 = (400+int(Track[t+1, 0]/.08), 0-int(Track[t+1, 1]/.08))
-            cv2.line(bgr, txy1, txy2, (190, 190, 190), 1)
+            # draw particle map on front view too
+            xi = np.uint32(400 + savedparticles[:, 0]/.08)
+            xj = np.uint32(-savedparticles[:, 1]/.08)
+            xin = (xi >= 0) & (xi < bgr.shape[1]) & (xj >= 0) & (xj < bgr.shape[0])
+            bgr[xj[xin], xi[xin], :] = 0
+            bgr[xj[xin], xi[xin], 1] = 255
+            xi = np.uint32(400 + X[0]/.08)
+            xj = np.uint32(-X[1]/.08)
+            xin = (xi >= 0) & (xi < bgr.shape[1]) & (xj >= 0) & (xj < bgr.shape[0])
+            bgr[xj[xin], xi[xin], :] = 255
+            bgr[xj[xin], xi[xin], 0] = 0
+            for l in range(len(L)):
+                lxy = (400+int(L[l, 0]/.08), 0-int(L[l, 1]/.08))
+                cv2.circle(bgr, lxy, 2, (0, 128, 255), 2)
 
-        annotate.draw_throttle(bgr, throttle)
-        annotate.draw_speed(bgr, tstamp, wheels, periods)
-        annotate.draw_steering(bgr, steering, servo, center=(200, 420))
-        annotate.draw_accelerometer(bgr, accel, gyro, center=(320, 420))
-        # TODO: also annotate gyroz and lateral accel
+            for t in range(0, len(Track), 2):
+                txy1 = (400+int(Track[t, 0]/.08), 0-int(Track[t, 1]/.08))
+                txy2 = (400+int(Track[t+1, 0]/.08), 0-int(Track[t+1, 1]/.08))
+                cv2.line(bgr, txy1, txy2, (190, 190, 190), 1)
+
+            annotate.draw_throttle(bgr, throttle)
+            annotate.draw_speed(bgr, tstamp, wheels, periods)
+            annotate.draw_steering(bgr, steering, servo, center=(200, 420))
+            annotate.draw_accelerometer(bgr, accel, gyro, center=(320, 420))
+            # TODO: also annotate gyroz and lateral accel
 
         # get steering angle, front and rear wheel velocities
-        delta = caldata.wheel_angle(servo)
-        vf = 0.5*np.sum(dw[:2])
-        vr = 0.5*np.sum(dw[2:])
+        #delta = caldata.wheel_angle(servo)
+        #vf = 0.5*np.sum(dw[:2])
+        #vr = 0.5*np.sum(dw[2:])
         # print('vf', vf, 'vr', vr, 'vr-vf', vr-vf, 'vr/vf', vr/(vf + 0.001))
-        if np.abs(delta) > 0.08:
-            # estimate lateral velocity
-            vy = (vr*np.cos(delta) + gyroz*a*np.sin(delta) - vf)
-            # print('lateral velocity *', np.sin(delta), '=', vy)
+        #if np.abs(delta) > 0.08:
+        #    # estimate lateral velocity
+        #    vy = (vr*np.cos(delta) + gyroz*a*np.sin(delta) - vf)
+        #    # print('lateral velocity *', np.sin(delta), '=', vy)
 
         if VIDEO is not None:
             vidout.write(bgr)
@@ -342,9 +390,11 @@ def main(f, VIDEO, interactive):
             k = cv2.waitKey()
             if k == ord('q'):
                 break
-        print('frame', i, 'L', totalL)
+        # print('frame', i, 'L', totalL)
 
         i += 1
+
+    return totalL
 
 
 if __name__ == '__main__':
@@ -357,6 +407,7 @@ if __name__ == '__main__':
     p.add_argument('-i', '--interactive', dest='interactive', action='store_true',
             help='Pause after every frame (default true)')
     p.add_argument('-ni', '--no-interactive', dest='interactive', action='store_false')
+    p.add_argument('-g', '--gridsearch', dest='gridsearch', action='store_true')
     p.add_argument('recordfile', type=str, help='Recording file from car')
     args = p.parse_args()
 
@@ -364,6 +415,31 @@ if __name__ == '__main__':
         print("need input!\n%s [cycloid-yyyymmdd-hhmmss.rec]" % sys.argv[0])
         sys.exit(1)
 
-    f = open(args.recordfile, 'rb')
-    main(f, args.video, args.interactive)
-    f.close()
+    def run(x=None):
+        if x is not None:
+            params.NOISE_ANGULAR = a0*2**x[0]
+            params.NOISE_LONG = lon0*2**x[1]
+            params.NOISE_LAT = lat0*2**x[2]
+
+        f = open(args.recordfile, 'rb')
+        totalL = main(f, args.video, args.interactive)
+        f.close()
+        if x is not None:
+            print("ang", params.NOISE_ANGULAR,
+                  "lon", params.NOISE_LONG,
+                  "lat", params.NOISE_LAT,
+                  "temp", params.PF_TEMP,
+                  totalL)
+        return totalL * -1e-8
+
+    if args.gridsearch:
+        from skopt import gp_minimize
+        a0 = params.NOISE_ANGULAR
+        lon0 = params.NOISE_LONG
+        lat0 = params.NOISE_LAT
+
+        res = gp_minimize(run, [(-4., 4.), (-4., 4.), (-4., 4.)],
+                          random_state=123)
+        print('final params: ang lon lat', np.array([a0, lon0, lat0]) * 2**np.array(res.x), 'LL', -1e8*res.fun)
+    else:
+        print("final likelihood", run())
