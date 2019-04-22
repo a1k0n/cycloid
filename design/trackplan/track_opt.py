@@ -165,7 +165,8 @@ def OptimizeTrack(x, lanewidth=1.8, kcurv=0.2, kdist=0.5):
     '''
 
     u = 1j * TrackNormal(x)
-    kmin = 0.09
+    # kmin = 0.09
+    kmin = 0.0
 
     def ye_cost(ye):
         rx = u*ye + x

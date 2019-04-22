@@ -4,6 +4,36 @@ import numpy as np
 parameters for any point on the plane '''
 
 
+def trackexport(T):
+    ''' compute various positions and normals for export '''
+    output = np.zeros((9, T.shape[1]))
+
+    output[:3] = T[:3]  # first three dimensions of output are unchanged
+
+    Tn = np.hstack([T[:, 1:], T[:, :1]])
+    Nn = Tn[:2] - T[:2]
+    L = np.linalg.norm(Nn, axis=0)
+    S = (Tn[2] - T[2]) / L
+    C = np.sqrt(1 - S**2)
+    Nn /= L
+    Nn = np.vstack([-Nn[0]*S - Nn[1]*C, Nn[0]*C - Nn[1]*S])
+    Nn /= np.linalg.norm(Nn, axis=0)
+
+    # we need to rotate Nn / Np based on the radii of the current/next/previous points
+    # ...unless they have the same radius, in which case this doesn't work.
+    # ln = np.linalg.norm(Tn[:2] - T[:2], axis=0) * T[2] / (Tn[2] - T[2])
+    # print 'ln', ln
+    # crap. for now let's just ignore the problem
+
+    Pn = (Tn[:2] + Nn*Tn[2])
+    P = (T[:2] + Nn*T[2])
+    output[3:5] = P
+    output[5:7] = Pn
+    output[7:9] = Nn
+
+    return output
+
+
 def trackparams(xy, T):
     # reconstructed by following code in drive/trajtrack.cc
     l0 = T[3:5]
