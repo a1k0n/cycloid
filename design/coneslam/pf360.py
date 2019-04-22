@@ -80,7 +80,7 @@ def step(X, dt, ds, gyro_dtheta, v, accel_y):
 
 
 def likelihood(X, acts):
-    angratio = (len(acts)+1)/(2*np.pi)  # range of angles, 0..2*pi mapped to 0..len(acts)+1
+    angratio = len(acts)/(2*np.pi)  # range of angles, 0..2*pi mapped to 0..len(acts)
 
     filt = acts != 0
     acts[filt] -= params.V_THRESHOLD
@@ -129,7 +129,8 @@ def camcal(w, h, lat0, lat1, lon0=0, lon1=2*np.pi):
     theta = theta*(1 + k1*theta**2)
     midtheta = np.pi/2*(1 + k1*(np.pi/2)**2)
     npix = int(2 * np.pi * fx * midtheta + 0.5)
-    t = np.linspace(lon0, lon1, npix+1)[:npix]
+    angratio = (lon1-lon0)/npix
+    t = np.arange(npix) * angratio
     # offset by -90 degrees for camera orientation
     x = fx*np.outer(theta, np.sin(t)) + cx
     y = -fy*np.outer(theta, np.cos(t)) + cy
@@ -297,7 +298,8 @@ def main(f, VIDEO, interactive):
         myactivation = np.sum(myactivation, axis=0)
 
         if interactive or VIDEO is not None:
-            angles = np.linspace(0, 2*np.pi, len(activation)+1)[:-1]
+            angratio = 2*np.pi/len(activation)
+            angles = np.arange(len(activation)) * angratio
             C = np.cos(angles[activation > params.V_THRESHOLD])
             S = np.sin(angles[activation > params.V_THRESHOLD])
             ai = np.round(320+280*S).astype(np.int)
@@ -307,7 +309,8 @@ def main(f, VIDEO, interactive):
             bgr[aj, ai, :] = 255
             bgr[aj, ai, 2] = 0
 
-            angles = np.linspace(0, 2*np.pi, len(myactivation)+1)[:-1]
+            angratio = 2*np.pi/len(myactivation)
+            angles = np.arange(len(myactivation)) * angratio
             C = np.cos(angles[myactivation > params.V_THRESHOLD])
             S = np.sin(angles[myactivation > params.V_THRESHOLD])
             ai = np.round(320+275*S).astype(np.int)
