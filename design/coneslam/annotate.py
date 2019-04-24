@@ -70,7 +70,7 @@ def draw_speed(bgr, tstamp, wheels, periods, center=(40, 420), radius=30):
              (int(center[0]), int(center[1])),
              (180, 255, 180), 2, cv2.LINE_AA)
 
-    cv2.putText(bgr, "%0.1f mph" % (mph), (30, 460),
+    cv2.putText(bgr, "%0.1f mph" % (mph), (center[0] - 10, center[1] + 40),
                 cv2.FONT_HERSHEY_PLAIN, 1, (255, 255, 255), 1,
                 cv2.LINE_AA)
     last_ts = tstamp

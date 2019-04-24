@@ -59,6 +59,23 @@ def read_frame(f):
     return True, framedata
 
 
+class RecordIterator:
+    def __init__(self, f):
+        self.f = f
+
+    def __iter__(self):
+        return self
+
+    def __next__(self):
+        ok, data = read_frame(self.f)
+        if not ok:
+            raise StopIteration
+        return data
+
+    def next(self):
+        return self.__next__()
+
+
 def parse_args():
     import argparse
 
@@ -100,7 +117,7 @@ if __name__ == '__main__':
             return np.stack([x, y]).transpose(1, 2, 0).astype(np.float32)
 
         f32map = ang2pix(np.linspace(np.pi/2, -np.pi/2, 1024),
-                         np.linspace(-np.pi, np.pi, 2048))
+                         np.linspace(-np.pi + np.pi/4, np.pi + np.pi/4, 2048))
         remap = cv2.convertMaps(f32map, None, cv2.CV_16SC2)
 
 
@@ -133,9 +150,10 @@ if __name__ == '__main__':
         frame = data['yuv420']
         bgr = cv2.cvtColor(frame, cv2.COLOR_YUV2BGR_I420)
         bgr = np.clip(bgr * args.exposure, 0, 255).astype(np.uint8)
+        anncenter = (320, 420)
         if remap is not None:
             bgr = cv2.remap(bgr, remap[0], remap[1], cv2.INTER_LINEAR)
-            bgr[bgr.shape[0]//2, :, :] = 255
+            anncenter = (bgr.shape[1]//2, 600)
         if t0 is None:
             t0 = tstamp
             tstamp_last = tstamp 
@@ -148,9 +166,9 @@ if __name__ == '__main__':
         variance += dt**2
         max_dt= max(dt, max_dt)
 
-        annotate.draw_steering(bgr, carstate[1], carstate[4])
-        annotate.draw_speed(bgr, tstamp, carstate[5], carstate[6])
-        annotate.draw_throttle(bgr, carstate[0])
+        annotate.draw_steering(bgr, carstate[1], carstate[4], anncenter)
+        annotate.draw_speed(bgr, tstamp, carstate[5], carstate[6], (anncenter[0] - 100, anncenter[1]))
+        annotate.draw_throttle(bgr, carstate[0], (anncenter[0], anncenter[1] + 50))
         if args.interactive:
             cv2.imshow("camera", bgr)
         if vidout is not None:

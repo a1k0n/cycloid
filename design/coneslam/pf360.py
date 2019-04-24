@@ -83,7 +83,7 @@ def likelihood(X, acts):
     angratio = len(acts)/(2*np.pi)  # range of angles, 0..2*pi mapped to 0..len(acts)
 
     filt = acts != 0
-    acts[filt] -= params.V_THRESHOLD
+    # acts[filt] -= params.V_THRESHOLD
     # acts[filt] = -1 + 2*(acts[filt] > params.V_THRESHOLD)
 
     A = np.cumsum(np.concatenate([acts, acts]))
@@ -130,7 +130,7 @@ def camcal(w, h, lat0, lat1, lon0=0, lon1=2*np.pi):
     midtheta = np.pi/2*(1 + k1*(np.pi/2)**2)
     npix = int(2 * np.pi * fx * midtheta + 0.5)
     angratio = (lon1-lon0)/npix
-    t = np.arange(npix) * angratio
+    t = lon0 + np.arange(npix) * angratio
     # offset by -90 degrees for camera orientation
     x = fx*np.outer(theta, np.sin(t)) + cx
     y = -fy*np.outer(theta, np.cos(t)) + cy
@@ -166,7 +166,7 @@ def main(f, VIDEO, interactive):
         bg = cv2.imread("cl.png")
     # bg = cv2.imread("voyage-top.png")
 
-    m1 = camcal(320, 240, 10, -5)
+    m1 = camcal(320, 240, 10, -5, -np.pi/4, 2*np.pi - np.pi/4)
     ym1, ym2 = cv2.convertMaps(m1*2, None, cv2.CV_16SC2)
     uvm1, uvm2 = cv2.convertMaps(m1, None, cv2.CV_16SC2)
 
@@ -202,14 +202,9 @@ def main(f, VIDEO, interactive):
     Vlat = 0
     totalL = 0
     vest2 = 0
-    while not done:
-        ok, framedata = recordreader.read_frame(f)
-        if not ok:
-            break
-
+    for framedata in f:
         throttle, steering, accel, gyro, servo, wheels, periods = framedata['carstate']
         savedparticles = framedata['particles']
-        yuv = framedata['yuv420']
         ts = framedata['tstamp']
         if tstamp is None:
             tstamp = ts - 1.0 / 30
@@ -248,6 +243,7 @@ def main(f, VIDEO, interactive):
             # print('measured alat', Am, 'estimated alat', Ae)
 
         if interactive or VIDEO is not None:
+            yuv = framedata['yuv420']
             bgr = cv2.cvtColor(yuv, cv2.COLOR_YUV2BGR_I420)
             mapview = bg.copy()
             # mapview = 200*np.ones(bg.shape, np.uint8)
@@ -291,42 +287,28 @@ def main(f, VIDEO, interactive):
         activation[1:] = activation[1:] - activation[:-1]
 
         # recompute activations from video
-        yuv1 = yuvremap(yuv)
-        uv = yuv1[:, :, 1:3].astype(np.int32) - 128
-        myactivation = uv[:, :, 1]
-        myactivation[yuv1[:, :, 1] == 0] = 0
-        myactivation = np.sum(myactivation, axis=0)
+        if False:
+            yuv1 = yuvremap(yuv)
+            uv = yuv1[:, :, 1:3].astype(np.int32) - 128
+            myactivation = uv[:, :, 1]
+            myactivation[yuv1[:, :, 1] == 0] = 0
+            myactivation = np.sum(myactivation, axis=0)
 
-        if interactive or VIDEO is not None:
-            angratio = 2*np.pi/len(activation)
-            angles = np.arange(len(activation)) * angratio
-            C = np.cos(angles[activation > params.V_THRESHOLD])
-            S = np.sin(angles[activation > params.V_THRESHOLD])
-            ai = np.round(320+280*S).astype(np.int)
-            aj = np.clip(np.round(240-280*C).astype(np.int), 0, 479)
-            #ai = np.clip(uvm1[10, activation > params.V_THRESHOLD, 0]*2, 0, 639)
-            #aj = np.clip(uvm1[10, activation > params.V_THRESHOLD, 1]*2, 0, 479)
-            bgr[aj, ai, :] = 255
-            bgr[aj, ai, 2] = 0
+            if interactive or VIDEO is not None:
+                #ai = np.clip(uvm1[10, activation > params.V_THRESHOLD, 0]*2, 0, 639)
+                #aj = np.clip(uvm1[10, activation > params.V_THRESHOLD, 1]*2, 0, 479)
+                #bgr[aj, ai, :] = 255
+                #bgr[aj, ai, 2] = 0
 
-            angratio = 2*np.pi/len(myactivation)
-            angles = np.arange(len(myactivation)) * angratio
-            C = np.cos(angles[myactivation > params.V_THRESHOLD])
-            S = np.sin(angles[myactivation > params.V_THRESHOLD])
-            ai = np.round(320+275*S).astype(np.int)
-            aj = np.clip(np.round(240-275*C).astype(np.int), 0, 479)
-            bgr[aj, ai, :] = 255
-            bgr[aj, ai, 0] = 0
-            ai = np.clip(uvm1[0, myactivation > params.V_THRESHOLD, 0]*2, 0, 639)
-            aj = np.clip(uvm1[0, myactivation > params.V_THRESHOLD, 1]*2, 0, 479)
-            bgr[aj, ai, :] = 255
-            bgr[aj, ai, 0] = 0
+                ai = np.clip(uvm1[0, myactivation > params.V_THRESHOLD, 0]*2, 0, 639)
+                aj = np.clip(uvm1[0, myactivation > params.V_THRESHOLD, 1]*2, 0, 479)
+                bgr[aj, ai, :] = 255
+                bgr[aj, ai, 0] = 0
 
-            #print('act', activation[300:350])
-            #print('myact', myactivation[300:350])
+                #print('act', activation[300:350])
+                #print('myact', myactivation[300:350])
 
-
-        LL, c0, c1 = likelihood(X, myactivation)
+        LL, c0, c1 = likelihood(X, activation)
         totalL += np.sum(LL)
         LL -= np.max(LL)
         if ds > 0:
@@ -411,12 +393,14 @@ if __name__ == '__main__':
             help='Pause after every frame (default true)')
     p.add_argument('-ni', '--no-interactive', dest='interactive', action='store_false')
     p.add_argument('-g', '--gridsearch', dest='gridsearch', action='store_true')
-    p.add_argument('recordfile', type=str, help='Recording file from car')
+    p.add_argument('recordfile', type=str, nargs='+', help='Recording file from car')
     args = p.parse_args()
 
-    if args.recordfile is None:
+    if args.recordfile is None or len(args.recordfile) == 0:
         print("need input!\n%s [cycloid-yyyymmdd-hhmmss.rec]" % sys.argv[0])
         sys.exit(1)
+
+    datas = []
 
     def run(x=None):
         if x is not None:
@@ -424,9 +408,9 @@ if __name__ == '__main__':
             params.NOISE_LONG = lon0*2**x[1]
             params.NOISE_LAT = lat0*2**x[2]
 
-        f = open(args.recordfile, 'rb')
-        totalL = main(f, args.video, args.interactive)
-        f.close()
+        totalL = 0
+        for data in datas:
+            totalL += main(data, args.video, args.interactive)
         if x is not None:
             print("ang", params.NOISE_ANGULAR,
                   "lon", params.NOISE_LONG,
@@ -441,8 +425,23 @@ if __name__ == '__main__':
         lon0 = params.NOISE_LONG
         lat0 = params.NOISE_LAT
 
+        print('preloading data...')
+        for rf in args.recordfile:
+            datacache = []
+            f = open(rf, 'rb')
+            for item in recordreader.RecordIterator(f):
+                del item['yuv420']
+                datacache.append(item)
+            datas.append(datacache)
+            f.close()
+        print('minimizing...')
+
         res = gp_minimize(run, [(-4., 4.), (-4., 4.), (-4., 4.)],
                           random_state=123)
         print('final params: ang lon lat', np.array([a0, lon0, lat0]) * 2**np.array(res.x), 'LL', -1e8*res.fun)
     else:
-        print("final likelihood", run())
+        for rf in args.recordfile:
+            f = open(rf, 'rb')
+            datas = [recordreader.RecordIterator(f)]
+            run()
+            f.close()
