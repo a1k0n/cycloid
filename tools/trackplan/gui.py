@@ -129,14 +129,15 @@ class RemapWindow:
         self.scaleref = 1.0
         self.offsetlock = False
         self.homeangle = 0.0
+        self.imheight = 1000
 
     def getstate(self):
         return (self.offxy, self.remapscale, self.lanewidth, self.pts,
-                self.scaleref, self.offsetlock, self.homeangle)
+                self.scaleref, self.offsetlock, self.homeangle, self.imheight)
 
     def setstate(self, s):
         (self.offxy, self.remapscale, self.lanewidth, self.pts, self.scaleref,
-         self.offsetlock, self.homeangle) = s
+         self.offsetlock, self.homeangle, self.imheight) = s
         self.selectedpt = None
 
     def render_turns(self, scale, rectmin):
@@ -219,14 +220,17 @@ class RemapWindow:
             return
 
         _, self.offsetlock = imgui.checkbox("offset lock", self.offsetlock)
-        offsetchanged = False
-        scalechanged = False
         if not self.offsetlock:
-            offsetchanged, self.offxy = imgui.slider_float2(
+            ch, self.offxy = imgui.slider_float2(
                 "offset xy", *self.offxy, min_value=-10, max_value=10)
-            scalechanged, self.remapscale = imgui.slider_float(
+            changed |= ch
+            ch, self.remapscale = imgui.slider_float(
                 "scale", self.remapscale, min_value=10, max_value=10000,
                 power=2)
+            changed |= ch
+            ch, self.imheight = imgui.slider_int(
+                "height", self.imheight, min_value=128, max_value=2048)
+            changed |= ch
             _, self.scaleref = imgui.input_float(
                 "scale reference dist (m)", self.scaleref)
 
@@ -241,7 +245,7 @@ class RemapWindow:
         if imgui.button("delete last"):
             self.pts[self.editmode] = self.pts[self.editmode][:-1]
 
-        if changed or offsetchanged or scalechanged:
+        if changed:
             self.recompute(ptlist1, ptlist2)
 
         if self.remappedtex is not None:
@@ -371,30 +375,49 @@ class RemapWindow:
         elif self.editmode == "scaleref":
             zoomtip(self.remappedtex, self.remappedim.shape, 5)
 
-    def recompute(self, ptlist1, ptlist2):
+    def reproject(self, ptlist1, ptlist2, scale, size, height):
         H, _ = cv2.findHomography(np.float32(ptlist1), np.float32(ptlist2))
         n, R, t, N = cv2.decomposeHomographyMat(H, self.K)
         # refpts = np.hstack([ptlist1, np.ones((len(ptlist1), 1))])
         n = N[np.argmin(np.array(N)[:, 1, 0])]
         R2 = Rmatrix(n)
-        size = 1000
         M2 = np.float32([
-            [-self.remapscale, 0, size/2 - self.remapscale*self.offxy[0]],
-            [0, self.remapscale, size/2 - self.remapscale*self.offxy[1]],
+            [-scale, 0, size/2 - scale*self.offxy[0]],
+            [0, scale, size/2 - scale*self.offxy[1]],
             [0, 0, 1]
         ])
         MM = np.dot(M2, np.dot(R2, np.linalg.inv(self.K)))
-        self.remappedim = cv2.warpPerspective(self.im1, MM, (size, size))
+        return cv2.warpPerspective(self.im1, MM, (int(size), int(height)))
+
+    def recompute(self, ptlist1, ptlist2):
+        self.remappedim = self.reproject(
+            ptlist1, ptlist2, self.remapscale,
+            1024, self.imheight)
+
         if self.remappedtex is not None:
             unload_texture(self.remappedtex)
         self.remappedtex = load_texture(self.remappedim)
 
     def get_scaleref(self):
         pts = np.array(self.pts['scaleref'])
+        print("scaleref pts: ", pts)
         if len(pts) < 2:
             return 1.0
         mapdist = np.sqrt(np.sum((pts[1] - pts[0])**2))
         return self.scaleref / mapdist
+
+    def save_png(self, fname, ptlist1, ptlist2):
+        # fixme
+        # scale: relative image width / cm
+        scale = 1.0 / (self.im1.shape[1] * self.get_scaleref())
+        meterwidth = 1024*scale
+        scale = 51.2/meterwidth
+        xsize = 1024 * scale
+        ysize = self.imheight * scale
+        print("scale", scale, "w, h", xsize, ysize)
+        cv2.imwrite(fname, self.reproject(
+            ptlist1, ptlist2,
+            self.remapscale * scale, xsize, ysize))
 
     def save_cones(self, fname):
         scale = self.get_scaleref()
@@ -492,6 +515,11 @@ def main(im1, im2, K):
                         rw.save_track("track.txt")
                         status = 'Exported track.txt'
 
+                exportpng, _ = imgui.menu_item("Export map image")
+                if exportpng:
+                    rw.save_png("map.png", ptlist1, ptlist2)
+                    status = 'Exported map.png'
+
                 clicked_quit, _ = imgui.menu_item(
                     "Quit", 'Cmd+Q', False, True)
                 if clicked_quit:
@@ -524,7 +552,7 @@ def main(im1, im2, K):
 
 def impl_glfw_init():
     width, height = 1280, 720
-    window_name = "minimal ImGui/GLFW3 example"
+    window_name = "cycloid track planner"
 
     if not glfw.init():
         print("Could not initialize OpenGL context")
