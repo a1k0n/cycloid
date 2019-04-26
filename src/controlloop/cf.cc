@@ -230,8 +230,9 @@ int main(int argc, char *argv[]) {
   CFIR ir;
 
   SysIdentifier steer_id;
-  PIDLoop steer_pid;
-  SelfTuningMotorControl motor_control(V_SCALE);
+  PILoop steer_pi;
+  SysIdentifier motor_id;
+  PILoop motor_pi;
 
   bool was_learning = true;
   setlinebuf(stdout);

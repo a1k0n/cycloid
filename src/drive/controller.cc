@@ -37,8 +37,10 @@ DriveController::DriveController() {
 void DriveController::ResetState() {
   vr_ = vf_ = 0;
   w_ = 0;
-  ierr_v_ = 0;
-  ierr_w_ = 0;
+  prev_throttle_ = 0;
+  prev_steer_ = 0;
+  prev_v_err_ = 0;
+  prev_k_err_ = 0;
 }
 
 static inline float clip(float x, float min, float max) {
@@ -51,27 +53,6 @@ void DriveController::UpdateState(const DriverConfig &config,
     const Vector3f &accel, const Vector3f &gyro,
     uint8_t servo_pos, const uint16_t *wheel_period, float dt) {
 
-  // FIXME: hardcoded servo calibraiton
-  // delta_ = (servo_pos - 126.5) / 121.3;
-  delta_ = 0;
-
-#if 0
-  // update front/rear velocity estimate through crude filter
-  if (ACTIVE_ENCODERS == 4) {
-    vf_ *= (1 - V_ALPHA);
-    vf_ += V_ALPHA * V_SCALE * 0.5*(wheel_delta[0] + wheel_delta[1])/dt;
-    vr_ *= (1 - V_ALPHA);
-    vr_ += V_ALPHA * V_SCALE * 0.5*(wheel_delta[2] + wheel_delta[3])/dt;
-  } else {
-    vf_ *= (1 - V_ALPHA);
-    float sum = 0;
-    for (int i = 0; i < ACTIVE_ENCODERS; i++) {
-      sum += wheel_delta[i];
-    }
-    vf_ += V_ALPHA * V_SCALE * sum * (1.0 / ACTIVE_ENCODERS) / dt;
-    vr_ = vf_;  // assume vr==vf, AWD
-  }
-#else
   // with new STM32 hat firmware, this isn't necessary and we have a better
   // wheel speed estimate
   if (wheel_period[0] == 0) {
@@ -79,7 +60,6 @@ void DriveController::UpdateState(const DriverConfig &config,
   } else {
     vf_ = vr_ = V_SCALE * 1e6 / wheel_period[0];
   }
-#endif
 
   w_ = gyro[2];
 }
@@ -88,7 +68,8 @@ void DriveController::UpdateLocation(const DriverConfig &config,
     float x, float y, float theta) {
   x_ = x;
   y_ = y;
-  theta_ = theta; // NOTE: theta is meaningless here; I shouldn't be tracking it
+  // NOTE: theta is meaningless here; I shouldn't be tracking it
+  theta_ = theta;
   if (!track_.GetTarget(x_, y_, config.lookahead,
         &cx_, &cy_, &nx_, &ny_, &k_, &vk_)) {
     cx_ = cy_ = ny_ = 0;
@@ -150,9 +131,12 @@ bool DriveController::GetControl(const DriverConfig &config,
   if (!autodrive && throttle_in <= 0) {
     *throttle_out = throttle_in;
     // yaw is backwards
-    *steering_out = clip(-steering_in, STEER_LIMIT_LOW/127.0, STEER_LIMIT_HIGH/127.0);
-    ierr_w_ = 0;  // also reset integrators
-    ierr_v_ = 0;
+    *steering_out =
+        clip(-steering_in, STEER_LIMIT_LOW / 127.0, STEER_LIMIT_HIGH / 127.0);
+    prev_steer_ = *steering_out;
+    prev_throttle_ = *throttle_out;
+    prev_v_err_ = 0;
+    prev_k_err_ = 0;
     return true;
   }
 
@@ -164,8 +148,9 @@ bool DriveController::GetControl(const DriverConfig &config,
   if (autodrive) {
     k = autok;
     // use lookahead vk_ to slow down early
+    // vk = fmax(fabs(vk_), fabs(k));
     // maybe just use vk_ directly here? then we speed up at corner exit
-    vk = fmax(fabs(vk_), fabs(k));
+    vk = fabs(vk_);
     vmax = config.speed_limit * 0.01;
   }
 
@@ -174,22 +159,6 @@ bool DriveController::GetControl(const DriverConfig &config,
   float target_v = vmax;
   if (fabs(vk) > kmin) {  // any curvature more than this will reduce speed
     target_v = sqrt(config.traction_limit * 0.01 / fabs(vk));
-    float atarget = config.accel_limit * 0.01;
-
-    // maintain an optimal slip ratio with 0 lateral velocity
-    // by adjusting speed until vf = vr*cos(delta) - w*Lf*sin(delta)
-    // vr = (vf + w*Lf*sin(delta)) / cos(delta)
-#if 0
-    float vr_slip_target = (vf_ + atarget + w_*GEOM_LF*sin(delta_)) /
-        cos(delta_);
-    if (vr_slip_target < target_v && vr_slip_target > 1.0) {
-      // printf("[%d] using slip target %f (vf=%f vr=%f)\n",
-      //     frameno, vr_slip_target, vf_, vr_);
-      target_v = vr_slip_target;
-    }
-#else
-    //target_v = clip(target_v, target_v + atarget, vmax);
-#endif
   }
 
   // use current velocity to determine target yaw rate
@@ -198,45 +167,30 @@ bool DriveController::GetControl(const DriverConfig &config,
   float target_k = k;
   float target_w = k*vr_;
 
-  float err_v = vr_ - target_v;
+  float verr = target_v - vr_;
   float kerr = 0;
   if (vr_ > 0.5) {
     kerr = target_k - w_/vr_;
-  } else {
-    ierr_w_ = 0;
   }
 
-  float BW_w = 2*M_PI*0.01*config.yaw_bw;
+  float BW_w = 0.01 * config.servo_bw;
+  float srv_r = 0.01 * config.servo_rate;
+  float dkerr = kerr - prev_k_err_;
+  float ds = BW_w * (dkerr / srv_r + dt * kerr);
+  *steering_out =
+      clip(prev_steer_ + ds, STEER_LIMIT_LOW / 127.0, STEER_LIMIT_HIGH / 127.0);
+  prev_steer_ = *steering_out;
+  prev_k_err_ = kerr;
 
-  // *steering_out = clip(-BW_w/target_v * (ierr_w_ + err_w / BW_SRV), -1, 1);
-  // why did i divide by target_v? that seems crazy and in practice it goes nuts
-  // at low speeds unless BW_w is tiny.
-  // *steering_out = clip(-BW_w * (ierr_w_ + err_w / BW_SRV),
-  //    STEER_LIMIT_LOW/127.0, STEER_LIMIT_HIGH/127.0);
+  float BW_v = 0.01*config.motor_bw;
+  float dverr = verr - prev_v_err_;
+  float k2 = 0.01 * config.motor_k2;
+  float k3 = 0.01 * config.motor_k3;
 
-  *steering_out = SERVO_DIRECTION*clip(target_k*SRV_A + SRV_D + BW_w * (ierr_w_*SRV_A + kerr*SRV_B),
-     STEER_LIMIT_LOW/127.0, STEER_LIMIT_HIGH/127.0);
-
-  float BW_v = 2*M_PI*0.01*config.motor_bw;
-  float Kp = BW_v / (M_K1 - M_K2*vr_);
-  float Ki = M_K3;
-  *throttle_out = clip(-Kp*(err_v + Ki*ierr_v_) + M_OFFSET, 0, 1);
-  if (*throttle_out == 0 && vr_ > 0) {  // handle braking
-    // alternate control law
-    float Kp2 = BW_v / (-M_K2*vr_);
-    *throttle_out = clip(Kp2*(err_v + Ki*ierr_v_ - M_OFFSET), -1, 0);
-  }
-
-  // don't wind-up at control limits
-  if ((*throttle_out > -1 && *throttle_out < 1) ||
-      (err_v > 0 && ierr_v_ < 0) || (err_v < 0 && ierr_v_ > 0)) {
-    ierr_v_ += dt*err_v;
-  }
-
-  if ((*steering_out > -1 && *steering_out < 1) ||
-      (kerr > 0 && ierr_w_ < 0) || (kerr < 0 && ierr_w_ > 0)) {
-    ierr_w_ += dt*kerr;
-  }
+  float du = BW_v / (1 - k2 * vr_) * (dverr + dt * k3 * verr);
+  *throttle_out = clip(prev_throttle_ + du, -1, 1);
+  prev_throttle_ = *throttle_out;
+  prev_v_err_ = verr;
 
   // update state for datalogging
   target_v_ = target_v;
@@ -263,9 +217,9 @@ int DriveController::Serialize(uint8_t *buf, int buflen) const {
   memcpy(buf + 12, &vf_, 4);
   memcpy(buf + 16, &vr_, 4);
   memcpy(buf + 20, &w_, 4);
-  memcpy(buf + 24, &ierr_v_, 4);
-  memcpy(buf + 28, &ierr_w_, 4);
-  memcpy(buf + 32, &delta_, 4);
+  memcpy(buf + 24, &prev_steer_, 4);
+  memcpy(buf + 28, &prev_throttle_, 4);
+  memcpy(buf + 32, &prev_k_err_, 4);
 
   memcpy(buf + 36, &target_k_, 4);
   memcpy(buf + 40, &target_v_, 4);
@@ -280,6 +234,6 @@ int DriveController::Serialize(uint8_t *buf, int buflen) const {
 }
 
 void DriveController::Dump() const {
-  printf("targetkvw %f %f %f v %f k %f windup %f %f",
-      target_k_, target_v_, target_w_, vr_, k_, ierr_v_, ierr_w_);
+  printf("targetkvw %f %f %f v %f k %f",
+      target_k_, target_v_, target_w_, vr_, k_);
 }

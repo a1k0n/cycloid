@@ -456,16 +456,16 @@ class DriverInputReceiver : public InputReceiver {
 };
 
 const char *DriverInputReceiver::configmenu[] = {
-  "cone thresh",
   "max speed",
   "traction limit",
-  "accel limit",
   "steering kP",
   "steering kD",
-  "motor bw",
-  "yaw rate bw",
+  "motor input",
+  "motor back-EMF",
+  "motor drag",
+  "servo input",
+  "servo rate",
   "cone precision",
-  "bogon thresh",
   "lookahead",
 };
 const int DriverInputReceiver::N_CONFIGITEMS = sizeof(configmenu) / sizeof(configmenu[0]);
