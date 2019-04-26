@@ -12,9 +12,8 @@ class EKF {
   void Reset();
 
   void Predict(float Delta_t, float u_M, float u_delta);
-  bool UpdateCenterline(float a, float b, float c, float y_c, Eigen::MatrixXf Rk);
   bool UpdateIMU(float g_z);
-  bool UpdateEncoders(float dsdt, float fb_delta);
+  bool UpdateEncoders(float dsdt, float wperiod);
 
 
   Eigen::VectorXf& GetState() { return x_; }
