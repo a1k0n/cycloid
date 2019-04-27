@@ -271,13 +271,13 @@ int main(int argc, char *argv[]) {
               STEER_LIMIT_LOW, STEER_LIMIT_HIGH);
           if (v > 0) {
             // separate brake_id is unsafe for now
-            motor_control.AddObservation(v, u_esc, dt);
+            motor_id.AddObservation(v, 1, u_esc, dt);
             steer_id.AddObservation(gyro[2], v, u_steer, dt);
           }
         }
         // hold PID loops in reset while learning
-        motor_control.ResetControl();
-        steer_pid.Reset();
+        motor_pi.Reset();
+        steer_pi.Reset();
         was_learning = true;
         break;
       case ir.Control:
@@ -291,7 +291,7 @@ int main(int argc, char *argv[]) {
           float k_target = -ir.Steering() / 32768.0;  // +-1m turning radius
 
           if (was_learning) {
-            auto km = motor_control.sysid_.Solve();
+            auto km = motor_id.Solve();
             fprintf(stderr, "motor sysid: %f %f %f %f %f\n", km[0], km[1],
                     km[2], km[3], km[4]);
             auto k = steer_id.Solve();
@@ -300,17 +300,19 @@ int main(int argc, char *argv[]) {
             was_learning = false;
           }
 
-          u_esc = motor_control.Control(v_target, v, MOTOR_BW, dt);
-          auto k = steer_id.Solve();
-          steer_pid.SetK(YAW_BW*k[0], YAW_BW*k[1], YAW_BW*k[2]);
+          auto k = motor_id.Solve();
+          motor_pi.SetK(1, 0);
+          u_esc = motor_pi.Control(v_target - v, dt);
+          k = steer_id.Solve();
+          steer_pi.SetK(1, 0);
           float kerr = 0;
           if (v > 0.5) {  // must be going at least 0.5 m/s for closed loop yaw control
             kerr = k_target - gyro[2]/v;
           } else {
             // reset wind-up at low speeds
-            steer_pid.Reset();
+            steer_pi.Reset();
           }
-          u_steer = clipi16(k_target*k[0] + k[3] + steer_pid.Control(kerr, dt),
+          u_steer = clipi16(k_target*k[0] + k[3] + steer_pi.Control(kerr, dt),
               STEER_LIMIT_LOW, STEER_LIMIT_HIGH);
         }
         break;

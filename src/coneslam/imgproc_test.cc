@@ -24,7 +24,8 @@ int main() {
     float gyroz;
     memcpy(&gyroz, framebuf+26+8, 4);
     printf("%d: gyroz=%f ", frame, gyroz);
-    int ncones = coneslam::FindCones(/*yuvimg=*/framebuf+55, /*thresh=*/config.cone_thresh, /*gyroz=*/gyroz, /*nout=*/10, /*x_out*/xbuf, /*bearing_out=*/thetabuf);
+    int ncones =
+        coneslam::FindCones(framebuf + 55, 50, gyroz, 10, xbuf, thetabuf);
     if (ncones) {
       for (int i = 0; i < ncones; i++) {
         printf("[%d]%f ", xbuf[i], thetabuf[i]);

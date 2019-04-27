@@ -34,8 +34,7 @@ int main() {
     for (int j = 0; j < nLM; j++) {
       float lm_bearing;
       fscanf(fp, "%f\n", &lm_bearing);
-      loc.UpdateLM(lm_bearing, config.lm_precision,
-                   config.lm_bogon_thresh*0.01);
+      loc.UpdateLM(lm_bearing, 1.0, 0.2);
     }
     loc.GetLocationEstimate(&p);
     printf("%d: %f %f %f\n", frame++, p.x, p.y, p.theta);

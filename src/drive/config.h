@@ -29,6 +29,8 @@ class DriverConfig {
   int16_t motor_k2;   // back-EMF const
   int16_t motor_k3;   // drag const
 
+  int16_t turnin_lift;  // amount to lift the throttle on turn-in
+
   // servo control parameters
   int16_t servo_bw;    // input magnitude
   int16_t servo_rate;  // servo speed
@@ -48,6 +50,8 @@ class DriverConfig {
     motor_bw = 0.08 * 100;
     motor_k2 = 0.03 * 100;
     motor_k3 = 0.34 * 100;
+
+    turnin_lift = 0.1 * 100;
 
     servo_bw = 0.62 * 100;
     servo_rate = 6.00 * 100;

@@ -1,4 +1,4 @@
-add_executable(cf cf.cc)
+add_executable(cf cf.cc fit.h pid.h)
 target_link_libraries(cf car input gpio imu)
 
 add_definitions(-DTESTDATA_PATH="${CMAKE_CURRENT_SOURCE_DIR}/testdata")

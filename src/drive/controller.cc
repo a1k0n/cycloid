@@ -161,10 +161,8 @@ bool DriveController::GetControl(const DriverConfig &config,
     target_v = sqrt(config.traction_limit * 0.01 / fabs(vk));
   }
 
-  // use current velocity to determine target yaw rate
-  // this yaw rate should be achievable with our tires given the slip rate
-  // limit above
-  float target_k = k;
+  // sometimes the controller gives infeasible curvatures; clamp them
+  float target_k = clip(k, -2, 2);
   float target_w = k*vr_;
 
   float verr = target_v - vr_;
@@ -187,7 +185,11 @@ bool DriveController::GetControl(const DriverConfig &config,
   float k2 = 0.01 * config.motor_k2;
   float k3 = 0.01 * config.motor_k3;
 
-  float du = BW_v / (1 - k2 * vr_) * (dverr + dt * k3 * verr);
+  // heuristic: subtract magnitude of yaw rate error from throttle control
+  float werr = (signbit(target_w) ? -1 : 1) * (target_w - w_) * 0.01 * config.turnin_lift;
+
+  float du = BW_v / (1 - k2 * vr_) * (dverr + dt * k3 * verr - werr * dt);
+
   *throttle_out = clip(prev_throttle_ + du, -1, 1);
   prev_throttle_ = *throttle_out;
   prev_v_err_ = verr;

@@ -1,4 +1,4 @@
-add_executable(drive drive.cc controller.cc trajtrack.cc)
+add_executable(drive drive.cc controller.cc trajtrack.cc config.h)
 target_link_libraries(drive car cam mmal input gpio imu ui lcd coneslam)
 install(TARGETS drive DESTINATION bin)
 
