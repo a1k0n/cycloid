@@ -94,7 +94,12 @@ void DriveController::AddSample(const DriverConfig &config,
   // the car's "y" coordinate is (-S, C); measure cos/sin psi
   float Cp = -S*nx_ + C*ny_;
   float Sp = S*ny_ + C*nx_;
-  float Cpy = Cp / (1 - k_ * ye);
+  float omkye = 1 - k_ * ye;
+  // limit |1 - k*ye| to 10% of turn radius to prevent numerical explosions
+  if (fabsf(omkye) < 0.1) {
+    omkye = 0.1 * (std::signbit(omkye) ? -1 : 1);
+  }
+  float Cpy = Cp / omkye;
 
   float Kpy = config.steering_kpy * 0.01;
   float Kvy = config.steering_kvy * 0.01;
@@ -186,7 +191,8 @@ bool DriveController::GetControl(const DriverConfig &config,
   float k3 = 0.01 * config.motor_k3;
 
   // heuristic: subtract magnitude of yaw rate error from throttle control
-  float werr = (signbit(target_w) ? -1 : 1) * (target_w - w_) * 0.01 * config.turnin_lift;
+  float werr = (std::signbit(target_w) ? -1 : 1) * (target_w - w_) * 0.01 *
+               config.turnin_lift;
 
   float du = BW_v / (1 - k2 * vr_) * (dverr + dt * k3 * verr - werr * dt);
 
