@@ -5,9 +5,9 @@ SET(CMAKE_SYSTEM_NAME Linux)
 #SET(CMAKE_ASM_COMPILER armv7-rpi2-linux-gnueabihf-gcc)
 
 # This compiler requires libstdc++ from gcc 5.2.0 which isn't available in raspbian jessie
-SET(CMAKE_C_COMPILER armv8-rpi3-linux-gnueabihf-gcc)
-SET(CMAKE_CXX_COMPILER armv8-rpi3-linux-gnueabihf-g++)
-SET(CMAKE_ASM_COMPILER armv8-rpi3-linux-gnueabihf-gcc)
+SET(CMAKE_C_COMPILER armv8-rpi3-linux-gnueabihf-gcc CACHE STRING "c compiler")
+SET(CMAKE_CXX_COMPILER armv8-rpi3-linux-gnueabihf-g++ CACHE STRING "c++ compiler")
+SET(CMAKE_ASM_COMPILER armv8-rpi3-linux-gnueabihf-gcc CACHE STRING "asm compiler")
 SET(CMAKE_SYSTEM_PROCESSOR arm)
 
 #ADD_DEFINITIONS("-march=armv6")
