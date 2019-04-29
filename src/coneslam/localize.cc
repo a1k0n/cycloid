@@ -114,7 +114,8 @@ void Localizer::Predict(float ds, float w, float dt) {
   }
 }
 
-void Localizer::UpdateLM(float lm_bearing, float precision, float bogon_thresh) {
+void Localizer::UpdateLM(float lm_bearing, float precision,
+                         float bogon_thresh) {
   float mindiffsqr = bogon_thresh*bogon_thresh;
 
   // for each particle, find likeliest landmark and its likelihood
@@ -326,6 +327,19 @@ int Localizer::Serialize(uint8_t *buf, int buflen) const {
   memcpy(buf, c1_, n_landmarks_ * n_particles_ * sizeof(uint16_t));
   buf += n_landmarks_ * n_particles_ * 2;
 
+  return totallen;
+}
+
+int Localizer::HeaderSize() const {
+  return 8 + n_landmarks_ * sizeof(Landmark);
+}
+
+int Localizer::SerializeHeader(uint8_t *buf, int buflen) const {
+  int totallen = HeaderSize();
+  assert(buflen > totallen);
+  memcpy(buf, "CONE", 4);  // cone locations
+  memcpy(buf+4, &totallen, 4);
+  memcpy(buf+8, landmarks_, n_landmarks_ * sizeof(Landmark));
   return totallen;
 }
 

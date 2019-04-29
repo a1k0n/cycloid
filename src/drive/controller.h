@@ -42,7 +42,7 @@ class DriveController {
   float prev_throttle_;  // previous throttle control
   float prev_steer_;     // previous steer control
   float prev_v_err_;     // previous velocity error
-  float prev_k_err_;     // previous curvature error
+  float ierr_k_;         // integrated curvature error
 
   float target_k_;  // mean path computation
   int k_samples_;

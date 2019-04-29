@@ -25,15 +25,15 @@ class DriverConfig {
   int16_t steering_kvy;  // derivative const
 
   // motor parameters
-  int16_t motor_bw;   // input magnitude
-  int16_t motor_k2;   // back-EMF const
-  int16_t motor_k3;   // drag const
+  int16_t motor_bw;     // input magnitude
+  int16_t motor_k2;     // back-EMF const
 
   int16_t turnin_lift;  // amount to lift the throttle on turn-in
 
   // servo control parameters
-  int16_t servo_bw;    // input magnitude
-  int16_t servo_rate;  // servo speed
+  int16_t servo_rate;      // servo speed
+  int16_t servo_offset;    // center offset
+  int16_t servo_finetune;  // closed-loop adjust rate
 
   int16_t lm_precision;  // landmark precision (1/sigma^2)
 
@@ -47,14 +47,14 @@ class DriverConfig {
     steering_kpy = 0.5 * 100;
     steering_kvy = 1.0 * 100;
 
-    motor_bw = 0.08 * 100;
-    motor_k2 = 0.03 * 100;
-    motor_k3 = 0.34 * 100;
+    motor_bw = 0.10 * 100;
+    motor_k2 = 1.50 * 100;
 
-    turnin_lift = 0.1 * 100;
+    turnin_lift = 0;
 
-    servo_bw = 0.62 * 100;
-    servo_rate = 6.00 * 100;
+    servo_rate = 1.30 * 100;
+    servo_offset = 0.10 * 100;
+    servo_finetune = 1.00 * 100;
 
     lm_precision = 100;
 

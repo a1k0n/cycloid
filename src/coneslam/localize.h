@@ -59,6 +59,8 @@ class Localizer {
 
   int SerializedSize() const;
   int Serialize(uint8_t *buf, int buflen) const;
+  int HeaderSize() const;
+  int SerializeHeader(uint8_t *buf, int buflen) const;
 
  private:
   void ResetLikelihood();

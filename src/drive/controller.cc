@@ -40,7 +40,7 @@ void DriveController::ResetState() {
   prev_throttle_ = 0;
   prev_steer_ = 0;
   prev_v_err_ = 0;
-  prev_k_err_ = 0;
+  ierr_k_ = 0;
 }
 
 static inline float clip(float x, float min, float max) {
@@ -141,7 +141,7 @@ bool DriveController::GetControl(const DriverConfig &config,
     prev_steer_ = *steering_out;
     prev_throttle_ = *throttle_out;
     prev_v_err_ = 0;
-    prev_k_err_ = 0;
+    ierr_k_ = 0;
     return true;
   }
 
@@ -171,33 +171,34 @@ bool DriveController::GetControl(const DriverConfig &config,
   float target_w = k*vr_;
 
   float verr = target_v - vr_;
-  float kerr = 0;
-  if (vr_ > 0.5) {
-    kerr = target_k - w_/vr_;
+  float BW_w = 100. / config.servo_rate;
+  float srv_off = 0.01 * config.servo_offset;
+  float srv_fine = 0.01 * config.servo_finetune;
+  if (vr_ > 0.2) {
+    float kerr = target_k - w_/vr_;
+    ierr_k_ = clip(ierr_k_ + dt * srv_fine * kerr, -1, 1);
+  } else {
+    ierr_k_ = 0;
   }
-
-  float BW_w = 0.01 * config.servo_bw;
-  float srv_r = 0.01 * config.servo_rate;
-  float dkerr = kerr - prev_k_err_;
-  float ds = BW_w * (dkerr / srv_r + dt * kerr);
-  *steering_out =
-      clip(prev_steer_ + ds, STEER_LIMIT_LOW / 127.0, STEER_LIMIT_HIGH / 127.0);
+  *steering_out = clip((target_k - srv_off) * BW_w - ierr_k_, -1, 1);
   prev_steer_ = *steering_out;
-  prev_k_err_ = kerr;
+  ierr_k_ = target_k;
 
-  float BW_v = 0.01*config.motor_bw;
+  float BW_v = 0.01 * config.motor_bw;
   float dverr = verr - prev_v_err_;
   float k2 = 0.01 * config.motor_k2;
-  float k3 = 0.01 * config.motor_k3;
 
   // heuristic: subtract magnitude of yaw rate error from throttle control
   float werr = (std::signbit(target_w) ? -1 : 1) * (target_w - w_) * 0.01 *
                config.turnin_lift;
+  werr = clip(werr, 0, 2);
 
-  float du = BW_v / (1 - k2 * vr_) * (dverr + dt * k3 * verr - werr * dt);
+  float du = BW_v * (dverr + k2 * prev_throttle_ * verr * dt);
 
   *throttle_out = clip(prev_throttle_ + du, -1, 1);
   prev_throttle_ = *throttle_out;
+  // hack in yaw error here
+  *throttle_out = clip(*throttle_out - werr, -1, 1);
   prev_v_err_ = verr;
 
   // update state for datalogging
@@ -227,7 +228,7 @@ int DriveController::Serialize(uint8_t *buf, int buflen) const {
   memcpy(buf + 20, &w_, 4);
   memcpy(buf + 24, &prev_steer_, 4);
   memcpy(buf + 28, &prev_throttle_, 4);
-  memcpy(buf + 32, &prev_k_err_, 4);
+  memcpy(buf + 32, &ierr_k_, 4);
 
   memcpy(buf + 36, &target_k_, 4);
   memcpy(buf + 40, &target_v_, 4);

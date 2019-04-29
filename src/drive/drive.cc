@@ -462,9 +462,10 @@ const char *DriverInputReceiver::configmenu[] = {
   "steering kD",
   "motor input",
   "motor back-EMF",
-  "motor drag",
-  "servo input",
+  "turn-in lift",
   "servo rate",
+  "servo offset",
+  "servo finetune",
   "cone precision",
   "lookahead",
 };
