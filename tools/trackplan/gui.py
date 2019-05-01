@@ -136,8 +136,13 @@ class RemapWindow:
                 self.scaleref, self.offsetlock, self.homeangle, self.imheight)
 
     def setstate(self, s):
-        (self.offxy, self.remapscale, self.lanewidth, self.pts, self.scaleref,
-         self.offsetlock, self.homeangle, self.imheight) = s
+        if len(s) == 8:
+            (self.offxy, self.remapscale, self.lanewidth, self.pts, self.scaleref,
+             self.offsetlock, self.homeangle, self.imheight) = s
+        elif len(s) == 7:
+            (self.offxy, self.remapscale, self.lanewidth, self.pts, self.scaleref,
+             self.offsetlock, self.homeangle) = s
+            self.imheight = 1000
         self.selectedpt = None
 
     def render_turns(self, scale, rectmin):

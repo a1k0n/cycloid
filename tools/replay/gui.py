@@ -111,7 +111,8 @@ class ReplayGUI:
             n = int(f.readline())
             self.track = np.zeros((n, 5))
             for i in range(n):
-                self.track[i] = [float(x) for x in f.readline().strip().split()]
+                self.track[i] = [
+                    float(x) for x in f.readline().strip().split()]
             f.close()
         except IOError:
             print("no track.txt found; skipping")
@@ -263,8 +264,8 @@ class ReplayGUI:
         n = max(self.i+1, 10)
         # use history from 0..i to learn motor model
         # dv/dt = k1*DC*V + k2*DC*v + k3*v
-        XTX = np.eye(3)
-        XTY = np.array([5., 1, 1])
+        XTX = np.eye(2)
+        XTY = np.array([5., 1])
         v = self.controlstate[1:n, 3].copy()
         dv = v.copy()
         dv[1:] = dv[1:] - dv[:-1]
@@ -272,20 +273,31 @@ class ReplayGUI:
         DC = np.abs(u/127.0)
         V = (1+np.sign(u))/2
         dt = 1.0/30  # FIXME
-        X = np.vstack([DC*V, -DC*v, -v])
+        X = np.vstack([DC*V, -DC*v])
         Y = dv/dt
         XTX += np.dot(X, X.T)
         XTY += np.dot(X, Y.T)
         ks = np.linalg.lstsq(XTX, XTY, rcond=None)[0]
-        imgui.slider_float("k1", ks[0], 0, 10)
-        imgui.slider_float("k2", ks[1], 0, 2)
-        imgui.slider_float("k3", ks[2], 0, 2)
+        imgui.slider_float("motor k1", ks[0], 0, 10)
+        imgui.slider_float("motor k2", ks[1], 0, 2)
 
         imgui.plot_lines("dv/dt", dv/dt)
         imgui.plot_lines("DC*V", DC*V)
-        imgui.plot_lines("DC*v", DC*v)
         imgui.plot_lines("v", v)
-        imgui.plot_lines("step response", motor_step_response(ks, 120))
+        imgui.plot_lines("step response", motor_step_response(
+            [ks[0], ks[1], 0], 120))
+
+        # let's also solve for steering ratios
+        XTX = np.eye(2)
+        XTY = np.array([1., 0])
+        w = self.controlstate[1:n, 5].copy()
+        u = self.controls[:n-1, 1] / 127.0
+        X = np.vstack([u*v, v])
+        XTX += np.dot(X, X.T)
+        XTY += np.dot(X, w.T)
+        ks = np.linalg.lstsq(XTX, XTY, rcond=None)[0]
+        imgui.slider_float("servo ratio", ks[0], -2, 2)
+        imgui.slider_float("servo bias", ks[1], -1, 1)
 
         imgui.end()
 
