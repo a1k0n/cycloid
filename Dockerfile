@@ -34,7 +34,7 @@ ENV PATH "$PATH:/pitools/arm-bcm2708/gcc-linaro-arm-linux-gnueabihf-raspbian-x64
 # In order not to modify 'userland', we just set the library install target correctly.
 # VMCS_INSTALL_PREFIX.
 RUN cmake /usr/cycloid/src \
-  -DCMAKE_TOOLCHAIN_FILE=/usr/cycloid/crosscompile.cmake\
+  -DCMAKE_TOOLCHAIN_FILE=/usr/cycloid/crosscompile.travis \
   -DBUILD_SHARED_LIBS=OFF -DLIBRARY_TYPE=STATIC \
   -DCMAKE_INSTALL_PREFIX=/usr/local -DVMCS_INSTALL_PREFIX=/usr/local
 RUN cmake --build . -- --jobs=$jobs
