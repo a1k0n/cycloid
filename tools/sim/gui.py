@@ -63,7 +63,7 @@ class Car:
         self.theta = 0
         self.v = 0
 
-        self.maxa = 9
+        self.maxa = 10
         self.mk1 = 10
         self.mk2 = 1
 
@@ -96,15 +96,17 @@ class Car:
         if self.v < 0:
             self.v = 0
 
-        self.theta += dt*k
+        self.theta += v*dt*k
         self.theta %= 2*np.pi
         self.x += v*np.cos(theta)*dt
         self.y += v*np.sin(theta)*dt
 
     def kstep(self, k, dt):
-        v = np.sqrt(self.maxa / np.abs(k))
+        v = 10
+        if k != 0:
+            v = np.sqrt(self.maxa / np.abs(k))
         dv = v - self.v
-        self.step(np.clip(0.5*dv, -1, 1), k, dt)
+        self.step(np.clip(dv, -1, 1), k, dt)
 
 
 class SimGUI:
@@ -130,7 +132,7 @@ class SimGUI:
         except IOError:
             print("no track.txt found; skipping")
         # FIXME: add lanewidith to track def
-        self.lanewidth = 0.5
+        self.lanewidth = 0.8
         self.car = Car()
         self.car.v = 0
         self.car.x = self.home[0]
@@ -142,6 +144,15 @@ class SimGUI:
         self.k = 0
         self.shots = None
         self.laptimes = []
+        self.V = np.load("V.npy")
+        self.init_vis()
+
+    def init_vis(self):
+        self.Vtex = []
+        for i in range(48):
+            vt = np.zeros((480, 928, 3), np.uint8)
+            vt[:] = (255 - self.V[i].clip(0, 20)*255.0/20.0)[:, :928, None]
+            self.Vtex.append(load_texture(vt))
 
     def render(self, play):
         imgui.begin("sim")
@@ -156,14 +167,17 @@ class SimGUI:
                 play = True
 
         # sliders
-        imgui.slider_float2("car xy", self.car.x, self.car.y, 0, meterwidth)
-        imgui.slider_float("car theta", self.car.theta * 180 / np.pi, 0, 360)
+        _, xy = imgui.slider_float2("car xy", self.car.x, -self.car.y, 0, meterwidth)
+        self.car.x, self.car.y = xy[0], -xy[1]
+        _, self.car.theta = imgui.slider_float("car theta", self.car.theta, 0, 2*np.pi)
         imgui.slider_float("car v", self.car.v, 0, 10)
         imgui.slider_float2("controls", self.u, self.k, -1, 1)
 
         # render overview
         pos = imgui.get_cursor_screen_pos()
         siz = imgui.get_content_region_available()
+        if siz[1] <= 0:
+            siz = [400, 400]
         imgui.invisible_button("overview", siz[0], siz[1])
         origin = pos
         scale = siz[0] / (meterwidth * 1.1)
@@ -206,7 +220,7 @@ class SimGUI:
                     origin[1] - traj[i, 1] * scale,
                     origin[0] + traj[i+1, 0] * scale,
                     origin[1] - traj[i+1, 1] * scale,
-                    imgui.get_color_u32_rgba(0, 0, 1, 1), 1)
+                    imgui.get_color_u32_rgba(0, 1, 1, 1), 1)
 
         # draw car + velocity
         vxy = scale * self.car.v * .1 * \
@@ -306,10 +320,49 @@ class SimGUI:
 
         return np.clip(self.k + bestdk, -2, 2)
 
+    def Value(self, x, y, theta):
+        ang = np.round(theta*24/np.pi)
+        x = np.clip(x/.02, 0, 928)
+        y = np.clip(-y/.02, 0, 478)
+        x0, y0 = int(x), int(y)
+        fx, fy = x - x0, y - y0
+        # FIXME: trilinear interpolation
+        vv = self.V[int(ang % 48), y0:y0+2, x0:x0+2]
+        return ((1-fx)*(1-fy)*vv[0, 0] + (1-fx)*fy*vv[1, 0]
+                + fx*(1-fy)*vv[0, 1] + fx*fy*vv[1, 1])
+
+    def bestkv(self, car, dt):
+        bestk, bestV, bestC = None, None, None
+        for k in np.linspace(-1.5, 1.5, 11):
+            c = car.clone()
+            c.kstep(k, dt)
+            v = self.Value(c.x, c.y, c.theta)
+            if bestV is None or v < bestV:
+                bestk, bestV, bestC = k, v, c
+        return bestk, bestV, bestC
+
+    def Vplan(self):
+        w, h = imgui.get_window_size()
+        imgui.image(self.Vtex[int(24*self.car.theta/np.pi % 48)], w, 480*w/928)
+        shots = []
+        c = self.car
+        bestk = None
+        for i in range(50):
+            k, v, c = self.bestkv(c, 0.1)
+            if bestk is None:
+                bestk = k
+            shots.append([c.x, c.y])
+        self.shots = np.array([shots])
+
+        return bestk
+
     def step(self, dt):
-        k = self.plan()
+        k = self.Vplan()
         self.k = k
         self.car.kstep(k, dt)
+
+    def idle(self):
+        self.Vplan()
 
 
 def sim():
@@ -337,6 +390,8 @@ def sim():
         t = time.time()
         if play:
             sg.step(min(t - t0, 0.03))
+        else:
+            sg.idle()
         t0 = t
         play = sg.render(play)
 
