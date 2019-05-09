@@ -83,7 +83,7 @@ def likelihood(X, acts):
     angratio = len(acts)/(2*np.pi)  # range of angles, 0..2*pi mapped to 0..len(acts)
 
     filt = acts != 0
-    # acts[filt] -= params.V_THRESHOLD
+    acts[filt] -= params.V_THRESHOLD
     # acts[filt] = -1 + 2*(acts[filt] > params.V_THRESHOLD)
 
     A = np.cumsum(np.concatenate([acts, acts]))

@@ -111,7 +111,7 @@ def tracksubdiv(T, N):
             pts[i, :2] = p[:2, k] + dp*rr
             # fill in normal and curvature
             pts[i, 2:4] = dp*np.sign(T[2, k])  # normal
-            pts[i, 4] = 1.0 / rr  # curvature
+            pts[i, 4] = 1.0 / T[2, k]  # curvature
         else:
             t = s / L[j]
             pts[i, :2] = (l0+p)[:, k]*(1-t) + ln[:, k]*t

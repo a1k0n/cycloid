@@ -21,13 +21,13 @@ CONE_RADIUS = 44.5/3.1415/200.  # cone radius in meters
 #NOISE_LONG = 10
 #NOISE_LAT = 0.5
 
-NOISE_ANGULAR = 14
-NOISE_LONG = 23
-NOISE_LAT = 12
+NOISE_ANGULAR = 2.75
+NOISE_LONG = 50
+NOISE_LAT = 0.25
 
 # "temperature" for particle filter resampling
 # (depends on magnitude of activations, which are summed pixel intensity values)
-PF_TEMP = 100e-6
+PF_TEMP = 200e-6
 
 # not used by particle filter, just visualization
 V_THRESHOLD = 30
