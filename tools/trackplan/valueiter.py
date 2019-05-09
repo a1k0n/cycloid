@@ -142,12 +142,12 @@ def main():
     print("precomputing remappings...")
     rm1, rm2, pcosts = computeremaps(V.shape[2], V.shape[1], pathcost)
 
-    v0 = np.sum(V)
+    v0 = np.sum(V, dtype=np.float64)
     s = tqdm.trange(500)
     s.set_postfix_str(str(v0))
     for i in s:
         runiter(V, rm1, rm2, pcosts)
-        v1 = np.sum(V)
+        v1 = np.sum(V, dtype=np.float64)
         if v1 == v0:
             break
         dv = v1 - v0
