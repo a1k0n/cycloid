@@ -149,9 +149,11 @@ class SimGUI:
 
     def init_vis(self):
         self.Vtex = []
-        for i in range(48):
-            vt = np.zeros((480, 928, 3), np.uint8)
-            vt[:] = (255 - self.V[i].clip(0, 20)*255.0/20.0)[:, :928, None]
+        for i in range(96):
+            h = 16*(self.V.shape[1]//16)
+            w = 16*(self.V.shape[2]//16)
+            vt = np.zeros((h, w, 3), np.uint8)
+            vt[:] = (255 - self.V[i].clip(0, 20)*255.0/20.0)[:h, :w, None]
             self.Vtex.append(load_texture(vt))
 
     def render(self, play):
@@ -172,6 +174,7 @@ class SimGUI:
         _, self.car.theta = imgui.slider_float("car theta", self.car.theta, 0, 2*np.pi)
         imgui.slider_float("car v", self.car.v, 0, 10)
         imgui.slider_float2("controls", self.u, self.k, -1, 1)
+        _, self.lanewidth = imgui.slider_float("lane width", self.lanewidth, 0.1, 2.0)
 
         # render overview
         pos = imgui.get_cursor_screen_pos()
@@ -321,19 +324,29 @@ class SimGUI:
         return np.clip(self.k + bestdk, -2, 2)
 
     def Value(self, x, y, theta):
-        ang = np.round(theta*24/np.pi)
-        x = np.clip(x/.02, 0, 928)
-        y = np.clip(-y/.02, 0, 478)
-        x0, y0 = int(x), int(y)
-        fx, fy = x - x0, y - y0
-        # FIXME: trilinear interpolation
-        vv = self.V[int(ang % 48), y0:y0+2, x0:x0+2]
-        return ((1-fx)*(1-fy)*vv[0, 0] + (1-fx)*fy*vv[1, 0]
-                + fx*(1-fy)*vv[0, 1] + fx*fy*vv[1, 1])
+        # test: downsample
+        if not hasattr(self, 'Vd'):
+            # FIXME: area resampling; be careful of how angles are handled though
+            self.Vd = self.V[::4, ::5, ::5].astype(np.float16)
+        Vd = self.Vd
+        #ang = theta*48/np.pi % 96
+        #x = np.clip(x/.02, 0, self.V.shape[2]-2)
+        #y = np.clip(-y/.02, 0, self.V.shape[1]-2)
+        ang = (theta*Vd.shape[0]/2/np.pi) % Vd.shape[0]
+        x = np.clip(x/.1, 0, Vd.shape[2]-2)
+        y = np.clip(-y/.1, 0, Vd.shape[1]-2)
+        x0, y0, a0 = int(x), int(y), int(ang)
+        fx, fy, fa = x - x0, y - y0, ang - a0
+        # trilinear interpolation
+        vv = Vd[[a0, (a0+1) % Vd.shape[0]], y0:y0+2, x0:x0+2]
+        vv = (1-fa)*vv[0] + fa*vv[1]
+        vv = (1-fy)*vv[0] + fy*vv[1]
+        vv = (1-fx)*vv[0] + fx*vv[1]
+        return vv
 
     def bestkv(self, car, dt):
         bestk, bestV, bestC = None, None, None
-        for k in np.linspace(-1.5, 1.5, 11):
+        for k in np.linspace(-1.3, 1.3, 7):
             c = car.clone()
             c.kstep(k, dt)
             v = self.Value(c.x, c.y, c.theta)
@@ -343,7 +356,7 @@ class SimGUI:
 
     def Vplan(self):
         w, h = imgui.get_window_size()
-        imgui.image(self.Vtex[int(24*self.car.theta/np.pi % 48)], w, 480*w/928)
+        imgui.image(self.Vtex[int(48*self.car.theta/np.pi % 96)], w, h)
         shots = []
         c = self.car
         bestk = None
