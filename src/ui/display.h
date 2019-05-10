@@ -15,8 +15,7 @@ class UIDisplay {
 
   void UpdateConeView(const uint8_t *yuv, int ncones, int *conesx);
 
-  void UpdateParticleView(const coneslam::Localizer *l,
-          float trackx, float tracky, float nx, float ny);
+  void UpdateParticleView(const coneslam::Localizer *l);
 
   void UpdateConfig(const char *configmenu[], int nconfigs,
       int config_item, const int16_t *config_values);

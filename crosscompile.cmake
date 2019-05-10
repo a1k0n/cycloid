@@ -20,5 +20,6 @@ IF (CMAKE_BUILD_TYPE MATCHES "Debug")
 ENDIF()
 
 # avoids annoying and pointless warnings from gcc
-SET(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -U_FORTIFY_SOURCE")
+SET(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -U_FORTIFY_SOURCE -mfp16-format=ieee")
+SET(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -U_FORTIFY_SOURCE -mfp16-format=ieee -mfpu=neon-fp16")
 SET(CMAKE_ASM_FLAGS "${CMAKE_ASM_FLAGS} -c")

@@ -50,6 +50,8 @@ def read_frame(f):
             framedata['c1'] = c0c1[nP:]
         elif n == b'CTLs':  # controller state
             framedata['controldata'] = struct.unpack("=17f", ick.read())
+        elif n == b'CTL2':  # controller state
+            framedata['controldata'] = struct.unpack("=26f", ick.read())
         elif n == b'Y420':  # YUV420 frame
             w, = struct.unpack('=H', ick.read(2))
             framedata['yuv420'] = np.frombuffer(

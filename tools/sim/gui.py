@@ -144,6 +144,7 @@ class SimGUI:
         self.k = 0
         self.shots = None
         self.laptimes = []
+        self.lookstep = 0.01
         self.V = np.load("V.npy")
         self.init_vis()
 
@@ -327,14 +328,15 @@ class SimGUI:
         # test: downsample
         if not hasattr(self, 'Vd'):
             # FIXME: area resampling; be careful of how angles are handled though
-            self.Vd = self.V[::4, ::5, ::5].astype(np.float16)
+            #self.Vd = self.V[::4, ::5, ::5].astype(np.float16)
+            self.Vd = self.V.astype(np.float16)
+            #self.Vd = self.V[:, ::5, ::5].astype(np.float16)
         Vd = self.Vd
-        #ang = theta*48/np.pi % 96
-        #x = np.clip(x/.02, 0, self.V.shape[2]-2)
-        #y = np.clip(-y/.02, 0, self.V.shape[1]-2)
+        x = np.clip(x/.02, 0, self.V.shape[2]-2)
+        y = np.clip(-y/.02, 0, self.V.shape[1]-2)
         ang = (theta*Vd.shape[0]/2/np.pi) % Vd.shape[0]
-        x = np.clip(x/.1, 0, Vd.shape[2]-2)
-        y = np.clip(-y/.1, 0, Vd.shape[1]-2)
+        #x = np.clip(x/.1, 0, Vd.shape[2]-2)
+        #y = np.clip(-y/.1, 0, Vd.shape[1]-2)
         x0, y0, a0 = int(x), int(y), int(ang)
         fx, fy, fa = x - x0, y - y0, ang - a0
         # trilinear interpolation
@@ -356,12 +358,14 @@ class SimGUI:
 
     def Vplan(self):
         w, h = imgui.get_window_size()
+        h = self.V.shape[1] * w / self.V.shape[2]
+        _, self.lookstep = imgui.slider_float("lookahead step", self.lookstep, 0, 1, power=1.5)
         imgui.image(self.Vtex[int(48*self.car.theta/np.pi % 96)], w, h)
         shots = []
         c = self.car
         bestk = None
         for i in range(50):
-            k, v, c = self.bestkv(c, 0.1)
+            k, v, c = self.bestkv(c, self.lookstep)
             if bestk is None:
                 bestk = k
             shots.append([c.x, c.y])

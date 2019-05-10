@@ -43,6 +43,8 @@ int main() {
     encoders[0] = encoders[1] = encoders[2] = encoders[3] = enc - lastenc;
 
     control.UpdateState(config, accel, gyro, 1, encoders, dt);
+    #if 0
+    // broken now by a dependency on coneslam. oops.
     control.UpdateLocation(config, x, y, theta);
     if (!control.GetControl(config, 0, 0, &throttle, &steering, dt, true, i)) {
       break;
@@ -51,6 +53,7 @@ int main() {
     printf("%d xy %f %f theta %f v %f w %f input %f %f control ", i, x, y, theta, v, w, throttle, steering);
     control.Dump();
     printf("\n");
+    #endif
 
     if (v > 0) {
       w = steering*v;

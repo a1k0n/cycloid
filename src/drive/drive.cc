@@ -183,9 +183,7 @@ class Driver: public CameraReceiver {
 
     display_.UpdateConeView(buf, 0, NULL);
     display_.UpdateEncoders(carstate_.wheel_pos);
-    display_.UpdateParticleView(localizer_,
-        controller_.cx_, controller_.cy_,
-        controller_.nx_, controller_.ny_);
+    display_.UpdateParticleView(localizer_);
 
     pthread_mutex_unlock(&localizer_mutex_);
     memcpy(last_encoders_, carstate_.wheel_pos, 4 * sizeof(uint16_t));
@@ -220,14 +218,7 @@ class Driver: public CameraReceiver {
       perror("localize mutex");
     } else {
       localizer_->Predict(ds, carstate_.gyro[2], dt);
-
-      coneslam::Particle meanp;
-      localizer_->GetLocationEstimate(&meanp);
-      controller_.UpdateLocation(config_, meanp.x, meanp.y, meanp.theta);
-      const coneslam::Particle *ps = localizer_->GetParticles();
-      for (int i = 0; i < localizer_->NumParticles(); i++) {
-          controller_.AddSample(config_, ps[i].x, ps[i].y, ps[i].theta);
-      }
+      controller_.UpdateLocation(config_, localizer_);
       pthread_mutex_unlock(&localizer_mutex_);
     }
 

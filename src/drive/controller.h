@@ -1,11 +1,12 @@
 #ifndef DRIVE_CONTROLLER_H_
 #define DRIVE_CONTROLLER_H_
 
-#include <Eigen/Dense>
 #include <math.h>
+#include <Eigen/Dense>
 
+#include "coneslam/localize.h"
 #include "drive/config.h"
-#include "drive/trajtrack.h"
+#include "drive/vflookup.h"
 
 class DriveController {
  public:
@@ -17,10 +18,7 @@ class DriveController {
       uint8_t servo_pos,
       const uint16_t *wheel_encoders, float dt);
 
-  void UpdateLocation(const DriverConfig &config,
-          float x, float y, float theta);
-  void AddSample(const DriverConfig &config,
-          float x, float y, float theta);
+  void UpdateLocation(const DriverConfig &config, const coneslam::Localizer *l);
 
   bool GetControl(const DriverConfig &config,
       float throttle_in, float steering_in,
@@ -33,8 +31,6 @@ class DriveController {
   int Serialize(uint8_t *buf, int buflen) const;
   void Dump() const;
 
-  TrajectoryTracker *GetTracker() { return &track_; }
-
   // car state
   float x_, y_, theta_;
   float vf_, vr_;        // front and rear wheel velocity
@@ -44,17 +40,15 @@ class DriveController {
   float prev_v_err_;     // previous velocity error
   float ierr_k_;         // integrated curvature error
 
-  float target_k_;  // mean path computation
+  float target_ks_[7];    // next potential control actions
+  float target_k_Vs_[7];  // total value of each action over all particles
   int k_samples_;
 
   float target_v_, target_w_;  // control targets
-  float ye_, psie_, k_, vk_;   // relative trajectory target
   float bw_w_, bw_v_;          // control bandwidth for yaw and speed
 
-  float cx_, cy_, nx_, ny_;
-
  private:
-  TrajectoryTracker track_;
+  ValueFuncLookup V_;
 };
 
 #endif  // DRIVE_CONTROLLER_H_

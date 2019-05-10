@@ -1,6 +1,7 @@
 import numpy as np
 import cv2
 import tqdm
+import struct
 
 # FIXME / TODO:
 #  - wrap this whole thing up with functions
@@ -125,10 +126,24 @@ def runiter(V, rm1, rm2, pcosts):
             V[ang] = np.minimum(V[ang], pcosts[ang, a] + Vd)
 
 
+def savebin(V):
+    f = open("vf.bin", "wb")
+    a, h, w = V.shape
+    # header:
+    #  - uint16 num angles
+    #  - uint16 height
+    #  - uint16 width
+    #  - float  pixel scale (pixels/meter)
+    hlen = 3*2 + 4
+    f.write(struct.pack("=4sIHHHf", b'VFNC', hlen, a, h, w, 50))
+    f.write(V.astype(np.float16).tobytes())
+    f.close()
+
+
 def main():
     try:
-        print("resuming V.npy; delete to start over")
         V = np.load("V.npy")
+        print("resuming V.npy; delete to start over")
     except Exception:
         V = 1000.*np.ones((96, 330, 600), np.float32)  # we're using 96 angles, stride dx 15, dy -3..+3
     # initialize finish line
@@ -154,6 +169,7 @@ def main():
         v0 = v1
         s.set_postfix_str(str(v0) + " dv " + str(dv))
     np.save("V.npy", V)
+    savebin(V)
 
 
 if __name__ == '__main__':
