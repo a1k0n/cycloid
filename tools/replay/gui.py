@@ -204,7 +204,7 @@ class ReplayGUI:
         for a in range(7):
             imgui.slider_float("k_%f" % self.controlstate[i, 12+a], self.controlstate[i, 12+7+a], 0, 100000, power=10)
         maxa = self.controlstate[i, 12+np.argmin(self.controlstate[i, 12+7:12+14])]
-        imgui.slider_float("target k", maxa, -1.3, 1.3)
+        imgui.slider_float("target k", maxa, 2, -2)
         v = self.controlstate[i, 3]
         if v > 0.5:
             k = self.controlstate[i, 4] / v

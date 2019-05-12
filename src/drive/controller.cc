@@ -1,6 +1,7 @@
 #include <math.h>
 #include <stdint.h>
 #include <stdio.h>
+#include <sys/time.h>
 
 #include "coneslam/localize.h"
 #include "drive/controller.h"
@@ -74,35 +75,48 @@ void DriveController::UpdateLocation(const DriverConfig &config,
   y_ = meanp.y;
 
   // TODO(asloane): consider more feasible maneuvers
-  target_ks_[0] = -1.3;
-  target_ks_[1] = -0.87;
-  target_ks_[2] = -0.44;
-  target_ks_[3] = 0;
-  target_ks_[4] = 0.44;
-  target_ks_[5] = 0.87;
-  target_ks_[6] = 1.3;
-  memset(target_k_Vs_, 0, sizeof(target_k_Vs_));
-  k_samples_ = 0;
+  // curvature can swing about 0.3 1/m from wherever it is now in 10ms
+  float k0 = 0;
+  if (vr_ > 0.3) {
+    k0 = clip(w_ / vr_, -0.7, 0.7);
+  }
 
-  float hT = 0.02;  // horizon time 10ms (configurable?)
+  //timeval tv0, tv1;
+  //gettimeofday(&tv0, NULL);
+  float hT = config.steering_kpy * 0.01;  // hack
   float vmax = config.speed_limit * 0.01;
   float kmin = config.traction_limit * 0.01 / (vmax * vmax);
   for (int a = 0; a < 7; a++) {
     // compute next x, y, theta
+    float k = k0 - (a-3)*0.2;
+    target_ks_[a] = k;
+    target_k_Vs_[a] = 0;
     float targetv = vmax;
-    float k = target_ks_[a];
     if (fabs(target_ks_[a]) > kmin) {
       targetv = sqrt(config.traction_limit * 0.01 / fabs(k));
     }
-    float v = 0.85 * vf_ + 0.15 * targetv;  // numbers from my butt
+    float v = 0.95 * vf_ + 0.05 * targetv;  // numbers from my butt
+    float ks = k * v * hT;
     for (int i = 0; i < l->NumParticles(); i++) {
-      float theta1 = ps[i].theta + v * hT * k;
-      float midtheta = ps[i].theta + 0.5 * v * hT * k;
-      float C = cos(midtheta), S = sin(midtheta);
-      target_k_Vs_[a] += V_.V(ps[i].x + v*C*hT, ps[i].y + v*S*hT, theta1);
+      float x0 = ps[i].x, y0 = ps[i].y, t0 = ps[i].theta;
+      float theta1 = t0 + ks;
+      float C = cos(t0), S = sin(t0);
+      float x1, y1;
+      if (k == 0) {
+        x1 = x0 + v*C*hT;
+        y1 = y0 + v*S*hT;
+      } else {
+        x1 = x0 + (sin(ps[i].theta + ks) - S) / k;
+        y1 = y0 + (C - cos(ps[i].theta + ks)) / k;
+      }
+      target_k_Vs_[a] += V_.V(x1, y1, theta1);
     }
   }
   k_samples_ = l->NumParticles();
+  //gettimeofday(&tv1, NULL);
+  //printf("control %dus\n", (tv1.tv_sec - tv0.tv_sec)*1e6 + tv1.tv_usec - tv0.tv_usec);
+  //printf("control %dus\n", tv1.tv_usec - tv0.tv_usec);
+  // 700-1400us
 }
 
 bool DriveController::GetControl(const DriverConfig &config,

@@ -62,6 +62,7 @@ class Car:
         self.y = 0
         self.theta = 0
         self.v = 0
+        self.w = 0
 
         self.maxa = 10
         self.mk1 = 10
@@ -69,7 +70,7 @@ class Car:
 
     def clone(self):
         c = Car()
-        c.x, c.y, c.theta, c.v = self.x, self.y, self.theta, self.v
+        c.x, c.y, c.theta, c.v, c.w = self.x, self.y, self.theta, self.v, self.w
         return c
 
     def step(self, u_v, u_delta, dt):
@@ -77,8 +78,9 @@ class Car:
         V = (1 + np.sign(u_v))/2
         dc = np.abs(u_v)
         dv = self.mk1*V*dc - self.mk2*self.v*dc
-        # underster?
         k = u_delta
+        self.w = 0.8*self.w + 0.2*(k*self.v)
+        # underster?
         v = self.v + dv*dt*0.5
         a = v**2 * np.abs(k)
         if a > self.maxa:
@@ -90,13 +92,13 @@ class Car:
         dv -= 100*dt*np.cos(k)
 
         v = self.v + dv*dt*0.5
-        theta = self.theta + dt*k*0.5
+        theta = self.theta + dt*self.w*0.5
 
         self.v += dv*dt
         if self.v < 0:
             self.v = 0
 
-        self.theta += v*dt*k
+        self.theta += self.w*dt
         self.theta %= 2*np.pi
         self.x += v*np.cos(theta)*dt
         self.y += v*np.sin(theta)*dt

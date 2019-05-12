@@ -50,6 +50,8 @@ def read_frame(f):
             framedata['c1'] = c0c1[nP:]
         elif n == b'CTLs':  # controller state
             framedata['controldata'] = struct.unpack("=17f", ick.read())
+        elif n == b'CTL2':  # controller state
+            framedata['controldata'] = struct.unpack("=26f", ick.read())
         elif n == b'Y420':  # YUV420 frame
             w, = struct.unpack('=H', ick.read(2))
             framedata['yuv420'] = np.frombuffer(ick.read(), np.uint8).reshape((-1, w))
@@ -74,6 +76,14 @@ class RecordIterator:
 
     def next(self):
         return self.__next__()
+
+
+def ang2pix(lat, lon):
+    theta = np.pi/2 - lat
+    theta = theta*(1 + dist_coeffs[0]*theta**2)
+    x = (fx*np.outer(theta, np.sin(-lon)) + cx)
+    y = (-fy*np.outer(theta, np.cos(-lon)) + cy)
+    return np.stack([x, y]).transpose(1, 2, 0).astype(np.float32)
 
 
 def parse_args():
@@ -109,13 +119,6 @@ if __name__ == '__main__':
         fx, fy, _ = np.diag(camera_matrix) / 4.05
         cx, cy = camera_matrix[:2, 2] / 4.05
         print('camera calibration: fx', fx, 'fy', fy, 'cx', cx, 'cy', cy, 'k1', dist_coeffs[0])
-        def ang2pix(lat, lon):
-            theta = np.pi/2 - lat
-            theta = theta*(1 + dist_coeffs[0]*theta**2)
-            x = (fx*np.outer(theta, np.sin(-lon)) + cx)
-            y = (-fy*np.outer(theta, np.cos(-lon)) + cy)
-            return np.stack([x, y]).transpose(1, 2, 0).astype(np.float32)
-
         f32map = ang2pix(np.linspace(np.pi/2, -np.pi/2, 1024),
                          np.linspace(-np.pi + np.pi/4, np.pi + np.pi/4, 2048))
         remap = cv2.convertMaps(f32map, None, cv2.CV_16SC2)
@@ -137,6 +140,7 @@ if __name__ == '__main__':
     n = 0
     variance = 0.0 
     max_dt = 0.0
+    ang = 0
     while True:
         ok, data = read_frame(f)
         if not ok:
@@ -152,6 +156,10 @@ if __name__ == '__main__':
         bgr = np.clip(bgr * args.exposure, 0, 255).astype(np.uint8)
         anncenter = (320, 420)
         if remap is not None:
+            print(ang)
+            f32map = ang2pix(np.linspace(np.pi/2, -np.pi/2, 1024),
+                             np.linspace(-np.pi + np.pi/4 + ang, np.pi + np.pi/4 + ang, 2048))
+            remap = cv2.convertMaps(f32map, None, cv2.CV_16SC2)
             bgr = cv2.remap(bgr, remap[0], remap[1], cv2.INTER_LINEAR)
             anncenter = (bgr.shape[1]//2, 600)
         if t0 is None:
@@ -163,6 +171,7 @@ if __name__ == '__main__':
             dt = tstamp - tstamp_last
             tstamp_last = tstamp
 
+        ang += carstate[3][2]*dt
         variance += dt**2
         max_dt= max(dt, max_dt)
 
@@ -195,10 +204,9 @@ if __name__ == '__main__':
         if args.interactive:
             cv2.imshow("particles", partview)
 
-        (x, y, theta, vf, vr, w, ierr_v, ierr_w, delta,
-         target_k, target_v, target_w, ye, psie, k, bw_w, bw_v) = controldata
-        print('xy', x, y, 'theta', theta, 'ye', ye, 'psie', psie, 'k', k)
-        print('target_k', target_k, 'target_v', target_v, target_k*target_v)
+        (x, y, vf, vr, w, prevsteer, prevthrottle, ierr_k, target_v, target_w, bw_w, bw_v) = controldata[:12]
+        print('xy', x, y)
+        #print('target_k', target_k, 'target_v', target_v, target_k*target_v)
         print('target_w', target_w, 'w', w)
 
         if args.interactive:
