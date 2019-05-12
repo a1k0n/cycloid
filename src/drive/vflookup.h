@@ -2,6 +2,7 @@
 #define DRIVE_VFLOOKUP_H_
 
 #include <math.h>
+#include <cmath>
 
 class ValueFuncLookup {
  public:
