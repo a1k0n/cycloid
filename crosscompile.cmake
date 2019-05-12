@@ -12,7 +12,7 @@ SET(CMAKE_SYSTEM_PROCESSOR arm)
 
 #ADD_DEFINITIONS("-march=armv6")
 #add_definitions("-mcpu=arm1176jzf-s -mfpu=vfp -mfloat-abi=hard")
-add_definitions("-mcpu=cortex-a53 -mfpu=neon-fp-armv8 -mfloat-abi=hard -funsafe-math-optimizations")
+add_definitions("-mcpu=cortex-a53 -mfpu=neon-fp-armv8 -mfloat-abi=hard -funsafe-math-optimizations -mfp16-format=ieee")
 
 # rdynamic means the backtrace should work
 IF (CMAKE_BUILD_TYPE MATCHES "Debug")
@@ -20,6 +20,6 @@ IF (CMAKE_BUILD_TYPE MATCHES "Debug")
 ENDIF()
 
 # avoids annoying and pointless warnings from gcc
-SET(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -U_FORTIFY_SOURCE -mfp16-format=ieee")
-SET(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -U_FORTIFY_SOURCE -mfp16-format=ieee -mfpu=neon-fp16")
+SET(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -U_FORTIFY_SOURCE")
+SET(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -U_FORTIFY_SOURCE")
 SET(CMAKE_ASM_FLAGS "${CMAKE_ASM_FLAGS} -c")
