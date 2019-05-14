@@ -230,7 +230,7 @@ class Driver: public CameraReceiver {
     float u_s = carstate_.steering / 127.0;
     if (controller_.GetControl(config_, js_throttle_ / 32767.0,
           js_steering_ / 32767.0, &u_a, &u_s, dt, autodrive_, frame_)) {
-      carstate_.steering = SERVO_DIRECTION * 127 * u_s;
+      carstate_.steering = 127 * u_s;
       carstate_.throttle = 127 * u_a;
 
       // override steering for servo angle calibration
@@ -449,8 +449,8 @@ class DriverInputReceiver : public InputReceiver {
 const char *DriverInputReceiver::configmenu[] = {
   "max speed",
   "traction limit",
-  "steering kP",
-  "steering kD",
+  "lookahead dist",
+  "lookahead dkdt",
   "motor input",
   "motor back-EMF",
   "turn-in lift",
@@ -458,7 +458,6 @@ const char *DriverInputReceiver::configmenu[] = {
   "servo offset",
   "servo finetune",
   "cone precision",
-  "lookahead",
 };
 const int DriverInputReceiver::N_CONFIGITEMS = sizeof(configmenu) / sizeof(configmenu[0]);
 

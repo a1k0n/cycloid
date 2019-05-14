@@ -11,7 +11,6 @@ const float WHEEL_DIAMETER = 0.0666;
 const float DRIVE_RATIO = 84./25. * 2.1;  // 84t spur, 25t pinion, 2.1 final drive
 const float MOTOR_POLES = 3;  // brushless sensor counts per motor revolution
 const float V_SCALE = WHEEL_DIAMETER*M_PI / DRIVE_RATIO / MOTOR_POLES;
-const float SERVO_DIRECTION = -1;  // 1 if +servo is left, -1 if +servo is right
 
 // Dynamic configuration variables
 // can be changed via commandline or controller
@@ -21,8 +20,8 @@ class DriverConfig {
   int16_t speed_limit;  // m/s, maximum allowed speed
   int16_t traction_limit;  // m/s^2 (lateral force, v*w product)
 
-  int16_t steering_kpy;  // PID curve following proportional const
-  int16_t steering_kvy;  // derivative const
+  int16_t lookahead_dist;   // value function lookahead distance
+  int16_t lookahead_krate;  // value function lookahead turn rate
 
   // motor parameters
   int16_t motor_bw;     // input magnitude
@@ -37,28 +36,24 @@ class DriverConfig {
 
   int16_t lm_precision;  // landmark precision (1/sigma^2)
 
-  int16_t lookahead;  // servo fixed value for turn calibration
-
   DriverConfig() {
     // Default values
     speed_limit = 8.0 * 100;
     traction_limit = 8.0 * 100;
 
-    steering_kpy = 0.5 * 100;
-    steering_kvy = 1.0 * 100;
+    lookahead_dist = 0.3 * 100;
+    lookahead_krate = 0.1 * 100;
 
     motor_bw = 0.10 * 100;
     motor_k2 = 1.50 * 100;
 
     turnin_lift = 0;
 
-    servo_rate = 1.30 * 100;
+    servo_rate = -1.30 * 100;
     servo_offset = 0.10 * 100;
-    servo_finetune = 1.00 * 100;
+    servo_finetune = 2.00 * 100;
 
     lm_precision = 100;
-
-    lookahead = 0;
   }
 
   bool Save() {

@@ -136,6 +136,11 @@ class ReplayGUI:
     def render_timeline(self):
         imgui.begin("timeline")
         tstamp = self.frame['tstamp']
+        if imgui.button("<"):
+            self.playing = False
+            if self.i > 0:
+                self.loadframe(self.i - 1)
+        imgui.same_line()
         if self.playing:
             if (self.i == self.scanner.num_frames()-1) or imgui.button("stop"):
                 self.playing = False
@@ -144,6 +149,10 @@ class ReplayGUI:
         elif imgui.button("play"):
             self.playing = True
             self.t0 = tstamp - time.time()
+        imgui.same_line()
+        if imgui.button(">"):
+            self.playing = False
+            self.nextframe()
         tsfrac = tstamp - int(tstamp)
         tstring = time.strftime("%H:%M:%S.", time.localtime(
             tstamp)) + "%02d" % (tsfrac*100)

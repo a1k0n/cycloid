@@ -77,34 +77,29 @@ void DriveController::UpdateLocation(const DriverConfig &config,
   // TODO(asloane): consider more feasible maneuvers
   // curvature can swing about 0.3 1/m from wherever it is now in 10ms
   float k0 = 0;
+  float kmax = 1.3;
+  float dk = config.lookahead_krate * 0.01 / 3;
   if (vr_ > 0.3) {
-    k0 = clip(w_ / vr_, -0.7, 0.7);
+    k0 = clip(w_ / vr_, -kmax+3*dk, kmax-3*dk);
   }
 
   //timeval tv0, tv1;
   //gettimeofday(&tv0, NULL);
-  float hT = config.steering_kpy * 0.01;  // hack
-  float vmax = config.speed_limit * 0.01;
-  float kmin = config.traction_limit * 0.01 / (vmax * vmax);
+  float s = config.lookahead_dist * 0.01;
   for (int a = 0; a < 7; a++) {
     // compute next x, y, theta
-    float k = k0 - (a-3)*0.2;
+    float k = k0 - (a-3)*dk;
     target_ks_[a] = k;
     target_k_Vs_[a] = 0;
-    float targetv = vmax;
-    if (fabs(target_ks_[a]) > kmin) {
-      targetv = sqrt(config.traction_limit * 0.01 / fabs(k));
-    }
-    float v = 0.95 * vf_ + 0.05 * targetv;  // numbers from my butt
-    float ks = k * v * hT;
+    float ks = k * s;
     for (int i = 0; i < l->NumParticles(); i++) {
       float x0 = ps[i].x, y0 = ps[i].y, t0 = ps[i].theta;
       float theta1 = t0 + ks;
       float C = cos(t0), S = sin(t0);
       float x1, y1;
       if (k == 0) {
-        x1 = x0 + v*C*hT;
-        y1 = y0 + v*S*hT;
+        x1 = x0 + C*s;
+        y1 = y0 + S*s;
       } else {
         x1 = x0 + (sin(ps[i].theta + ks) - S) / k;
         y1 = y0 + (C - cos(ps[i].theta + ks)) / k;
@@ -149,7 +144,7 @@ bool DriveController::GetControl(const DriverConfig &config,
     *throttle_out = throttle_in;
     // yaw is backwards
     *steering_out =
-        clip(-steering_in, STEER_LIMIT_LOW / 127.0, STEER_LIMIT_HIGH / 127.0);
+        clip(steering_in, STEER_LIMIT_LOW / 127.0, STEER_LIMIT_HIGH / 127.0);
     prev_steer_ = *steering_out;
     prev_throttle_ = *throttle_out;
     prev_v_err_ = 0;
@@ -157,9 +152,9 @@ bool DriveController::GetControl(const DriverConfig &config,
     return true;
   }
 
-  // max curvature is 1m radius
+  // max curvature is servo_rate
   // use a quadratic curve to give finer control near center
-  float k = -steering_in * 2 * fabs(steering_in);
+  float k = steering_in * config.servo_rate * 0.01 * fabs(steering_in);
   float vk = k;  // curvature to use for velocity calc
   float vmax = throttle_in * config.speed_limit * 0.01;
   if (autodrive) {
@@ -192,7 +187,8 @@ bool DriveController::GetControl(const DriverConfig &config,
   } else {
     ierr_k_ = 0;
   }
-  *steering_out = clip((target_k - srv_off) * BW_w - ierr_k_, -1, 1);
+  *steering_out = clip((target_k - srv_off) * BW_w + ierr_k_,
+                       STEER_LIMIT_LOW / 127.0, STEER_LIMIT_HIGH / 127.0);
   prev_steer_ = *steering_out;
 
   float BW_v = 0.01 * config.motor_bw;
