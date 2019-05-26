@@ -1,0 +1,198 @@
+import cv2
+import numpy as np
+import scipy.optimize
+
+import recordreader
+
+
+WHEELTICK_SCALE = 0.066
+K = np.load("../../tools/camcal/camera_matrix.npy")
+dist = np.load("../../tools/camcal/dist_coeffs.npy")
+K[:2] /= 4.05
+fx, fy = np.diag(K)[:2]
+cx, cy = K[:2, 2]
+mapsz = 300  # map size
+Z = 14   # map zoom factor
+uv = np.mgrid[:480, :640][[1, 0]].transpose(1, 2, 0).astype(np.float32)
+mask = ((uv[:, :, 1] - cy)**2 + (uv[:, :, 0] - cx)**2) < (np.pi/2.2 * fx)**2
+pts = cv2.fisheye.undistortPoints(uv[None, mask], K, dist)
+
+ceilmap = np.zeros((mapsz, mapsz), np.float32)
+ceilN = np.ones((mapsz, mapsz), np.float32)
+ceilmean = ceilmap / ceilN
+
+
+def Maplookup(x, y, theta):
+    S, C = np.sin(theta), np.cos(theta)
+    R = np.array([[C, S], [-S, C]])*Z
+    p = np.dot(pts[0], R.T) + np.array([x, y])
+    pi = p.astype(np.int)
+    pt = p - pi
+    t00 = (1-pt[:, 1])*(1-pt[:, 0])
+    t01 = (1-pt[:, 1])*(pt[:, 0])
+    t10 = (pt[:, 1])*(1-pt[:, 0])
+    t11 = (pt[:, 1])*(pt[:, 0])
+    m = (t00*ceilmean[pi[:, 1], pi[:, 0]+1] +
+         t01*ceilmean[pi[:, 1], pi[:, 0]+1] +
+         t10*ceilmean[pi[:, 1]+1, pi[:, 0]+1] +
+         t11*ceilmean[pi[:, 1]+1, pi[:, 0]+1])
+    return m
+
+
+def Mapupdate(xi, yi, theta, gray):
+    S, C = np.sin(theta), np.cos(theta)
+    R = np.array([[C, S], [-S, C]])*Z
+    p = np.dot(pts[0], R.T) + np.array([xi, yi])
+    pi = p.astype(np.int)
+    pt = p - pi
+    t00 = (1-pt[:, 1])*(1-pt[:, 0])
+    t01 = (1-pt[:, 1])*(pt[:, 0])
+    t10 = (pt[:, 1])*(1-pt[:, 0])
+    t11 = (pt[:, 1])*(pt[:, 0])
+    idxs = pi[:, 1] * mapsz + pi[:, 0]
+    ceilN[:] += np.bincount(idxs, t00.reshape(-1), mapsz*mapsz).reshape(mapsz, mapsz)
+    ceilN[:] += np.bincount(idxs+1, t01.reshape(-1), mapsz*mapsz).reshape(mapsz, mapsz)
+    ceilN[:] += np.bincount(idxs+mapsz, t10.reshape(-1), mapsz*mapsz).reshape(mapsz, mapsz)
+    ceilN[:] += np.bincount(idxs+mapsz+1, t11.reshape(-1), mapsz*mapsz).reshape(mapsz, mapsz)
+    ceilmap[:] += np.bincount(idxs, t00*gray[mask], mapsz*mapsz).reshape(mapsz, mapsz)
+    ceilmap[:] += np.bincount(idxs+1, t01*gray[mask], mapsz*mapsz).reshape(mapsz, mapsz)
+    ceilmap[:] += np.bincount(idxs+mapsz, t10*gray[mask], mapsz*mapsz).reshape(mapsz, mapsz)
+    ceilmap[:] += np.bincount(idxs+mapsz+1, t11*gray[mask], mapsz*mapsz).reshape(mapsz, mapsz)
+    ceilmean[:] = ceilmap / ceilN
+    #ceilmean[:] = cv2.GaussianBlur(ceilmap / ceilN, (7, 7), 4)
+
+
+def main(fname, skips=0):
+    f = open(fname, 'rb')
+    ts0 = None
+    theta = -0.09
+    ri = recordreader.RecordIterator(f)
+    for _ in range(skips):
+        ri.__next__()
+
+    xi, yi = mapsz/2, mapsz/2
+
+    ptrange = np.max(np.linalg.norm(pts[0], axis=1))
+    firstiter = False
+    if firstiter:
+        poses = []
+    else:
+        poses = np.load("poses.npy")
+
+    frameno = 0
+
+    vidout = None
+
+    if False:
+        vidout = cv2.VideoWriter("ba.mp4", cv2.VideoWriter_fourcc(
+            'X', '2', '6', '4'), 30, (640, 480), True)
+
+    lastw = None
+    for frame in ri:
+        gray = frame['yuv420'][:480]
+        bgr = cv2.cvtColor(frame['yuv420'], cv2.COLOR_YUV2BGR_I420)
+        if ts0 is None:
+            ts0 = frame['tstamp'] - 1.0/30
+        ts = frame['tstamp']
+        dt = ts - ts0
+        ts0 = ts
+
+        # throttle, steering, accel, gyro, servo, wheels, periods
+        gz = frame['carstate'][3][2]
+        wheels = frame['carstate'][5]
+        ds = 0
+        if lastw is not None:
+            ds = (wheels - lastw)[0]
+        lastw = wheels
+
+        theta -= gz*dt
+
+        S, C = np.sin(theta), np.cos(theta)
+        # now solve for x, y, theta
+        xi -= ds*WHEELTICK_SCALE*S
+        yi -= ds*WHEELTICK_SCALE*C
+
+        gm = gray[mask]
+
+        def L(X):
+            x, y, theta = X
+            # m, n = Maplookup(x, y, theta)
+            # i really thought that this would work better,
+            # but it totally doesn't
+            # return (gray[mask].astype(np.float32)*n - m)
+
+            # odometry constraint
+
+            return np.concatenate([(gm - Maplookup(x, y, theta)) / 170.0,
+                                   1e-3*np.array([xi - x, yi - y])])
+
+        if False:
+            L0 = np.sum(L([xi, yi, theta])**2)
+            Lx = np.sum(L([xi+1, yi, theta])**2)
+            Ly = np.sum(L([xi, yi+1, theta])**2)
+            Lt = np.sum(L([xi, yi, theta+0.01])**2)
+            print("jac: ", (Lx - L0), (Ly - L0), (Lt - L0)/0.01)
+
+        if firstiter:
+            lb = ptrange*Z
+            ub = mapsz - 2 - ptrange*Z
+            soln = scipy.optimize.least_squares(
+                L, x0=np.array([xi, yi, theta]), loss='soft_l1',
+                bounds=([lb, lb, theta - 0.1], [ub, ub, theta + 0.1]),
+                verbose=2)
+            print(soln)
+            xi, yi, theta = soln['x']
+
+            poses.append([xi, yi, theta, dt, ds, gz])
+        else:
+            xi, yi, theta = poses[frameno][:3]
+        frameno += 1
+
+        Mapupdate(xi, yi, theta, gray)
+
+        S, C = np.sin(theta), np.cos(theta)
+        disp = ceilmean.astype(np.uint8)
+        disp = cv2.resize(disp, dsize=(mapsz, mapsz),
+                          interpolation=cv2.INTER_NEAREST)
+        for i in range(1, len(poses[:frameno])):
+            p0 = poses[i-1]
+            p1 = poses[i]
+            cv2.line(disp, (int(32*p0[0]), int(32*p0[1])),
+                     (int(32*p1[0]), int(32*p1[1])), 255, 1,
+                     cv2.LINE_AA, 5)
+        cv2.circle(disp, (int(16*xi), int(16*yi)), 30, 0, -2, cv2.LINE_AA, 4)
+        cv2.line(disp, (int(32*xi), int(32*yi)),
+                 (int(32*xi - 160*S), int(32*yi - 160*C)), 170, 1,
+                 cv2.LINE_AA, 5)
+
+        # mark optical center
+        cv2.circle(bgr, (int(16*cx), int(16*cy)), 50, (170, 255, 170), 1, cv2.LINE_AA, 4)
+
+        if vidout is not None:
+            bgr[-mapsz:, -mapsz:, :] = disp[:, :, None]
+            vidout.write(bgr)
+
+        if False:
+            cv2.imshow("ceilmap", disp)
+            cv2.imshow("bgr", bgr)
+
+            k = cv2.waitKey(1)
+            if k == ord('q'):
+                break
+
+    cv2.imshow("ceilmap", disp)
+    cv2.imshow("bgr", bgr)
+    # pause before quitting
+    cv2.waitKey(0)
+    cv2.destroyAllWindows()
+
+    f.close()
+    print("saving ceiling map")
+    np.save("ceilmapY.npy", ceilmap)
+    np.save("ceilmapN.npy", ceilN)
+    np.save("poses.npy", np.array(poses))
+
+
+if __name__ == '__main__':
+    import sys
+    main(sys.argv[1], int(sys.argv[2]))
