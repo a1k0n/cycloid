@@ -69,49 +69,67 @@ void DriveController::UpdateState(const DriverConfig &config,
 void DriveController::UpdateLocation(const DriverConfig &config,
                                      const coneslam::Localizer *l) {
   coneslam::Particle meanp;
-  const coneslam::Particle *ps = l->GetParticles();
   l->GetLocationEstimate(&meanp);
   x_ = meanp.x;
   y_ = meanp.y;
+}
 
+void DriveController::Plan(const DriverConfig &config,
+                           const coneslam::Particle *ps, int np) {
   // TODO(asloane): consider more feasible maneuvers
   // curvature can swing about 0.3 1/m from wherever it is now in 10ms
   float k0 = 0;
   float kmax = 1.3;
   float dk = config.lookahead_krate * 0.01 / 3;
   if (vr_ > 0.3) {
-    k0 = clip(w_ / vr_, -kmax+3*dk, kmax-3*dk);
+    k0 = clip(w_ / vr_, -kmax + 3 * dk, kmax - 3 * dk);
   }
 
-  //timeval tv0, tv1;
-  //gettimeofday(&tv0, NULL);
+  timeval tv0, tv1;
+  gettimeofday(&tv0, NULL);
   float s = config.lookahead_dist * 0.01;
   for (int a = 0; a < 7; a++) {
     // compute next x, y, theta
     float k = k0 - (a-3)*dk;
-    target_ks_[a] = k;
-    target_k_Vs_[a] = 0;
     float ks = k * s;
-    for (int i = 0; i < l->NumParticles(); i++) {
+    float V = 0;
+    float P = 0;
+    for (int i = 0; i < np; i++) {
       float x0 = ps[i].x, y0 = ps[i].y, t0 = ps[i].theta;
       float theta1 = t0 + ks;
       float C = cos(t0), S = sin(t0);
-      float x1, y1;
-      if (k == 0) {
-        x1 = x0 + C*s;
-        y1 = y0 + S*s;
-      } else {
-        x1 = x0 + (sin(ps[i].theta + ks) - S) / k;
-        y1 = y0 + (C - cos(ps[i].theta + ks)) / k;
+      if (fabs(k) < 1e-2)
+        k = 1e-2;  // hack: avoid special cases for zero curvature
+
+      // add up the path cost every 10cm
+      for (float st = 0.15; st < s; st += 0.15) {
+        float xt = x0 + (sin(t0 + k*st) - S) / k;
+        float yt = y0 + (C - cos(t0 + k*st)) / k;
+        P += V_.C(xt, yt) * config.path_penalty * 0.001;
       }
-      target_k_Vs_[a] += V_.V(x1, y1, theta1);
+      // and then the final cost-to-go
+      float x1 = x0 + (sin(t0 + ks) - S) / k;
+      float y1 = y0 + (C - cos(t0 + ks)) / k;
+      V += V_.V(x1, y1, theta1);
+    }
+    target_ks_[a] = k;
+    target_k_Vs_[a] = V+P;
+    // printf("%0.1f/%0.1f ", V, P);
+  }
+  // gettimeofday(&tv1, NULL);
+  // printf(" control %ld.%06lds\n", tv1.tv_sec - tv0.tv_sec,
+  //       tv1.tv_usec - tv0.tv_usec);
+
+  // compute target curvature at all times, just for datalogging purposes
+  float bestV = target_k_Vs_[0];
+  target_k_ = target_ks_[0];
+  for (int a = 1; a < 7; a++) {
+    float V = target_k_Vs_[a];
+    if (V < bestV) {
+      bestV = V;
+      target_k_ = target_ks_[a];
     }
   }
-  k_samples_ = l->NumParticles();
-  //gettimeofday(&tv1, NULL);
-  //printf("control %dus\n", (tv1.tv_sec - tv0.tv_sec)*1e6 + tv1.tv_usec - tv0.tv_usec);
-  //printf("control %dus\n", tv1.tv_usec - tv0.tv_usec);
-  // 700-1400us
 }
 
 bool DriveController::GetControl(const DriverConfig &config,
@@ -123,21 +141,7 @@ bool DriveController::GetControl(const DriverConfig &config,
   // throttle_in controls vmax (w.r.t. the configured value)
   // steering_in controls desired curvature
 
-  // compute target curvature at all times, just for datalogging purposes
-  float bestV = target_k_Vs_[0], autok = target_ks_[0];
-  for (int a = 1; a < 7; a++) {
-    float V = target_k_Vs_[a];
-    if (V < bestV) {
-      bestV = V;
-      autok = target_ks_[a];
-    }
-  }
-#if 0
-  for (int a = 0; a < 7; a++) {
-    printf("%f ", target_k_Vs_[a]);
-  }
-  printf(" - %f\n", autok);
-#endif
+  float autok = target_k_;
 
   // if we're braking or coasting, just control that manually
   if (!autodrive && throttle_in <= 0) {
@@ -196,9 +200,7 @@ bool DriveController::GetControl(const DriverConfig &config,
   float k2 = 0.01 * config.motor_k2;
 
   // heuristic: subtract magnitude of yaw rate error from throttle control
-  float werr = (std::signbit(target_w) ? -1 : 1) * (target_w - w_) * 0.01 *
-               config.turnin_lift;
-  werr = clip(werr, 0, 2);
+  float werr = fabsf(target_w - w_) * 0.01 * config.turnin_lift;
 
   float du = BW_v * (dverr + k2 * prev_throttle_ * verr * dt);
 

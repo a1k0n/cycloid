@@ -82,13 +82,15 @@ def genpathcost(w, h):
                 np.clip(np.cos(angs+tang[:, :, None]), 1e-2, 1))
     pathcost = pathcost.transpose((2, 0, 1))
     # penalty for going outside the lines
-    pathcost[:, ye > yelim] += 100
+    penalty = 100*(ye > yelim)
     # penalty for going within the inside of the track
-    pathcost[:, ye < -yelim] = 1000
+    penalty[ye < -yelim] = 1000
 
     # major penalty for hitting cones
-    pathcost[:, coneradius < 0.3**2] = 1000
-    return pathcost
+    penalty[coneradius < 0.3**2] = 1000
+
+    pathcost[:] += penalty
+    return pathcost, penalty
 
 
 # last thing before we can solve this: generate the actual remap table for each move
@@ -126,7 +128,9 @@ def runiter(V, rm1, rm2, pcosts):
             V[ang] = np.minimum(V[ang], pcosts[ang, a] + Vd)
 
 
-def savebin(V):
+def savebin(V, pathcost):
+    assert(pathcost.shape == V[0].shape)
+
     f = open("vf.bin", "wb")
     a, h, w = V.shape
     # header:
@@ -137,6 +141,7 @@ def savebin(V):
     hlen = 3*2 + 4
     f.write(struct.pack("=4sIHHHf", b'VFNC', hlen, a, h, w, 50))
     f.write(V.astype(np.float16).tobytes())
+    f.write(pathcost.astype(np.float16).tobytes())
     f.close()
 
 
@@ -153,7 +158,7 @@ def main():
     V[-24:, int(-finishy-.5/.02):int(-finishy+.5/.02), int(finishx):int(finishx+2)] = 0
 
     print("precomputing path costs...")
-    pathcost = genpathcost(V.shape[2], V.shape[1])
+    pathcost, penalty = genpathcost(V.shape[2], V.shape[1])
     print("precomputing remappings...")
     rm1, rm2, pcosts = computeremaps(V.shape[2], V.shape[1], pathcost)
 
@@ -169,7 +174,7 @@ def main():
         v0 = v1
         s.set_postfix_str(str(v0) + " dv " + str(dv))
     np.save("V.npy", V)
-    savebin(V)
+    savebin(V, penalty)
 
 
 if __name__ == '__main__':

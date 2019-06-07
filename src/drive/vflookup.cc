@@ -23,8 +23,8 @@ bool ValueFuncLookup::Init() {
   a_ = a;
   h_ = h;
   w_ = w;
-  data_ = new __fp16[a*h*w];
-  fread(data_, a*h*w, 2, fp);
+  data_ = new __fp16[(a+1)*h*w];
+  fread(data_, (a+1)*h*w, 2, fp);
   fclose(fp);
   {
     float d1 = data_[0], d2 = data_[1], d3 = data_[2], d4 = data_[3];

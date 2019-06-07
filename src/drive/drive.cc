@@ -132,7 +132,7 @@ class Driver: public CameraReceiver {
   // and further set of chunks encoded by each piece below.
   void QueueRecordingData(const timeval &t, uint8_t *buf, size_t length) {
     uint32_t chunklen = 8 + 8;  // iff header, timestamp
-    uint32_t yuvcklen = length + 8 + 2; // iff header, width, camera frame
+    uint32_t yuvcklen = length + 8 + 2;  // iff header, width, camera frame
     // each of the following entries is expected to be a valid
     // IFF chunk on its own
     chunklen += carstate_.SerializedSize();
@@ -185,7 +185,15 @@ class Driver: public CameraReceiver {
     display_.UpdateEncoders(carstate_.wheel_pos);
     display_.UpdateParticleView(localizer_);
 
+    // make a copy of the particles so we can release the mutex early
+    int np = localizer_->NumParticles();
+    coneslam::Particle *pcopy = new coneslam::Particle[np];
+    const coneslam::Particle *ps = localizer_->GetParticles();
+    memcpy(pcopy, ps, np*sizeof(coneslam::Particle));
     pthread_mutex_unlock(&localizer_mutex_);
+
+    controller_.Plan(config_, pcopy, np);
+    delete[] pcopy;
     memcpy(last_encoders_, carstate_.wheel_pos, 4 * sizeof(uint16_t));
   }
 
@@ -451,6 +459,7 @@ const char *DriverInputReceiver::configmenu[] = {
   "traction limit",
   "lookahead dist",
   "lookahead dkdt",
+  "cone/lane penalty",
   "motor input",
   "motor back-EMF",
   "turn-in lift",
@@ -459,7 +468,8 @@ const char *DriverInputReceiver::configmenu[] = {
   "servo finetune",
   "cone precision",
 };
-const int DriverInputReceiver::N_CONFIGITEMS = sizeof(configmenu) / sizeof(configmenu[0]);
+const int DriverInputReceiver::N_CONFIGITEMS =
+    sizeof(configmenu) / sizeof(configmenu[0]);
 
 int main(int argc, char *argv[]) {
   signal(SIGINT, handle_sigint);
@@ -551,6 +561,9 @@ int main(int argc, char *argv[]) {
     last_wpos = carstate_.wheel_pos[0];
 
     driver_.OnControlFrame(ds, dt);
+    // timeval t1;
+    // gettimeofday(&t1, NULL);
+    // printf("%d.%06d %f\n", t1.tv_sec - t.tv_sec, t1.tv_usec - t.tv_usec, dt);
   }
 
 #ifdef CAMERA

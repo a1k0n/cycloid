@@ -20,6 +20,8 @@ class DriveController {
 
   void UpdateLocation(const DriverConfig &config, const coneslam::Localizer *l);
 
+  void Plan(const DriverConfig &config, const coneslam::Particle *ps, int np);
+
   bool GetControl(const DriverConfig &config,
       float throttle_in, float steering_in,
       float *throttle_out, float *steering_out, float dt,
@@ -42,7 +44,7 @@ class DriveController {
 
   float target_ks_[7];    // next potential control actions
   float target_k_Vs_[7];  // total value of each action over all particles
-  int k_samples_;
+  float target_k_;
 
   float target_v_, target_w_;  // control targets
   float bw_w_, bw_v_;          // control bandwidth for yaw and speed

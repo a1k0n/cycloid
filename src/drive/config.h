@@ -22,6 +22,7 @@ class DriverConfig {
 
   int16_t lookahead_dist;   // value function lookahead distance
   int16_t lookahead_krate;  // value function lookahead turn rate
+  int16_t path_penalty;     // cone / lane penalty magnitude
 
   // motor parameters
   int16_t motor_bw;     // input magnitude
@@ -38,20 +39,21 @@ class DriverConfig {
 
   DriverConfig() {
     // Default values
-    speed_limit = 8.0 * 100;
+    speed_limit = 3.0 * 100;
     traction_limit = 8.0 * 100;
 
-    lookahead_dist = 0.3 * 100;
-    lookahead_krate = 0.1 * 100;
+    lookahead_dist = 2.0 * 100;
+    lookahead_krate = 0.8 * 100;
+    path_penalty = 3;
 
-    motor_bw = 0.10 * 100;
-    motor_k2 = 1.50 * 100;
+    motor_bw = 0.14 * 100;
+    motor_k2 = 0.50 * 100;
 
     turnin_lift = 0;
 
-    servo_rate = -1.30 * 100;
-    servo_offset = 0.10 * 100;
-    servo_finetune = 2.00 * 100;
+    servo_rate = -1.70 * 100;
+    servo_offset = 0.30 * 100;
+    servo_finetune = -2.00 * 100;
 
     lm_precision = 100;
   }

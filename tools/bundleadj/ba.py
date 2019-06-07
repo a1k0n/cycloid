@@ -14,12 +14,36 @@ cx, cy = K[:2, 2]
 mapsz = 300  # map size
 Z = 14   # map zoom factor
 uv = np.mgrid[:480, :640][[1, 0]].transpose(1, 2, 0).astype(np.float32)
-mask = ((uv[:, :, 1] - cy)**2 + (uv[:, :, 0] - cx)**2) < (np.pi/2.2 * fx)**2
-pts = cv2.fisheye.undistortPoints(uv[None, mask], K, dist)
+ceilmask = ((uv[:, :, 1] - cy)**2 + (uv[:, :, 0] - cx)**2) < (np.pi/2.2 * fx)**2
+pts = cv2.fisheye.undistortPoints(uv[None, ceilmask], K, dist)
 
 ceilmap = np.zeros((mapsz, mapsz), np.float32)
 ceilN = np.ones((mapsz, mapsz), np.float32)
 ceilmean = ceilmap / ceilN
+
+
+def pix2floormap():
+    ''' undistortPoints doesn't support points behind the image plane, but we can solve for them '''
+    def solvetheta(thetad, k1):
+        theta = thetad
+        theta += (theta*(k1*theta**2 + 1) - thetad)/(-3*k1*theta**2 - 1)
+        theta += (theta*(k1*theta**2 + 1) - thetad)/(-3*k1*theta**2 - 1)
+        return theta
+
+    mg = np.mgrid[:480, :640]
+    u, v = (mg[1] - cx)/fx, (mg[0] - cy)/fy
+    r = np.sqrt(u**2 + v**2)
+    a, b = u/r, -v/r
+    theta = solvetheta(r, dist[0])
+    mask = (theta > np.pi/2) & (theta < np.pi/1.9)
+    t = 1.0 / np.tan(theta[mask] - np.pi/2)
+    return mask, np.stack([a[mask] * t, b[mask] * t]).T
+
+
+floormap = np.zeros((mapsz, mapsz, 3), np.float32)
+floorN = np.ones((mapsz, mapsz), np.float32) * 1e-3
+floormean = floormap / floorN[:, :, None]
+floormask, floorpts = pix2floormap()
 
 
 def Maplookup(x, y, theta):
@@ -54,12 +78,38 @@ def Mapupdate(xi, yi, theta, gray):
     ceilN[:] += np.bincount(idxs+1, t01.reshape(-1), mapsz*mapsz).reshape(mapsz, mapsz)
     ceilN[:] += np.bincount(idxs+mapsz, t10.reshape(-1), mapsz*mapsz).reshape(mapsz, mapsz)
     ceilN[:] += np.bincount(idxs+mapsz+1, t11.reshape(-1), mapsz*mapsz).reshape(mapsz, mapsz)
+    mask = ceilmask
     ceilmap[:] += np.bincount(idxs, t00*gray[mask], mapsz*mapsz).reshape(mapsz, mapsz)
     ceilmap[:] += np.bincount(idxs+1, t01*gray[mask], mapsz*mapsz).reshape(mapsz, mapsz)
     ceilmap[:] += np.bincount(idxs+mapsz, t10*gray[mask], mapsz*mapsz).reshape(mapsz, mapsz)
     ceilmap[:] += np.bincount(idxs+mapsz+1, t11*gray[mask], mapsz*mapsz).reshape(mapsz, mapsz)
     ceilmean[:] = ceilmap / ceilN
-    #ceilmean[:] = cv2.GaussianBlur(ceilmap / ceilN, (7, 7), 4)
+
+
+def Floorupdate(xi, yi, theta, bgr):
+    S, C = np.sin(-theta), np.cos(-theta)
+    R = np.array([[C, S], [-S, C]])
+    p = np.dot(floorpts, R.T) + np.array([xi, yi])
+    mask2 = (p[:, 0] >= 0) & (p[:, 1] >= 0) & (p[:, 0] < mapsz-1) & (p[:, 1] < mapsz-1)
+    p = p[mask2]
+    pi = p.astype(np.int)
+    pt = p - pi
+    t00 = (1-pt[:, 1])*(1-pt[:, 0])
+    t01 = (1-pt[:, 1])*(pt[:, 0])
+    t10 = (pt[:, 1])*(1-pt[:, 0])
+    t11 = (pt[:, 1])*(pt[:, 0])
+    idxs = pi[:, 1] * mapsz + pi[:, 0]
+    floorN[:] += np.bincount(idxs, t00.reshape(-1), mapsz*mapsz).reshape(mapsz, mapsz)
+    floorN[:] += np.bincount(idxs+1, t01.reshape(-1), mapsz*mapsz).reshape(mapsz, mapsz)
+    floorN[:] += np.bincount(idxs+mapsz, t10.reshape(-1), mapsz*mapsz).reshape(mapsz, mapsz)
+    floorN[:] += np.bincount(idxs+mapsz+1, t11.reshape(-1), mapsz*mapsz).reshape(mapsz, mapsz)
+    mask = floormask
+    for i in range(3):
+        floormap[:, :, i] += np.bincount(idxs, t00*bgr[mask, i][mask2], mapsz*mapsz).reshape(mapsz, mapsz)
+        floormap[:, :, i] += np.bincount(idxs+1, t01*bgr[mask, i][mask2], mapsz*mapsz).reshape(mapsz, mapsz)
+        floormap[:, :, i] += np.bincount(idxs+mapsz, t10*bgr[mask, i][mask2], mapsz*mapsz).reshape(mapsz, mapsz)
+        floormap[:, :, i] += np.bincount(idxs+mapsz+1, t11*bgr[mask, i][mask2], mapsz*mapsz).reshape(mapsz, mapsz)
+    floormean[:] = floormap / floorN[:, :, None]
 
 
 def main(fname, skips=0):
@@ -112,7 +162,7 @@ def main(fname, skips=0):
         xi -= ds*WHEELTICK_SCALE*S
         yi -= ds*WHEELTICK_SCALE*C
 
-        gm = gray[mask]
+        gm = gray[ceilmask]
 
         def L(X):
             x, y, theta = X
@@ -149,6 +199,7 @@ def main(fname, skips=0):
         frameno += 1
 
         Mapupdate(xi, yi, theta, gray)
+        Floorupdate(mapsz - xi, yi, theta, bgr)
 
         S, C = np.sin(theta), np.cos(theta)
         disp = ceilmean.astype(np.uint8)
@@ -172,9 +223,11 @@ def main(fname, skips=0):
             bgr[-mapsz:, -mapsz:, :] = disp[:, :, None]
             vidout.write(bgr)
 
-        if False:
+        if True:
             cv2.imshow("ceilmap", disp)
+            bgr[floormask] = np.clip(bgr[floormask] + 100, 0, 255)
             cv2.imshow("bgr", bgr)
+            cv2.imshow("floor", floormean.astype(np.uint8))
 
             k = cv2.waitKey(1)
             if k == ord('q'):

@@ -14,6 +14,7 @@ class ValueFuncLookup {
   ~ValueFuncLookup();
 
   bool Init();
+
   float V(float x, float y, float theta) {
     float a = theta*a_/(2*M_PI);
     x *= scale_;
@@ -33,8 +34,11 @@ class ValueFuncLookup {
 
     // trilinear interpolation
     int ia0 = a0*w_*h_ + y0*w_ + x0;
-    int ia1 = a1*w_*h_ + y0*w_ + x0;
     float v000 = data_[ia0];
+    #if 0
+    return v000;
+    #else
+    int ia1 = a1*w_*h_ + y0*w_ + x0;
     float v001 = data_[ia0 + 1];
     float v00 = (1-dx)*v000 + dx*v001;
     float v010 = data_[ia0 + w_];
@@ -49,6 +53,16 @@ class ValueFuncLookup {
     float v11 = (1-dx)*v110 + dx*v111;
     float v1 = (1-dy)*v10 + dy*v11;
     return (1-da)*v0 + da*v1;
+    #endif
+  }
+
+  float C(float x, float y) {
+    x *= scale_;
+    y *= -scale_;
+    if (x < 0 || x > w_ - 2 || y < 0 || y > h_ - 2) return 1000.;
+    int x0 = std::floor(x);
+    int y0 = std::floor(y);
+    return data_[a_*w_*h_ + y0*w_ + x0];
   }
 
  private:
