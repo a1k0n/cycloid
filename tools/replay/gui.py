@@ -97,6 +97,7 @@ class ReplayGUI:
         print("done")
         self.lm = None
         self.track = None
+        self.unloadlist = []
         try:
             f = open("lm.txt", "r")
             n = int(f.readline())
@@ -119,7 +120,7 @@ class ReplayGUI:
 
     def loadframe(self, i):
         if self.frametexid is not None:
-            unload_texture(self.frametexid)
+            self.unloadlist.append(self.frametexid)
         self.i = i
         self.frame = self.scanner.frame(i)
         yuv420 = self.frame['yuv420']
@@ -192,9 +193,9 @@ class ReplayGUI:
         imgui.plot_lines("control v", temp)
         temp = self.controls[mi:i+1, 1].copy()
         imgui.plot_lines("control steer", temp)
-        temp = self.controlstate[mi:i+1, 9].copy()
+        temp = self.controlstate[mi:i+1, 11].copy()
         imgui.plot_lines("target w", temp)
-        temp = self.controlstate[mi:i+1, 4].copy()
+        temp = self.controlstate[mi:i+1, 5].copy()
         imgui.plot_lines("yaw rate", temp)
 
         # live variables
@@ -208,25 +209,24 @@ class ReplayGUI:
         # for yaw rate and curvature, set the limits backwards
         # so that turning right is to the right
         maxw = int(np.ceil(np.max(np.abs(self.controlstate[:, 5])) * 1.1))
-        imgui.slider_float("yaw rate", self.controlstate[i, 4], maxw, -maxw)
-        imgui.slider_float("target w", self.controlstate[i, 9], maxw, -maxw)
-        for a in range(7):
-            imgui.slider_float("k_%f" % self.controlstate[i, 12+a], self.controlstate[i, 12+7+a], 0, 100000, power=10)
-        maxa = self.controlstate[i, 12+np.argmin(self.controlstate[i, 12+7:12+14])]
-        imgui.slider_float("target k", maxa, 2, -2)
+        imgui.slider_float("yaw rate", self.controlstate[i, 5], maxw, -maxw)
+        imgui.slider_float("target w", self.controlstate[i, 11], maxw, -maxw)
+        imgui.slider_float("target k", self.controlstate[i, 9], 2, -2)
         v = self.controlstate[i, 3]
         if v > 0.5:
-            k = self.controlstate[i, 4] / v
+            k = self.controlstate[i, 5] / v
         else:
             k = 0
         imgui.slider_float("curvature", k, 2, -2)
 
         imgui.slider_float("windup v", self.controlstate[i, 6], -5, 5)
-        imgui.slider_float("windup k", self.controlstate[i, 7], -1, 1)
+        imgui.slider_float("windup w", self.controlstate[i, 7], -1, 1)
 
         # render overview
         pos = imgui.get_cursor_screen_pos()
         siz = imgui.get_content_region_available()
+        if siz[1] == 0:
+            siz = [400, 300]
         imgui.invisible_button("overview", siz[0], siz[1])
         origin = pos
         meterwidth = max(np.max(self.track[:, 0]), np.max(self.lm[:, 0]))
@@ -314,6 +314,9 @@ class ReplayGUI:
         imgui.end()
 
     def render(self):
+        for t in self.unloadlist:
+            unload_texture(t)
+        self.unloadlist = []
         self.render_timeline()
         self.render_graphs()
         if self.learn_controls:
