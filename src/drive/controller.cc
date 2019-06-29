@@ -59,7 +59,9 @@ void DriveController::UpdateState(const DriverConfig &config,
   // wheel speed estimate
   if (wheel_period[0] == 0) {
     vf_ = vr_ = 0;
-  } else {
+  } else if (wheel_period[0] > V_SCALE * 1e6 / 30.0) {
+    // occasionally the firmware outputs a ridiculously small but nonzero wheel
+    // period, so restrict to reasonable values (< 30m/s max)
     vf_ = vr_ = V_SCALE * 1e6 / wheel_period[0];
   }
 
