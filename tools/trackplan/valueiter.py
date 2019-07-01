@@ -150,7 +150,10 @@ def main():
         V = np.load("V.npy")
         print("resuming V.npy; delete to start over")
     except Exception:
-        V = 1000.*np.ones((96, 330, 600), np.float32)  # we're using 96 angles, stride dx 15, dy -3..+3
+        m = cv2.imread("map.png")
+        print("initializing map from map.png, %dx%d px (%f x %f m)" %
+              (m.shape[1], m.shape[0], m.shape[1]*.02, m.shape[0]*.02))
+        V = 1000.*np.ones((96, m.shape[0], m.shape[1]), np.float32)  # we're using 96 angles, stride dx 15, dy -3..+3
     # initialize finish line
     finishx, finishy = homex/.02, homey/.02
     # finish line is pointing right, but we can cover any right-facing angle, -12..+12?
@@ -163,7 +166,7 @@ def main():
     rm1, rm2, pcosts = computeremaps(V.shape[2], V.shape[1], pathcost)
 
     v0 = np.sum(V, dtype=np.float64)
-    s = tqdm.trange(500)
+    s = tqdm.trange(200)
     s.set_postfix_str(str(v0))
     for i in s:
         runiter(V, rm1, rm2, pcosts)

@@ -88,7 +88,7 @@ class ReplayGUI:
             (throttle, steering, accel, gyro, servo,
              wheels, periods) = frdata['carstate']
             self.controls.append([throttle, steering])
-            self.controlstate.append(frdata['controldata'])
+            self.controlstate.append(frdata['controldata2'])
         self.controlstate = np.float32(self.controlstate)
         self.controls = np.float32(self.controls)
         self.ts = np.array(self.ts)

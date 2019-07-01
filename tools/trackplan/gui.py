@@ -384,7 +384,8 @@ class RemapWindow:
         H, _ = cv2.findHomography(np.float32(ptlist1), np.float32(ptlist2))
         n, R, t, N = cv2.decomposeHomographyMat(H, self.K)
         # refpts = np.hstack([ptlist1, np.ones((len(ptlist1), 1))])
-        n = N[np.argmin(np.array(N)[:, 1, 0])]
+        # n = N[np.argmin(np.array(N)[:, 1, 0])]
+        n = N[np.argmin(np.array(N)[:, 2, 0])]
         R2 = Rmatrix(n)
         M2 = np.float32([
             [-scale, 0, size/2 - scale*self.offxy[0]],

@@ -38,8 +38,8 @@ Localizer::~Localizer() {
 
 void Localizer::Reset() {
   for (int i = 0; i < n_particles_; i++) {
-    particles_[i].x = 0.125*randn() + home_x_;
-    particles_[i].y = 0.125*randn() + home_y_;
+    particles_[i].x = 0.025*randn() + home_x_;
+    particles_[i].y = 0.025*randn() + home_y_;
     particles_[i].theta = randn() * 0.1 + home_theta_;
     particles_[i].heading = particles_[i].theta;
   }

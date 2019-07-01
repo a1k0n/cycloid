@@ -225,7 +225,11 @@ class Driver: public CameraReceiver {
     if (pthread_mutex_lock(&localizer_mutex_)) {
       perror("localize mutex");
     } else {
-      localizer_->Predict(ds, carstate_.gyro[2], dt);
+      // if we aren't moving forward, then don't update at all because the slow
+      // gyro drift will eventually throw us off
+      if (ds > 0) {
+        localizer_->Predict(ds, carstate_.gyro[2], dt);
+      }
       controller_.UpdateLocation(config_, localizer_);
       pthread_mutex_unlock(&localizer_mutex_);
     }

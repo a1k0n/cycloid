@@ -104,7 +104,7 @@ void DriveController::Plan(const DriverConfig &config,
         k = 1e-2;  // hack: avoid special cases for zero curvature
 
       // add up the path cost every 10cm
-      for (float st = 0.15; st < s; st += 0.15) {
+      for (float st = 0.30; st < s; st += 0.30) {
         float xt = x0 + (sin(t0 + k*st) - S) / k;
         float yt = y0 + (C - cos(t0 + k*st)) / k;
         P += V_.C(xt, yt) * config.path_penalty * 0.001;
