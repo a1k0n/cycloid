@@ -6,8 +6,8 @@ import recordreader
 
 
 WHEELTICK_SCALE = 0.066
-K = np.load("../../tools/camcal/camera_matrix.npy")
-dist = np.load("../../tools/camcal/dist_coeffs.npy")
+K = np.load("../../tools/camcal/old/camera_matrix.npy")
+dist = np.load("../../tools/camcal/old/dist_coeffs.npy")
 K[:2] /= 4.05
 fx, fy = np.diag(K)[:2]
 cx, cy = K[:2, 2]
