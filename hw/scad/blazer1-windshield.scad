@@ -5,9 +5,9 @@ cam_border = 3;
 rpi_mount_height = 23.5;
 rpi_mount_x = -3;
 
-cam_mount_height = 50;
+cam_mount_height = 45;
 cam_mount_x = 185;
-cam_mount_rotate = [0, 21, 0];
+cam_mount_rotate = [0, 22, 0];
 
 r2 = 1.0/sqrt(2);
 function rot45(x) = [x[0]*r2 + x[1]*r2, -x[0]*r2 + x[1]*r2];
@@ -198,7 +198,7 @@ module CamBoardThing() {
     [168+33, 12, 0], [168+33, -12, 0],
     [168+33+9, 12, 0], [168+33+9, -12, 0]
   ];
-  offpts = [[172, 7, 0], [172, -9, 0], [205.5, 19, 0], [205.5, -19, 0]];
+  offpts = [[165, 7, 0], [165, -9, 0], [205.5, 19, 0], [205.5, -19, 0]];
 
   beam_size = r;
 
@@ -226,40 +226,12 @@ module CamBoardThing() {
     for (p1 = arducam_mount) {
       translate([cam_mount_x, 0, cam_mount_height])
         rotate(cam_mount_rotate)
-        translate([p1[0], p1[1], -10.1])
-        cylinder(h=10.2, d=screw_drill);
+        translate([p1[0], p1[1], -14.1])
+        cylinder(h=14.2, d=screw_drill);
     }
     // make extra room for the belt
-    translate([0, -6, 3.0]) rotate([0, 88, 0]) cylinder(r=3, h=200);
+    translate([0, -6, 1.0]) rotate([0, 88, 0]) cylinder(r=3, h=200);
   }
-
-  /*
-  difference() {
-    union() {
-      for (p0 = offpts) {
-        for (p1 = arducam_mount) {
-          p = p0;
-          if (p1[1] > -20) {
-            beam(p0, [p1[0] + cam_mount_x, p1[1], cam_mount_height-3], beam_size);
-          } else {
-            beam(otherside(p0), [p1[0] + cam_mount_x, p1[1], cam_mount_height-3], beam_size);
-          }
-        }
-      }
-      for (p1 = arducam_mount) {
-        translate([p1[0] + cam_mount_x, p1[1], cam_mount_height - 3.1])
-          cylinder(h=3.1, r=r);
-      }
-    }
-    // cut screw holes
-    for (p1 = arducam_mount) {
-      translate([p1[0] + cam_mount_x, p1[1], cam_mount_height - 20.1])
-        cylinder(h=20.2, d=screw_drill);
-    }
-    // make extra room for the belt
-    translate([0, -6, 3.0]) rotate([0, 88, 0]) cylinder(r=3, h=200);
-  }
-*/
 }
 
 %CarMountingReference();
