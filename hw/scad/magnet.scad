@@ -53,8 +53,12 @@ arducam_mount = [
   [28.5/2, 28.5/2],
 ];
 
-CamMountOffsetY = 82;
-CamMountOffsetZ = 71;
+//CamMountOffsetY = 82;
+//CamMountOffsetZ = 71;
+
+CamMountOffsetY = 82 + 42;
+CamMountOffsetZ = 71 - 10;
+CamMountAngle = 31;
 
 module BaseplateMounts() {
   for (m = mounts) {
@@ -87,6 +91,19 @@ module Beam(p0, p1) {
       translate(p1) translate([0, 0, -4]) cylinder(r=beam_radius, h=4);
     }
     translate(p1) translate([0, 0, -20]) cylinder(h=20.1, d=screw_drill);
+  }
+}
+
+module AngleBeam(p0, p1, off, rot) {
+  difference() {
+    union() {
+      hull() {
+        translate(p0) cylinder(r=beam_radius, h=4);
+        translate(p1) rotate(rot) translate(off) translate([0, 0, -6]) cylinder(r=beam_radius, h=2);
+      }
+      translate(p1) rotate(rot) translate(off) translate([0, 0, -4]) cylinder(r=beam_radius, h=4);
+    }
+    translate(p1) rotate(rot) translate(off) translate([0, 0, -20]) cylinder(h=20.1, d=screw_drill);
   }
 }
 
@@ -163,8 +180,8 @@ module CamMount() {
   OffsetMount(mounts[6], [0, 125.5], beam_radius);
 
   offsetmounts2 = [
-    [20, 104],
-    [12, 119.5],
+    [20, 100],
+    [12+2, 119.5-1],
     [-12, 119.5],
     [20, 63.5+10],
   ];
@@ -175,10 +192,10 @@ module CamMount() {
   OffsetMount(mounts[6], offsetmounts2[2], beam_radius);
 
   mounttable = [
-    [0, [3], 0],
-    [1, [2, 3], 0],
+    [0, [2], 0],
+    [1, [0, 1, 2, 3], 20],
     [2, [0, 1, 2, 3], 20],
-    [3, [0, 1, 2, 3], 20],
+//    [3, [0, 1, 2, 3], 20],
   ];
 
   for (m = mounttable) {
@@ -190,7 +207,7 @@ module CamMount() {
       if (zoff > 0) {
         translate(om) cylinder(r=beam_radius, h=zoff);
       }
-      Beam(om1, [am[0], am[1] + CamMountOffsetY, CamMountOffsetZ]);
+      AngleBeam(om1, [0, CamMountOffsetY, CamMountOffsetZ], am, [-CamMountAngle, 0, 0]);
     }
   }
 }

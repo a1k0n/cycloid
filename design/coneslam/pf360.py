@@ -5,7 +5,6 @@ import cv2
 
 import annotate
 import recordreader
-import caldata
 import params
 import time
 
