@@ -8,24 +8,6 @@
 
 using Eigen::Vector3f;
 
-const float V_ALPHA = 0.3;
-
-// servo closed loop response bandwidth (measured)
-const float BW_SRV = 0.2*M_PI*4;  // Hz
-
-const float SRV_A = -67.161224 / 127.0;
-const float SRV_B = -3.835942 / 127.0;
-const float SRV_C = 0.016797 / 127.0;
-const float SRV_D = 10.778385 / 127.0;
-
-const float M_K1 = 13.7;  // DC motor response constants (measured)
-const float M_K2 = 1.26;
-const float M_K3 = 0.53;
-const float M_OFFSET = 0.103;  // minimum control input (dead zone)
-
-const float GEOM_LF = 6.5*.0254;  // car geometry; A = CG to front axle length
-const float GEOM_LR = 5*.0254;  // CG to rear axle (m)
-
 const int STEER_LIMIT_LOW = -85;
 const int STEER_LIMIT_HIGH = 127;
 
