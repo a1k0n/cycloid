@@ -6,16 +6,18 @@ import recordreader
 
 
 WHEELTICK_SCALE = 0.066
-K = np.load("../../tools/camcal/old/camera_matrix.npy")
-dist = np.load("../../tools/camcal/old/dist_coeffs.npy")
+CAM_TILT = np.array([0, 22.*np.pi/180., 0])
+K = np.load("../../tools/camcal/camera_matrix.npy")
+dist = np.load("../../tools/camcal/dist_coeffs.npy")
 K[:2] /= 4.05
 fx, fy = np.diag(K)[:2]
 cx, cy = K[:2, 2]
 mapsz = 300  # map size
 Z = 14   # map zoom factor
 uv = np.mgrid[:480, :640][[1, 0]].transpose(1, 2, 0).astype(np.float32)
-ceilmask = ((uv[:, :, 1] - cy)**2 + (uv[:, :, 0] - cx)**2) < (np.pi/2.2 * fx)**2
-pts = cv2.fisheye.undistortPoints(uv[None, ceilmask], K, dist)
+ceilmask = ((uv[:, :, 1] - cy)**2 + (uv[:, :, 0] - cx + 60)**2) < (np.pi/2.4 * fx)**2
+R = cv2.Rodrigues(CAM_TILT)[0]
+pts = cv2.fisheye.undistortPoints(uv[None, ceilmask], K, dist, R=R)
 
 ceilmap = np.zeros((mapsz, mapsz), np.float32)
 ceilN = np.ones((mapsz, mapsz), np.float32)
