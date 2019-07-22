@@ -10,6 +10,7 @@ RUN apt-get install -yq --no-install-recommends \
   build-essential \
   cmake \
   libeigen3-dev \
+  libz-dev \
   pkg-config
 
 # Install debugging packages. TODO Remove once this Dockerfile is stable.
