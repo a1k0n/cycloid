@@ -4,11 +4,9 @@
 
 #include "ceiltrack/ceiltrack.h"
 
-// distance to closest grid point
-static float griddist(float x, float q) {
-  float r = remainderf(x + q / 2, q);
-  if (r < 0) r += q;
-  return r - q/2;
+static float moddist(float x, float q, float ooq) {
+  float xoq = x * ooq;
+  return q*(xoq - roundf(xoq));
 }
 
 bool CeilingTracker::Open(const char *fname) {
@@ -53,6 +51,12 @@ bool CeilingTracker::Open(const char *fname) {
     goto err;
   }
 
+#if 0
+  for (float f = -10; f < 10; f += 0.125f) {
+    printf("moddist(%f, 3.0) = %f\n", f, moddist(f, 3.0, 1.0/3.0));
+  }
+#endif
+
   fclose(fp);
   return true;
 
@@ -66,7 +70,10 @@ float CeilingTracker::Update(const uint8_t *img, uint8_t thresh, float xgrid,
   int rleptr = 0;
   int uvptr = 0;
 
-  // this is solvable in closed form! it's a pre-inverted 3x3 matrix * a 3x1 vector
+  float ooxg = 1.0 / xgrid, ooyg = 1.0 / ygrid;
+
+  // this is solvable in closed form! it's a pre-inverted 3x3 matrix * a 3x1
+  // vector
   float u = xytheta[0], v = xytheta[1], theta = xytheta[2];
   float S = sin(theta), C = cos(theta);
   float S2 = 0, S3 = 0, R = 0;
@@ -81,18 +88,18 @@ float CeilingTracker::Update(const uint8_t *img, uint8_t thresh, float xgrid,
     while (n--) {
       if ((*img) > thresh) {
         float x = uvmap_[uvptr];
-        float y = uvmap_[uvptr+1];
+        float y = uvmap_[uvptr + 1];
         R += x * x + y * y;
         float Rx = x * C + y * S, Ry = -x * S + y * C;
         float dRx = x * S - C * y, dRy = x * C + S * y;
-        float dx = griddist(Rx - u, xgrid);
-        float dy = griddist(Ry - v, ygrid);
-        cost += dx*dx + dy*dy;
+        float dx = moddist(Rx - u, xgrid, ooxg);
+        float dy = moddist(Ry - v, ygrid, ooyg);
+        cost += dx * dx + dy * dy;
         S2 += dRx;
         S3 += dRy;
         Sdx += dx;
         Sdy += dy;
-        SdRxy += dx*dRx + dy*dRy;
+        SdRxy += dx * dRx + dy * dRy;
         N++;
       }
       img++;
@@ -102,12 +109,12 @@ float CeilingTracker::Update(const uint8_t *img, uint8_t thresh, float xgrid,
 
   // Levenberg-Marquardt damping factor (if no detections, prevents blowups)
   const float lambda = 1;
-  #if 0
+#if 0
   printf("JTJ | %f %f %f\n", N + lambda, 0.0f, S2);
   printf("    | %f %f %f\n", 0.0f, N + lambda, S3);
   printf("    | %f %f %f\n", S2, S3, R + lambda);
   printf("JTr | %f %f %f\n", -Sdx, -Sdy, -SdRxy);
-  #endif
+#endif
   {
     float x0 = S3 * Sdy;
     float x1 = N + lambda;
@@ -123,5 +130,5 @@ float CeilingTracker::Update(const uint8_t *img, uint8_t thresh, float xgrid,
     xytheta[2] -= x6 * (-x0 + x2 - x8);
   }
 
-  return 0.5*cost;
+  return 0.5 * cost;
 }

@@ -34,7 +34,7 @@ int main() {
   int frame = 0;
   float B[3];
   memset(B, 0, sizeof(B));
-  const float eps = 1e-3;
+  const float eps = 1e-5;
   double trackusec = 0;
   int trackiters = 0;
   while (gzread(zf, y, sizeof(y)) == sizeof(y)) {
@@ -62,7 +62,7 @@ int main() {
     frame++;
   }
 
-  printf("read %d frames\n", frame);
+  printf("validated %d frames\n", frame);
   printf("%f usec/iteration\n", trackusec / trackiters);
   return 0;
 }
