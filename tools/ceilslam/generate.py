@@ -15,7 +15,7 @@ def rle(mask):
         if zero:
             if mask[i]:
                 out.append(run)
-                run = 0
+                run = 1
                 zero = False
             else:
                 run += 1
@@ -24,7 +24,7 @@ def rle(mask):
                 run += 1
             else:
                 out.append(run)
-                run = 0
+                run = 1
                 zero = True
     return np.array(out)
 
@@ -46,12 +46,12 @@ def main():
     h, w = ceilmask.shape
     hlen = 2 + 2 + 4 + 4
     f.write(struct.pack("=4sIHHII", b'cmLU', hlen, h, w,
-                        np.sum(ceilmask), len(rlemask)*2))
+                        np.sum(ceilmask), len(rlemask)))
     f.write(rlemask.tobytes())
     f.write(pts.T.astype(np.float16).tobytes())
     f.close()
     print("wrote", fname, 'mask', len(rlemask)*2, 'bytes; pts x', pts.T.shape, '=',
-          pts.shape[1]*4, 'bytes')
+          pts.shape[1]*4, 'bytes', np.sum(ceilmask))
 
 
 if __name__ == '__main__':
