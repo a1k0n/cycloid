@@ -10,7 +10,7 @@ RUN apt-get install -yq --no-install-recommends \
   build-essential \
   cmake \
   libeigen3-dev \
-  libz-dev \
+  curl \
   pkg-config
 
 # Install debugging packages. TODO Remove once this Dockerfile is stable.
@@ -29,6 +29,11 @@ RUN cat crosscompile.cmake.patch >> crosscompile.cmake
 # Build our binary
 WORKDIR /usr/build
 ENV PATH "$PATH:/pitools/arm-bcm2708/gcc-linaro-arm-linux-gnueabihf-raspbian-x64/bin"
+RUN curl https://www.zlib.net/zlib-1.2.11.tar.gz | tar zxvf -
+WORKDIR /usr/build/zlib-1.2.11
+RUN CHOST=arm-linux-gnueabihf ./configure && make && make install prefix=/pitools/arm-bcm2708/gcc-linaro-arm-linux-gnueabihf-raspbian-x64/arm-linux-gnueabihf/libc/usr
+
+WORKDIR /usr/build
 # LIBRARY_TYPE is a custom way of 'userland' to switch between static/shared.
 # There is also a 'vcos' library whose static behavior can be controlled through
 # VCOS_PTHREADS_BUILD_SHARED; however setting this to FALSE does not work (obvious link error).
@@ -39,7 +44,6 @@ RUN cmake /usr/cycloid/src \
   -DBUILD_SHARED_LIBS=OFF -DLIBRARY_TYPE=STATIC \
   -DCMAKE_INSTALL_PREFIX=/usr/local -DVMCS_INSTALL_PREFIX=/usr/local
 RUN cmake --build . -- --jobs=$jobs
-RUN cmake --build . -- --jobs=$jobs install
 
 # Travis fails on the resin image if 'RUN' is used with "exec format error".
 # FROM resin/rpi-raspbian:stretch
