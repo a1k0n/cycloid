@@ -78,7 +78,8 @@ err:
 #if (defined __ARM_NEON) || (defined __ARM_NEON__)
 // vectorize w/ fp16x8!
 float CeilingTracker::Update(const uint8_t *img, uint8_t thresh, float xgrid,
-                             float ygrid, float *xytheta) {
+                             float ygrid, float *xytheta, int niter,
+                             bool verbose) {
   int rleptr = 0;
   int uvptr = 0;
 
