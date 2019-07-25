@@ -33,36 +33,37 @@ int main() {
 
   int frame = 0;
   float B[3];
-  memset(B, 0, sizeof(B));
-  const float eps = 1e-5;
+  const float eps = 1e-3;
   double trackusec = 0;
   int trackiters = 0;
-  while (gzread(zf, y, sizeof(y)) == sizeof(y)) {
-    timeval tv0, tv1;
-    gettimeofday(&tv0, NULL);
-    for (int iter = 0; iter < 6; iter++) {
-      float cost = ctrack.Update(y, 240, X_GRID, Y_GRID, B);
-      if (frame == 0) {
-        printf("frame %d iter %d: cost %f xyt %f %f %f\n", frame, iter, cost, B[0], B[1], B[2]);
+  for (int iter = 0; iter < 10; iter++) {
+    memset(B, 0, sizeof(B));
+    while (gzread(zf, y, sizeof(y)) == sizeof(y)) {
+      timeval tv0, tv1;
+      gettimeofday(&tv0, NULL);
+      ctrack.Update(y, 240, X_GRID, Y_GRID, B, 6, frame == 0 && iter == 0);
+      gettimeofday(&tv1, NULL);
+      trackusec +=
+          (tv1.tv_sec - tv0.tv_sec) * 1e6 + (tv1.tv_usec - tv0.tv_usec);
+      trackiters += 1;  // 6;
+      float gx, gy, gt;
+      if (fscanf(gf, "%f %f %f\n", &gx, &gy, &gt) != 3) {
+        fprintf(stderr, "golden.txt parse error");
+        return 1;
       }
+      if (fabs(gx - B[0]) > eps || fabs(gy - B[1]) > eps ||
+          fabs(gt - B[2]) > eps) {
+        fprintf(stderr, "test error frame %d (%f %f %f) should be (%f %f %f)\n",
+                frame, B[0], B[1], B[2], gx, gy, gt);
+        return 1;
+      }
+      frame++;
     }
-    gettimeofday(&tv1, NULL);
-    trackusec += (tv1.tv_sec - tv0.tv_sec) * 1e6 + (tv1.tv_usec - tv0.tv_usec);
-    trackiters += 6;
-    float gx, gy, gt;
-    if (fscanf(gf, "%f %f %f\n", &gx, &gy, &gt) != 3) {
-      fprintf(stderr, "golden.txt parse error");
-      return 1;
-    }
-    if (fabs(gx - B[0]) > eps || fabs(gy - B[1]) > eps ||
-        fabs(gt - B[2]) > eps) {
-      fprintf(stderr, "test error frame %d (%f %f %f) should be (%f %f %f)\n",
-              frame, B[0], B[1], B[2], gx, gy, gt);
-    }
-    frame++;
+    gzrewind(zf);
+    rewind(gf);
   }
 
   printf("validated %d frames\n", frame);
-  printf("%f usec/iteration\n", trackusec / trackiters);
+  printf("%f usec/frame\n", trackusec / trackiters);
   return 0;
 }
