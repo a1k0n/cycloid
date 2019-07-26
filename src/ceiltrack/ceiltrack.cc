@@ -15,7 +15,7 @@
 
 static inline float moddist(float x, float q, float ooq) {
   float xoq = x * ooq;
-  return q*(xoq - __builtin_roundf(xoq));
+  return q * (xoq - __builtin_roundf(xoq));
 }
 
 bool CeilingTracker::Open(const char *fname) {
@@ -31,17 +31,18 @@ bool CeilingTracker::Open(const char *fname) {
     goto err;
   }
 
-  if (header[0] != 'c' || header[1] != 'm' || header[2] != 'L' || header[3] != 'U') {
+  if (header[0] != 'c' || header[1] != 'm' || header[2] != 'L' ||
+      header[3] != 'U') {
     fprintf(stderr, "CeilingTracker::Open: bad magic\n");
     goto err;
   }
 
   uint16_t h, w;
   uint32_t uvsiz, rlesiz;
-  memcpy(&h, header+8, 2);
-  memcpy(&w, header+10, 2);
-  memcpy(&uvsiz, header+12, 4);
-  memcpy(&rlesiz, header+16, 4);
+  memcpy(&h, header + 8, 2);
+  memcpy(&w, header + 10, 2);
+  memcpy(&uvsiz, header + 12, 4);
+  memcpy(&rlesiz, header + 16, 4);
   fprintf(stderr,
           "CeilingTracker::Open: %dx%d imgsiz, %d uv table entries, %d rle "
           "entries\n",
@@ -49,7 +50,7 @@ bool CeilingTracker::Open(const char *fname) {
 
   mask_rle_ = new uint16_t[rlesiz];
   mask_rlelen_ = rlesiz;
-  uvmap_ = new __fp16[uvsiz*2];
+  uvmap_ = new __fp16[uvsiz * 2];
   uvmaplen_ = uvsiz;
   if (fread(mask_rle_, 2, rlesiz, fp) != rlesiz) {
     fprintf(stderr, "CeilingTracker::Open: short read on rle table\n");
@@ -78,8 +79,8 @@ err:
 #if (defined __ARM_NEON) || (defined __ARM_NEON__)
 
 float hsum_f32_neon(float32x4_t x) {
-    float32x2_t r2 = vpadd_f32(vget_high_f32(x), vget_low_f32(x));
-    return vget_lane_f32(vpadd_f32(r2, r2), 0);
+  float32x2_t r2 = vpadd_f32(vget_high_f32(x), vget_low_f32(x));
+  return vget_lane_f32(vpadd_f32(r2, r2), 0);
 }
 
 // vectorize w/ fp16x8!
@@ -124,17 +125,16 @@ float CeilingTracker::Update(const uint8_t *img, uint8_t thresh, float xgrid,
                 Rvec = vmovq_n_f32(0), costvec = vmovq_n_f32(0),
                 SdRxyvec = vmovq_n_f32(0), Sdxvec = vmovq_n_f32(0),
                 Sdyvec = vmovq_n_f32(0);
-    float32x4_t Cvec = vld1q_f32(&C);
-    float32x4_t Svec = vld1q_f32(&S);
+    float32x4_t Cvec = vld1q_dup_f32(&C);
+    float32x4_t Svec = vld1q_dup_f32(&S);
 
     int M = bufptr & (~7);
     for (int i = 0; i < M; i += 8) {
       // load four interleaved coordinates
-      float32x4x2_t xyxyxyxy = vld2q_f32(&xybuf[i]);
-      // ...then de-interleave them
-      float32x4x2_t xxxxyyyy = vuzpq_f32(xyxyxyxy.val[0], xyxyxyxy.val[1]);
+      float32x4x2_t xxxxyyyy = vld2q_f32(&xybuf[i]);
       float32x4_t xxxx = xxxxyyyy.val[0];
       float32x4_t yyyy = xxxxyyyy.val[1];
+
       Rvec = vaddq_f32(Rvec,
                        vaddq_f32(vmulq_f32(xxxx, xxxx), vmulq_f32(yyyy, yyyy)));
 
@@ -142,18 +142,59 @@ float CeilingTracker::Update(const uint8_t *img, uint8_t thresh, float xgrid,
           vaddq_f32(vmulq_f32(xxxx, Cvec), vmulq_f32(yyyy, Svec));
       float32x4_t Ryyyy =
           vsubq_f32(vmulq_f32(yyyy, Cvec), vmulq_f32(xxxx, Svec));
+
       S2vec = vsubq_f32(S2vec, Ryyyy);
       S3vec = vaddq_f32(S3vec, Rxxxx);
       float32x4_t Rxoq =
-          vmulq_f32(vsubq_f32(Rxxxx, vld1q_f32(&u)), vld1q_f32(&ooxg));
+          vmulq_f32(vsubq_f32(Rxxxx, vld1q_dup_f32(&u)), vld1q_dup_f32(&ooxg));
       float32x4_t Ryoq =
-          vmulq_f32(vsubq_f32(Ryyyy, vld1q_f32(&v)), vld1q_f32(&ooyg));
-      float32x4_t Rxrounded = vcvtq_f32_s32(vcvtq_s32_f32(Rxoq));
-      float32x4_t Ryrounded = vcvtq_f32_s32(vcvtq_s32_f32(Ryoq));
+          vmulq_f32(vsubq_f32(Ryyyy, vld1q_dup_f32(&v)), vld1q_dup_f32(&ooyg));
+      float32x4_t Rxoqp5 = vaddq_f32(Rxoq, vmovq_n_f32(0.5));
+      float32x4_t Ryoqp5 = vaddq_f32(Ryoq, vmovq_n_f32(0.5));
+      // NEON only supports truncating toward zero but we need to round to
+      // nearest
+      // so we do a trick here: first we use compare w/ 0 and reinterpret the
+      // bit
+      // pattern so that if element i was negative, negx[i] = -1
+      // then we add 0.5, truncate, and add negx which will have the effect of
+      // adding -0.5 if the original number was negative, which achieves correct
+      // rounding.
+      int32x4_t negx = vreinterpretq_s32_u32(vcltq_f32(Rxoqp5, vmovq_n_f32(0)));
+      int32x4_t negy = vreinterpretq_s32_u32(vcltq_f32(Ryoqp5, vmovq_n_f32(0)));
+      float32x4_t Rxrounded =
+          vcvtq_f32_s32(vaddq_s32(negx, vcvtq_s32_f32(Rxoqp5)));
+      float32x4_t Ryrounded =
+          vcvtq_f32_s32(vaddq_s32(negy, vcvtq_s32_f32(Ryoqp5)));
+
       float32x4_t dxxxx =
-          vmulq_f32(vsubq_f32(Rxoq, Rxrounded), vld1q_f32(&xgrid));
+          vmulq_f32(vsubq_f32(Rxoq, Rxrounded), vld1q_dup_f32(&xgrid));
       float32x4_t dyyyy =
-          vmulq_f32(vsubq_f32(Ryoq, Ryrounded), vld1q_f32(&ygrid));
+          vmulq_f32(vsubq_f32(Ryoq, Ryrounded), vld1q_dup_f32(&ygrid));
+#if 0
+      float tx[4], ty[4], txr[4], tyr[4];
+      float tdx[4], tdy[4];
+      vst1q_f32(tx, Rxoq);
+      vst1q_f32(txr, Rxrounded);
+      vst1q_f32(ty, Ryoq);
+      vst1q_f32(tyr, Ryrounded);
+      vst1q_f32(tdx, dxxxx);
+      vst1q_f32(tdy, dyyyy);
+      for (int j = 0; j < 4; j++) {
+	float x = xybuf[i + j*2];
+	float y = xybuf[i + j*2 + 1];
+	float Rx = x * C + y * S, Ry = -x * S + y * C;
+	float dx = moddist(Rx - u, xgrid, ooxg);
+	float dy = moddist(Ry - v, ygrid, ooyg);
+	printf("neon%d dx: %f %f %f %f plain: %f %f %f %f\n", j,
+	    tx[j], ty[j], txr[j], tyr[j],
+	    (Rx-u)*ooxg, roundf((Rx-u)*ooxg),
+	    (Ry-v)*ooyg, roundf((Ry-u)*ooyg));
+	printf("  %f %f -> %f %f\n", tdx[j], tdy[j], dx, dy);
+      }
+      
+      return 0;
+#endif
+
       Sdxvec = vaddq_f32(Sdxvec, dxxxx);
       Sdyvec = vaddq_f32(Sdyvec, dyyyy);
       costvec = vaddq_f32(
@@ -164,7 +205,7 @@ float CeilingTracker::Update(const uint8_t *img, uint8_t thresh, float xgrid,
 
     float N = M >> 1;
     float R = hsum_f32_neon(Rvec);
-    float cost = hsum_f32_neon(costvec);
+    cost = hsum_f32_neon(costvec);
     float S2 = hsum_f32_neon(S2vec);
     float S3 = hsum_f32_neon(S3vec);
     float Sdx = hsum_f32_neon(Sdxvec);
@@ -172,7 +213,7 @@ float CeilingTracker::Update(const uint8_t *img, uint8_t thresh, float xgrid,
     float SdRxy = hsum_f32_neon(SdRxyvec);
     // Levenberg-Marquardt damping factor (if no detections, prevents blowups)
     const float lambda = 1;
-#if 1
+#if 0
   printf("JTJ | %f %f %f\n", N + lambda, 0.0f, S2);
   printf("    | %f %f %f\n", 0.0f, N + lambda, S3);
   printf("    | %f %f %f\n", S2, S3, R + lambda);
@@ -191,6 +232,11 @@ float CeilingTracker::Update(const uint8_t *img, uint8_t thresh, float xgrid,
       xytheta[0] -= x7 * (S2 * (x0 - x2) - Sdx * x4);
       xytheta[1] -= x7 * (-S3 * x2 + S3 * x8 - Sdy * (x3 + x5));
       xytheta[2] -= x6 * (-x0 + x2 - x8);
+    }
+
+    if (verbose) {
+      printf("CeilTrack::Update iter %d: cost %f xyt %f %f %f (%d pixels)\n",
+             iter, cost * 0.5, xytheta[0], xytheta[1], xytheta[2], M / 2);
     }
   }
 
@@ -289,7 +335,7 @@ float CeilingTracker::Update(const uint8_t *img, uint8_t thresh, float xgrid,
     const float lambda = 1;
     float N = M >> 1;
     float R = hsum_ps_sse3(Rvec);
-    float cost = hsum_ps_sse3(costvec);
+    cost = hsum_ps_sse3(costvec);
     float S2 = hsum_ps_sse3(S2vec);
     float S3 = hsum_ps_sse3(S3vec);
     float Sdx = hsum_ps_sse3(Sdxvec);
