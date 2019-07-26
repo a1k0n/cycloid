@@ -76,6 +76,12 @@ err:
 }
 
 #if (defined __ARM_NEON) || (defined __ARM_NEON__)
+
+float hsum_f32_neon(float32x4_t x) {
+    float32x2_t r2 = vpadd_f32(vget_high_f32(x), vget_low_f32(x));
+    return vget_lane_f32(vpadd_f32(r2, r2), 0);
+}
+
 // vectorize w/ fp16x8!
 float CeilingTracker::Update(const uint8_t *img, uint8_t thresh, float xgrid,
                              float ygrid, float *xytheta, int niter,
@@ -85,74 +91,107 @@ float CeilingTracker::Update(const uint8_t *img, uint8_t thresh, float xgrid,
 
   float ooxg = 1.0 / xgrid, ooyg = 1.0 / ygrid;
 
-  // this is solvable in closed form! it's a pre-inverted 3x3 matrix * a 3x1
-  // vector
-  float u = xytheta[0], v = xytheta[1], theta = xytheta[2];
-  float S = sin(theta), C = cos(theta);
-  float S2 = 0, S3 = 0, R = 0;
-  float Sdx = 0, Sdy = 0, SdRxy = 0;
-  float cost = 0;
-  int N = 0;
-
-  static std::vector<float> xybuf;
+  // first step: lookup all the camera ray vectors of white pixels looking up
+  static float *xybuf = NULL;
+  int bufptr = 0;
+  if (xybuf == NULL) {
+    // needs to have 16-byte alignment, which it should, being a relatively
+    // large allocation
+    xybuf = new float[uvmaplen_];
+  }
   while (rleptr < mask_rlelen_) {
     // read zero-len
     img += mask_rle_[rleptr++];
     int n = mask_rle_[rleptr++];
-    xybuf.clear();
     while (n--) {
-      uvptr += 2;
-      if ((*img++) <= thresh) {
-        continue;
+      if ((*img++) > thresh) {
+        xybuf[bufptr] = uvmap_[uvptr];
+        xybuf[bufptr + 1] = uvmap_[uvptr + 1];
+        bufptr += 2;
       }
-      xybuf.push_back(uvmap_[uvptr - 2]);
-      xybuf.push_back(uvmap_[uvptr - 1]);
-    }
-    n = xybuf.size();
-    N += n/2;
-    int i;
-    for (i = 0; i < (n & ~3); i += 4) {
-      float32x4_t xy2 = vld1q_f32(&xybuf[i]);
-      
-    }
-    for (; i < n; i += 2) {
-      float x = xybuf[i];
-      float y = xybuf[i+1];
-      R += x * x + y * y;
-      float Rx = x * C + y * S, Ry = -x * S + y * C;
-      float dRx = x * S - C * y, dRy = x * C + S * y;
-      S2 += dRx;
-      S3 += dRy;
-      float dx = moddist(Rx - u, xgrid, ooxg);
-      float dy = moddist(Ry - v, ygrid, ooyg);
-      cost += dx * dx + dy * dy;
-      Sdx += dx;
-      Sdy += dy;
-      SdRxy += dx * dRx + dy * dRy;
+      uvptr += 2;
     }
   }
 
-  // Levenberg-Marquardt damping factor (if no detections, prevents blowups)
-  const float lambda = 1;
-#if 0
+  float cost = 0;
+  for (int iter = 0; iter < niter; iter++) {
+    // this is solvable in closed form! it's a pre-inverted 3x3 matrix * a 3x1
+    // vector
+    float u = xytheta[0], v = xytheta[1], theta = xytheta[2];
+    float S = sin(theta), C = cos(theta);
+
+    float32x4_t S2vec = vmovq_n_f32(0), S3vec = vmovq_n_f32(0),
+                Rvec = vmovq_n_f32(0), costvec = vmovq_n_f32(0),
+                SdRxyvec = vmovq_n_f32(0), Sdxvec = vmovq_n_f32(0),
+                Sdyvec = vmovq_n_f32(0);
+    float32x4_t Cvec = vld1q_f32(&C);
+    float32x4_t Svec = vld1q_f32(&S);
+
+    int M = bufptr & (~7);
+    for (int i = 0; i < M; i += 8) {
+      // load four interleaved coordinates
+      float32x4x2_t xyxyxyxy = vld2q_f32(&xybuf[i]);
+      // ...then de-interleave them
+      float32x4x2_t xxxxyyyy = vuzpq_f32(xyxyxyxy.val[0], xyxyxyxy.val[1]);
+      float32x4_t xxxx = xxxxyyyy.val[0];
+      float32x4_t yyyy = xxxxyyyy.val[1];
+      Rvec = vaddq_f32(Rvec,
+                       vaddq_f32(vmulq_f32(xxxx, xxxx), vmulq_f32(yyyy, yyyy)));
+
+      float32x4_t Rxxxx =
+          vaddq_f32(vmulq_f32(xxxx, Cvec), vmulq_f32(yyyy, Svec));
+      float32x4_t Ryyyy =
+          vsubq_f32(vmulq_f32(yyyy, Cvec), vmulq_f32(xxxx, Svec));
+      S2vec = vsubq_f32(S2vec, Ryyyy);
+      S3vec = vaddq_f32(S3vec, Rxxxx);
+      float32x4_t Rxoq =
+          vmulq_f32(vsubq_f32(Rxxxx, vld1q_f32(&u)), vld1q_f32(&ooxg));
+      float32x4_t Ryoq =
+          vmulq_f32(vsubq_f32(Ryyyy, vld1q_f32(&v)), vld1q_f32(&ooyg));
+      float32x4_t Rxrounded = vcvtq_f32_s32(vcvtq_s32_f32(Rxoq));
+      float32x4_t Ryrounded = vcvtq_f32_s32(vcvtq_s32_f32(Ryoq));
+      float32x4_t dxxxx =
+          vmulq_f32(vsubq_f32(Rxoq, Rxrounded), vld1q_f32(&xgrid));
+      float32x4_t dyyyy =
+          vmulq_f32(vsubq_f32(Ryoq, Ryrounded), vld1q_f32(&ygrid));
+      Sdxvec = vaddq_f32(Sdxvec, dxxxx);
+      Sdyvec = vaddq_f32(Sdyvec, dyyyy);
+      costvec = vaddq_f32(
+          costvec, vaddq_f32(vmulq_f32(dxxxx, dxxxx), vmulq_f32(dyyyy, dyyyy)));
+      SdRxyvec = vaddq_f32(SdRxyvec, vsubq_f32(vmulq_f32(Rxxxx, dyyyy),
+                                               vmulq_f32(Ryyyy, dxxxx)));
+    }
+
+    float N = M >> 1;
+    float R = hsum_f32_neon(Rvec);
+    float cost = hsum_f32_neon(costvec);
+    float S2 = hsum_f32_neon(S2vec);
+    float S3 = hsum_f32_neon(S3vec);
+    float Sdx = hsum_f32_neon(Sdxvec);
+    float Sdy = hsum_f32_neon(Sdyvec);
+    float SdRxy = hsum_f32_neon(SdRxyvec);
+    // Levenberg-Marquardt damping factor (if no detections, prevents blowups)
+    const float lambda = 1;
+#if 1
   printf("JTJ | %f %f %f\n", N + lambda, 0.0f, S2);
   printf("    | %f %f %f\n", 0.0f, N + lambda, S3);
   printf("    | %f %f %f\n", S2, S3, R + lambda);
   printf("JTr | %f %f %f\n", -Sdx, -Sdy, -SdRxy);
 #endif
-  {
-    float x0 = S3 * Sdy;
-    float x1 = N + lambda;
-    float x2 = SdRxy * x1;
-    float x3 = -x1 * (R + lambda);
-    float x4 = S3 * S3 + x3;
-    float x5 = S2 * S2;
-    float x6 = 1.0 / (x4 + x5);
-    float x7 = x6 / x1;
-    float x8 = S2 * Sdx;
-    xytheta[0] -= x7 * (S2 * (x0 - x2) - Sdx * x4);
-    xytheta[1] -= x7 * (-S3 * x2 + S3 * x8 - Sdy * (x3 + x5));
-    xytheta[2] -= x6 * (-x0 + x2 - x8);
+    {
+      float x0 = S3 * Sdy;
+      float x1 = N + lambda;
+      float x2 = SdRxy * x1;
+      float x3 = -x1 * (R + lambda);
+      float x4 = S3 * S3 + x3;
+      float x5 = S2 * S2;
+      float x6 = 1.0 / (x4 + x5);
+      float x7 = x6 / x1;
+      float x8 = S2 * Sdx;
+      xytheta[0] -= x7 * (S2 * (x0 - x2) - Sdx * x4);
+      xytheta[1] -= x7 * (-S3 * x2 + S3 * x8 - Sdy * (x3 + x5));
+      xytheta[2] -= x6 * (-x0 + x2 - x8);
+    }
   }
 
   return 0.5 * cost;
