@@ -242,8 +242,8 @@ class TrackplanWindow:
 
         w, h = imgui.get_window_size()
         h = self.mapim.shape[0] * w / self.mapim.shape[1]
-        rectmin = imgui.get_item_rect_min()
         imgui.image_button(self.maptex, w, h, frame_padding=0)
+        rectmin = imgui.get_item_rect_min()
         if imgui.is_item_clicked(0):
             mxy = imgui.get_mouse_pos()
             u = (mxy[0] - rectmin[0]) * self.mapim.shape[1] / w
