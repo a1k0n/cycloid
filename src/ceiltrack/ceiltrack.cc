@@ -9,14 +9,17 @@
 #include <arm_neon.h>
 #else
 #include <emmintrin.h>
+#include <immintrin.h>
 #include <pmmintrin.h>
 #include <xmmintrin.h>
 #endif
 
+/*
 static inline float moddist(float x, float q, float ooq) {
   float xoq = x * ooq;
   return q * (xoq - __builtin_roundf(xoq));
 }
+ */
 
 bool CeilingTracker::Open(const char *fname) {
   uint8_t header[20];
