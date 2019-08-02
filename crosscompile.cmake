@@ -8,9 +8,9 @@ SET(CMAKE_SYSTEM_NAME Linux)
 # cd zlib-1.2.11
 # CHOST=armv8-rpi3-linux-gnueabihf ./configure
 # make
-# make install prefix=/<path>/armv8-rpi3-linux-gnueabihf-5.2.0/armv8-rpi3-linux-gnueabihf/sysroot/usr
+# make install prefix=/<path>/armv8-rpi3-linux-gnueabihf-7.2.0/armv8-rpi3-linux-gnueabihf/sysroot/usr
 
-# This compiler requires libstdc++ from gcc 5.2.0 which isn't available in raspbian jessie
+# This compiler requires libstdc++ from gcc 7.2.0 which isn't available in raspbian jessie
 SET(CMAKE_C_COMPILER armv8-rpi3-linux-gnueabihf-gcc CACHE STRING "c compiler")
 SET(CMAKE_CXX_COMPILER armv8-rpi3-linux-gnueabihf-g++ CACHE STRING "c++ compiler")
 SET(CMAKE_ASM_COMPILER armv8-rpi3-linux-gnueabihf-gcc CACHE STRING "asm compiler")

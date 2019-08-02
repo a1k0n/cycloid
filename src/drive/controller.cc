@@ -50,21 +50,20 @@ void DriveController::UpdateState(const DriverConfig &config,
   w_ = gyro[2];
 }
 
-void DriveController::UpdateLocation(const DriverConfig &config,
-                                     const coneslam::Localizer *l) {
-  coneslam::Particle meanp;
-  l->GetLocationEstimate(&meanp);
-  x_ = meanp.x;
-  y_ = meanp.y;
+void DriveController::UpdateLocation(const DriverConfig &config, const float *xytheta) {
+  x_ = xytheta[0];
+  y_ = xytheta[1];
+  theta_ = xytheta[2];
 }
 
-void DriveController::Plan(const DriverConfig &config,
-                           const coneslam::Particle *ps, int np) {
+void DriveController::Plan(const DriverConfig &config) {
   // TODO(asloane): consider more feasible maneuvers
   // curvature can swing about 0.3 1/m from wherever it is now in 10ms
+  const int nangles = 5;
   float k0 = 0;
   float kmax = 1.3;
-  float dk = config.lookahead_krate * 0.01 / 3;
+  float dk = config.lookahead_krate * 0.01 / nangles;
+
   if (vr_ > 0.3) {
     k0 = clip(w_ / vr_, -kmax + 3 * dk, kmax - 3 * dk);
   }
@@ -72,14 +71,14 @@ void DriveController::Plan(const DriverConfig &config,
   timeval tv0, tv1;
   gettimeofday(&tv0, NULL);
   float s = config.lookahead_dist * 0.01;
-  for (int a = 0; a < 7; a++) {
+  for (int a = 0; a < (1+nangles*2); a++) {
     // compute next x, y, theta
-    float k = k0 - (a-3)*dk;
+    float k = k0 - (a-nangles)*dk;
     float ks = k * s;
     float V = 0;
     float P = 0;
-    for (int i = 0; i < np; i++) {
-      float x0 = ps[i].x, y0 = ps[i].y, t0 = ps[i].theta;
+    {
+      float x0 = x_, y0 = y_, t0 = theta_;
       float theta1 = t0 + ks;
       float C = cos(t0), S = sin(t0);
       if (fabs(k) < 1e-2)

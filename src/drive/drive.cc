@@ -6,8 +6,7 @@
 #include <string.h>
 #include <sys/time.h>
 
-#include "coneslam/imgproc.h"
-#include "coneslam/localize.h"
+#include "ceiltrack/ceiltrack.h"
 #include "drive/config.h"
 #include "drive/controller.h"
 #include "drive/flushthread.h"
@@ -21,9 +20,14 @@
 // driving around w/ controller
 #define CAMERA 1
 
-const int NUM_PARTICLES = 300;
-
 volatile bool done = false;
+
+// hardcoded garbage for the time being
+const float CEILHOME_X = -3.03, CEILHOME_Y = 0.73, CEILHOME_THETA = 0;
+const float CEIL_HEIGHT = 8.25*0.3048;
+const float CEIL_X_GRID = 0.3048*10/CEIL_HEIGHT;
+const float CEIL_Y_GRID = 0.3048*12/CEIL_HEIGHT;
+
 
 // const int PWMCHAN_STEERING = 14;
 // const int PWMCHAN_ESC = 15;
@@ -35,8 +39,7 @@ STM32HatSerial stm32hat;
 IMU imu(i2c);
 UIDisplay display_;
 FlushThread flush_thread_;
-pthread_mutex_t localizer_mutex_;
-coneslam::Localizer localizer_(NUM_PARTICLES);
+CeilingTracker ceiltrack_;
 int16_t js_throttle_ = 0, js_steering_ = 0;
 
 struct CarState {
@@ -45,6 +48,7 @@ struct CarState {
   uint16_t wheel_pos[4];
   uint16_t wheel_dt[4];
   int8_t throttle, steering;
+  float ceiltrack_pos[3];
 
   CarState(): accel(0, 0, 0), gyro(0, 0, 0) {
     memset(wheel_pos, 0, 8);
@@ -52,6 +56,13 @@ struct CarState {
     servo_pos = 110;
     throttle = 0;
     steering = 0;
+    SetHome();
+  }
+
+  void SetHome() {
+    ceiltrack_pos[0] = CEILHOME_X;
+    ceiltrack_pos[1] = CEILHOME_Y;
+    ceiltrack_pos[2] = CEILHOME_THETA;
   }
 
   // 2 3-float vectors, 3 uint8s, 2 4-uint16 arrays
@@ -80,7 +91,7 @@ struct CarState {
 
 class Driver: public CameraReceiver {
  public:
-  explicit Driver(coneslam::Localizer *loc) {
+  explicit Driver() {
     output_fd_ = -1;
     frame_ = 0;
     frameskip_ = 0;
@@ -89,7 +100,6 @@ class Driver: public CameraReceiver {
     if (config_.Load()) {
       fprintf(stderr, "Loaded driver configuration\n");
     }
-    localizer_ = loc;
     firstframe_ = true;
     ncones_ = 0;
   }
@@ -136,7 +146,6 @@ class Driver: public CameraReceiver {
     // each of the following entries is expected to be a valid
     // IFF chunk on its own
     chunklen += carstate_.SerializedSize();
-    chunklen += localizer_->SerializedSize();
     chunklen += controller_.SerializedSize();
     chunklen += yuvcklen;
 
@@ -150,7 +159,6 @@ class Driver: public CameraReceiver {
     memcpy(chunkbuf+12, &t.tv_usec, 4);
     int ptr = 16;
     ptr += carstate_.Serialize(chunkbuf+ptr, chunklen - ptr);
-    ptr += localizer_->Serialize(chunkbuf+ptr, chunklen - ptr);
     ptr += controller_.Serialize(chunkbuf+ptr, chunklen - ptr);
 
     // write the 640x480 yuv420 buffer last
@@ -173,27 +181,21 @@ class Driver: public CameraReceiver {
       dt = 1.0 / 30.0;
     }
 
-    pthread_mutex_lock(&localizer_mutex_);
+    ceiltrack_.Update(buf, 240, CEIL_X_GRID, CEIL_Y_GRID, carstate_.ceiltrack_pos, 2, false);
+    float xytheta[3];
+    // convert ceiling homogeneous coordinates to actual meters on the ground
+    // also we need to convert from bottom-up to top-down coordinates so we mirror around X
+    xytheta[0] = -carstate_.ceiltrack_pos[0] * CEIL_HEIGHT;
+    xytheta[1] = carstate_.ceiltrack_pos[1] * CEIL_HEIGHT;
+    xytheta[2] = -carstate_.ceiltrack_pos[2];
+    controller_.UpdateLocation(config_, xytheta);
+    controller_.Plan(config_);
 
     uint16_t ds = last_encoders_[0] - carstate_.wheel_pos[0];
-    if (ds != 0) {  // only do coneslam updates while we're moving
-      localizer_->Update(buf, config_.lm_precision * 1e-6);
-      localizer_->Resample();
-    }
-
     display_.UpdateConeView(buf, 0, NULL);
     display_.UpdateEncoders(carstate_.wheel_pos);
-    display_.UpdateParticleView(localizer_);
-
-    // make a copy of the particles so we can release the mutex early
-    int np = localizer_->NumParticles();
-    coneslam::Particle *pcopy = new coneslam::Particle[np];
-    const coneslam::Particle *ps = localizer_->GetParticles();
-    memcpy(pcopy, ps, np*sizeof(coneslam::Particle));
-    pthread_mutex_unlock(&localizer_mutex_);
-
-    controller_.Plan(config_, pcopy, np);
-    delete[] pcopy;
+    // FIXME: hardcoded map size 20mx10m
+    display_.UpdateCeiltrackView(xytheta, CEIL_X_GRID*CEIL_HEIGHT, CEIL_Y_GRID*CEIL_HEIGHT, 20, 10);
     memcpy(last_encoders_, carstate_.wheel_pos, 4 * sizeof(uint16_t));
   }
 
@@ -222,18 +224,6 @@ class Driver: public CameraReceiver {
   // Called each control loop frame, 100Hz
   // N.B. this can be called concurrently with OnFrame in a separate thread
   void OnControlFrame(float ds, float dt) {
-    if (pthread_mutex_lock(&localizer_mutex_)) {
-      perror("localize mutex");
-    } else {
-      // if we aren't moving forward, then don't update at all because the slow
-      // gyro drift will eventually throw us off
-      if (ds > 0) {
-        localizer_->Predict(ds, carstate_.gyro[2], dt);
-      }
-      controller_.UpdateLocation(config_, localizer_);
-      pthread_mutex_unlock(&localizer_mutex_);
-    }
-
     controller_.UpdateState(config_,
         carstate_.accel, carstate_.gyro,
         carstate_.servo_pos, carstate_.wheel_dt, dt);
@@ -280,11 +270,9 @@ class Driver: public CameraReceiver {
   int output_fd_;
   int frameskip_;
   struct timeval last_t_;
-  coneslam::Localizer *localizer_;
 };
 
-Driver driver_(&localizer_);
-
+Driver driver_;
 
 static inline float clip(float x, float min, float max) {
   if (x < min) return min;
@@ -375,7 +363,7 @@ class DriverInputReceiver : public InputReceiver {
         }
         break;
       case 'H':  // home button: init to start line
-        localizer_.Reset();
+        carstate_.SetHome();
         display_.UpdateStatus("starting line", 0x07e0);
         break;
       case 'L':
@@ -479,7 +467,6 @@ int main(int argc, char *argv[]) {
   signal(SIGINT, handle_sigint);
 
   feenableexcept(FE_INVALID | FE_DIVBYZERO | FE_OVERFLOW | FE_UNDERFLOW);
-  pthread_mutex_init(&localizer_mutex_, NULL);
 
   int fps = 30;
 
@@ -506,8 +493,8 @@ int main(int argc, char *argv[]) {
     return 1;
   }
 
-  if (!localizer_.LoadLandmarks("lm.txt")) {
-    fprintf(stderr, "if no landmarks yet, just echo 0 >lm.txt and rerun\n");
+  if (!ceiltrack_.Open("ceillut.bin")) {
+    fprintf(stderr, "can't open ceillut.bin, camera calibration lookup table\n");
     return 1;
   }
 

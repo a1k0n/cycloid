@@ -51,62 +51,11 @@ def zoomtip(imtex, imdim, mag=1.0):
         imgui.end()
 
 
-def imagepicker(name, im, imtex, ptlist):
-    imgui.begin(name)
-    changed = False
-    if imgui.button("delete last"):
-        ptlist = ptlist[:-1]
-        changed = True
-    w, h = imgui.get_window_size()
-    h = im.shape[0] * w / im.shape[1]
-    imgui.image_button(imtex, w, h, frame_padding=0)
-    rectmin = imgui.get_item_rect_min()
-
-    # add selected points to draw list
-    dl = imgui.get_window_draw_list()
-    for p in ptlist:
-        u = p[0] * w / im.shape[1] + rectmin[0]
-        v = p[1] * w / im.shape[1] + rectmin[1]
-        dl.add_rect_filled(u - 4, v - 4, u + 4, v + 4,
-                           imgui.get_color_u32_rgba(1, 0.8, 0.1, 1), 4)
-        dl.add_rect(u - 4.5, v - 4.5, u + 4.5, v + 4.5,
-                    imgui.get_color_u32_rgba(0, 0, 0, 1), 5)
-
-    zoomtip(imtex, im.shape)
-
-    if imgui.is_item_clicked(0):
-        # print("clicked", name, imgui.get_mouse_pos(), imgui.get_item_rect_min())
-        # fixme: drag points
-        # for now, you just have to be careful where you double-click
-        if imgui.is_mouse_double_clicked(0):
-            # print("double-clicked", name, imgui.get_mouse_pos(), imgui.get_item_rect_min())
-            mxy = imgui.get_mouse_pos()
-            u = (mxy[0] - rectmin[0]) * im.shape[1] / w
-            v = (mxy[1] - rectmin[1]) * im.shape[1] / w
-            ptlist.append((u, v))
-            changed = True
-
-    imgui.end()
-    return ptlist, changed
-
-
-def Rmatrix(N):
-    R2 = np.eye(3)
-    R2[2] = N.reshape(-1)
-    R2[0] = np.cross(R2[0], R2[2])
-    R2[0] /= np.linalg.norm(R2[0])
-    R2[1] = np.cross(R2[2], R2[0])
-    R2[1] /= np.linalg.norm(R2[1])
-    return R2
-
-
-class RemapWindow:
-    def __init__(self, im1, K):
+class TrackplanWindow:
+    def __init__(self, mapim):
         # state on init
-        self.remappedtex = None
-        self.remappedim = None
-        self.im1 = im1
-        self.K = K
+        self.mapim = mapim
+        self.maptex = load_texture(mapim)
 
         # ephemeral state
         self.editmode = 'cone'
@@ -117,32 +66,23 @@ class RemapWindow:
         self.start_opt = False
 
         # state to save
-        self.offxy = (0, 0)
-        self.remapscale = 200
         self.lanewidth = 100
         self.pts = {
             'cone': [],
             'turn': [],
-            'scaleref': [],
             'home': [],
         }
-        self.scaleref = 1.0
+        self.scaleref = 0.02
         self.offsetlock = False
         self.homeangle = 0.0
-        self.imheight = 1000
 
     def getstate(self):
-        return (self.offxy, self.remapscale, self.lanewidth, self.pts,
-                self.scaleref, self.offsetlock, self.homeangle, self.imheight)
+        return (self.lanewidth, self.pts,
+                self.scaleref, self.offsetlock, self.homeangle)
 
     def setstate(self, s):
-        if len(s) == 8:
-            (self.offxy, self.remapscale, self.lanewidth, self.pts, self.scaleref,
-             self.offsetlock, self.homeangle, self.imheight) = s
-        elif len(s) == 7:
-            (self.offxy, self.remapscale, self.lanewidth, self.pts, self.scaleref,
-             self.offsetlock, self.homeangle) = s
-            self.imheight = 1000
+        (self.lanewidth, self.pts, self.scaleref,
+            self.offsetlock, self.homeangle) = s
         self.selectedpt = None
 
     def render_turns(self, scale, rectmin):
@@ -213,33 +153,12 @@ class RemapWindow:
             b = (i+1) % N
             dl.add_line(L[a, 0], L[a, 1], L[b, 0], L[b, 1], magenta)
 
-    def render(self, ptlist1, ptlist2, changed):
+    def render(self, changed):
         imgui.begin("birdseye")
-        if len(ptlist1) < 4:
-            imgui.text("please add at least 4 points to each image")
-            imgui.end()
-            return
-        if len(ptlist1) != len(ptlist2):
-            imgui.text("please add the same number of points to each image")
-            imgui.end()
-            return
+        _, self.scaleref = imgui.input_float(
+            "map scale (m/pixel)", self.scaleref)
 
-        _, self.offsetlock = imgui.checkbox("offset lock", self.offsetlock)
-        if not self.offsetlock:
-            ch, self.offxy = imgui.slider_float2(
-                "offset xy", *self.offxy, min_value=-10, max_value=10)
-            changed |= ch
-            ch, self.remapscale = imgui.slider_float(
-                "scale", self.remapscale, min_value=10, max_value=10000,
-                power=2)
-            changed |= ch
-            ch, self.imheight = imgui.slider_int(
-                "height", self.imheight, min_value=128, max_value=2048)
-            changed |= ch
-            _, self.scaleref = imgui.input_float(
-                "scale reference dist (m)", self.scaleref)
-
-        for i, mode in enumerate(["cone", "turn", "scaleref", "home"]):
+        for i, mode in enumerate(["cone", "turn", "home"]):
             if i != 0:
                 imgui.same_line()
             if imgui.radio_button(mode, self.editmode == mode):
@@ -250,11 +169,7 @@ class RemapWindow:
         if imgui.button("delete last"):
             self.pts[self.editmode] = self.pts[self.editmode][:-1]
 
-        if changed:
-            self.recompute(ptlist1, ptlist2)
-
-        if self.remappedtex is not None:
-            self.render_editor()
+        self.render_editor()
 
         imgui.end()
 
@@ -262,9 +177,6 @@ class RemapWindow:
         if self.editmode == 'turn':
             self.pts['turn'].append([u, v, 250])
         else:
-            if self.editmode == 'scaleref':
-                # only two of these at once
-                self.pts['scaleref'] = self.pts['scaleref'][-1:]
             if self.editmode == 'home':
                 # only one of these
                 self.pts['home'] = []
@@ -329,13 +241,13 @@ class RemapWindow:
         imgui.end_child()
 
         w, h = imgui.get_window_size()
-        h = self.remappedim.shape[0] * w / self.remappedim.shape[1]
+        h = self.mapim.shape[0] * w / self.mapim.shape[1]
         rectmin = imgui.get_item_rect_min()
-        imgui.image_button(self.remappedtex, w, h, frame_padding=0)
+        imgui.image_button(self.maptex, w, h, frame_padding=0)
         if imgui.is_item_clicked(0):
             mxy = imgui.get_mouse_pos()
-            u = (mxy[0] - rectmin[0]) * self.im1.shape[1] / w
-            v = (mxy[1] - rectmin[1]) * self.im1.shape[1] / w
+            u = (mxy[0] - rectmin[0]) * self.mapim.shape[1] / w
+            v = (mxy[1] - rectmin[1]) * self.mapim.shape[1] / w
 
             if imgui.is_mouse_double_clicked(0):
                 self.add_point(u, v)
@@ -345,18 +257,15 @@ class RemapWindow:
         if (imgui.is_item_hovered() and self.selectedpt is not None and
                 imgui.is_mouse_dragging(0)):
             mxy = imgui.get_mouse_pos()
-            u = (mxy[0] - rectmin[0]) * self.im1.shape[1] / w
-            v = (mxy[1] - rectmin[1]) * self.im1.shape[1] / w
+            u = (mxy[0] - rectmin[0]) * self.mapim.shape[1] / w
+            v = (mxy[1] - rectmin[1]) * self.mapim.shape[1] / w
             self.move_point(u, v)
 
-        scale = w / self.im1.shape[1]
+        scale = w / self.mapim.shape[1]
         dl = imgui.get_window_draw_list()
         self.render_ptlist(dl, self.pts['cone'], rectmin, scale,
                            imgui.get_color_u32_rgba(1, 0.7, 0, 1), 4,
                            self.editmode == 'cone')
-        self.render_ptlist(dl, self.pts['scaleref'], rectmin, scale,
-                           imgui.get_color_u32_rgba(0, 1, 0.3, 1), 2,
-                           self.editmode == 'scaleref', True)
         self.render_ptlist(dl, self.pts['turn'], rectmin, scale,
                            imgui.get_color_u32_rgba(0, 0.3, 1, 1), 3,
                            self.editmode == 'turn')
@@ -376,57 +285,10 @@ class RemapWindow:
         self.render_opttrack(scale, rectmin)
 
         if self.editmode == "cone":
-            zoomtip(self.remappedtex, self.remappedim.shape, 2)
-        elif self.editmode == "scaleref":
-            zoomtip(self.remappedtex, self.remappedim.shape, 5)
-
-    def reproject(self, ptlist1, ptlist2, scale, size, height):
-        H, _ = cv2.findHomography(np.float32(ptlist1), np.float32(ptlist2))
-        n, R, t, N = cv2.decomposeHomographyMat(H, self.K)
-        # refpts = np.hstack([ptlist1, np.ones((len(ptlist1), 1))])
-        # n = N[np.argmin(np.array(N)[:, 1, 0])]
-        n = N[np.argmin(np.array(N)[:, 2, 0])]
-        R2 = Rmatrix(n)
-        M2 = np.float32([
-            [-scale, 0, size/2 - scale*self.offxy[0]],
-            [0, scale, size/2 - scale*self.offxy[1]],
-            [0, 0, 1]
-        ])
-        MM = np.dot(M2, np.dot(R2, np.linalg.inv(self.K)))
-        return cv2.warpPerspective(self.im1, MM, (int(size), int(height)))
-
-    def recompute(self, ptlist1, ptlist2):
-        self.remappedim = self.reproject(
-            ptlist1, ptlist2, self.remapscale,
-            1024, self.imheight)
-
-        if self.remappedtex is not None:
-            unload_texture(self.remappedtex)
-        self.remappedtex = load_texture(self.remappedim)
-
-    def get_scaleref(self):
-        pts = np.array(self.pts['scaleref'])
-        print("scaleref pts: ", pts)
-        if len(pts) < 2:
-            return 1.0
-        mapdist = np.sqrt(np.sum((pts[1] - pts[0])**2))
-        return self.scaleref / mapdist
-
-    def save_png(self, fname, ptlist1, ptlist2):
-        # fixme
-        # scale: relative image width / cm
-        scale = 1.0 / (self.im1.shape[1] * self.get_scaleref())
-        meterwidth = 1024*scale
-        scale = 51.2/meterwidth
-        xsize = 1024 * scale
-        ysize = self.imheight * scale
-        print("scale", scale, "w, h", xsize, ysize)
-        cv2.imwrite(fname, self.reproject(
-            ptlist1, ptlist2,
-            self.remapscale * scale, xsize, ysize))
+            zoomtip(self.maptex, self.mapim.shape, 2)
 
     def save_cones(self, fname):
-        scale = self.get_scaleref()
+        scale = self.scaleref
         cones = np.array(self.pts['cone']) * scale
         f = open(fname, "w")
         f.write("%d\n" % len(cones))
@@ -439,7 +301,7 @@ class RemapWindow:
         f.close()
 
     def save_track(self, fname):
-        scale = self.get_scaleref()
+        scale = self.scaleref
         turns = self.pts['turn']
         Nturns = len(turns)
         if Nturns < 3:
@@ -464,21 +326,12 @@ class RemapWindow:
         f.close()
 
 
-def main(im1, im2, K):
-    im1 = cv2.imread(im1)
-    im2 = cv2.imread(im2)
-
+def main(mapim):
     imgui.create_context()
     window = impl_glfw_init()
     impl = GlfwRenderer(window)
 
-    imtex1 = load_texture(im1)
-    imtex2 = load_texture(im2)
-
-    ptlist1 = []
-    ptlist2 = []
-
-    rw = RemapWindow(im1, K)
+    mw = TrackplanWindow(cv2.imread(mapim))
 
     status = 'Ready'
     while not glfw.window_should_close(window):
@@ -493,9 +346,9 @@ def main(im1, im2, K):
                 load1, _ = imgui.menu_item("Load pts")
                 if load1:
                     try:
-                        f = open("ptlist.pkl", "rb")
-                        ptlist1, ptlist2, rwstate = pickle.load(f)
-                        rw.setstate(rwstate)
+                        f = open("trackstate.pkl", "rb")
+                        rwstate = pickle.load(f)
+                        mw.setstate(rwstate)
                         loaded = True
                         f.close()
                     except IOError:
@@ -503,28 +356,23 @@ def main(im1, im2, K):
 
                 save1, _ = imgui.menu_item("Save pts")
                 if save1:
-                    f = open("ptlist.pkl", "wb")
-                    pickle.dump((ptlist1, ptlist2, rw.getstate()), f)
+                    f = open("trackstate.pkl", "wb")
+                    pickle.dump((mw.getstate()), f)
                     f.close()
                     status = 'Saved point list'
 
                 exportlm, _ = imgui.menu_item("Export cones / home")
                 if exportlm:
-                    rw.save_cones("lm.txt")
+                    mw.save_cones("lm.txt")
                     status = 'Exported lm.txt'
 
                 exporttrack, _ = imgui.menu_item("Export track")
                 if exporttrack:
-                    if rw.opttrack is None:
+                    if mw.opttrack is None:
                         status = 'Optimized track not defined!'
                     else:
-                        rw.save_track("track.txt")
+                        mw.save_track("track.txt")
                         status = 'Exported track.txt'
-
-                exportpng, _ = imgui.menu_item("Export map image")
-                if exportpng:
-                    rw.save_png("map.png", ptlist1, ptlist2)
-                    status = 'Exported map.png'
 
                 clicked_quit, _ = imgui.menu_item(
                     "Quit", 'Cmd+Q', False, True)
@@ -534,10 +382,7 @@ def main(im1, im2, K):
                 imgui.end_menu()
             imgui.end_main_menu_bar()
 
-        ptlist1, changed1 = imagepicker("image 1", im1, imtex1, ptlist1)
-        ptlist2, changed2 = imagepicker("image 2", im2, imtex2, ptlist2)
-
-        rw.render(ptlist1, ptlist2, loaded or changed1 or changed2)
+        mw.render(loaded)
 
         imgui.set_next_window_position(
             0, imgui.get_io().display_size[1] - 30)
@@ -588,11 +433,9 @@ def impl_glfw_init():
 if __name__ == "__main__":
     import sys
 
-    # need camera calibration matrix
-    K = np.load("../../tools/camcal/flat/camera_matrix.npy")
-
-    if len(sys.argv) < 3:
-        print("usage:", sys.argv[0], "[img1] [img2]")
+    if len(sys.argv) < 2:
+        print("usage:", sys.argv[0], "[mapimg]")
+        print("mapimg is exported from ceilslam or any other tool, 2cm/pix")
         exit(1)
 
-    main(sys.argv[1], sys.argv[2], K)
+    main(sys.argv[1])

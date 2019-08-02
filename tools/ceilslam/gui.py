@@ -13,10 +13,8 @@ import ceiltrack
 import recordreader
 
 # starting position for localization
-HOME = [5, 2.5]
-# x coordinate about which to mirror the map
-# for a top-down view instead of bottom-up
-MIRRORX = 4.5
+# negative x because we also mirror the track about X
+HOME = [ceiltrack.X_GRID*-2.5, ceiltrack.Y_GRID*0.5]
 
 
 def load_texture(im):
@@ -122,7 +120,7 @@ class SLAMGUI:
         self.ts = np.array(self.ts)
         self.track = np.array(self.track)
         self.origtrack = self.track.copy()
-        self.track[:, 0] = 2*MIRRORX - self.track[:, 0]
+        self.track[:, 0] = -self.track[:, 0]
         self.track[:, 2] = -self.track[:, 2]
         # mirror the floor-pixel lookup table x coordinates also
         self.floorlut[1][0] = -self.floorlut[1][0]
@@ -130,8 +128,18 @@ class SLAMGUI:
 
         self.loadframe(0)
         print("done,", match_time, "secs match_time", opt_time, "sec opt_time")
-        self.floortex = load_texture(ceiltrack.render_floor(
-            self.track, self.floordata, self.floorlut[1]))
+        floorimg = ceiltrack.render_floor(
+            self.track, self.floordata, self.floorlut[1])
+        if True:
+            xgm = ceiltrack.X_GRID * ceiltrack.CEIL_HEIGHT
+            ygm = ceiltrack.Y_GRID * ceiltrack.CEIL_HEIGHT
+            Z = 50   # pixels per meter
+            for x in range(0, 1+int(1000 / (xgm*Z))):
+                for y in range(0, 1+int(500 / (ygm*Z))):
+                    cv2.circle(floorimg, (int(x*xgm*Z), int(y*ygm*Z)), int(0.25*Z), (255, 255, 0))
+        cv2.imwrite("map.png", floorimg)
+        self.floortex = load_texture(floorimg)
+        print("home location:", HOME)
 
     def loadframe(self, i):
         if self.frametexid is not None:
@@ -190,8 +198,8 @@ class SLAMGUI:
 
     def render_map(self):
         imgui.begin("map")
-        imgui.slider_float("x (feet)", self.track[self.i, 0] * ceiltrack.CEIL_HEIGHT, -80, 80)
-        imgui.slider_float("y (feet)", self.track[self.i, 1] * ceiltrack.CEIL_HEIGHT, -80, 80)
+        imgui.slider_float("x (m)", self.track[self.i, 0] * ceiltrack.CEIL_HEIGHT * 0.3048, -80, 80)
+        imgui.slider_float("y (m)", self.track[self.i, 1] * ceiltrack.CEIL_HEIGHT * 0.3048, -80, 80)
         imgui.slider_float("theta", self.track[self.i, 2] % (np.pi*2), -7, 7)
         imgui.slider_float("x (grid)", self.track[self.i, 0] / ceiltrack.X_GRID, -10, 10)
         imgui.slider_float("y (grid)", self.track[self.i, 1] / ceiltrack.X_GRID, -10, 10)
@@ -203,10 +211,10 @@ class SLAMGUI:
             siz = [400, 300]
         # just use a fixed size
         w = siz[0]
-        imgui.image_button(self.floortex, w, w, frame_padding=0)
+        imgui.image_button(self.floortex, w, w/2, frame_padding=0)
         # imgui.image_button(self.floortex, siz[0], siz[0])
         origin = [pos[0], pos[1]]
-        scale = 5 * ceiltrack.CEIL_HEIGHT * w/360
+        scale = 50 * ceiltrack.CEIL_HEIGHT * w/1000
         trackcolor = imgui.get_color_u32_rgba(0.3, 0.5, 0.3, 1)
         for i in range(1, self.i):
             dl.add_line(

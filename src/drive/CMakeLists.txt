@@ -1,8 +1,8 @@
 add_executable(drive
-    drive.cc controller.cc trajtrack.cc config.h
-    trajtrack.h vflookup.h vflookup.cc)
+    drive.cc controller.cc trajtrack.cc
+    config.h controller.h trajtrack.h vflookup.h vflookup.cc)
 
-target_link_libraries(drive car cam mmal input gpio imu ui lcd coneslam)
+target_link_libraries(drive car cam mmal input gpio imu ui lcd coneslam ceiltrack)
 install(TARGETS drive DESTINATION bin)
 
 # add_executable(localize_test localize_test.cc localize.cc)

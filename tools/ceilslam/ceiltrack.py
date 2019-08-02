@@ -3,14 +3,15 @@ import cv2
 
 
 CAM_TILT = np.array([0, 22. * np.pi / 180., 0])
-CEIL_HEIGHT = 8.25
-X_GRID = 10/CEIL_HEIGHT
-Y_GRID = 12/CEIL_HEIGHT
+ft2m = 0.3048  # measurements were orig. in feet; conv to meters
+CEIL_HEIGHT = 8.25*ft2m
+X_GRID = 10*ft2m/CEIL_HEIGHT
+Y_GRID = 12*ft2m/CEIL_HEIGHT
 
 # camera stands 90mm off the ground, which is almost exactly 0.3 feet (4")
 # however, this value was determined empirically to work and isn't
 # based on a measurement
-FLOOR_HEIGHT = 0.30
+FLOOR_HEIGHT = 0.30*ft2m
 K, dist = None, None
 
 
@@ -91,22 +92,29 @@ def cost(xy, u, v, theta):
     return 0.5*np.sum(dx**2 + dy**2), -np.linalg.solve(JTJ + np.eye(3), JTr)
 
 
-def render_floor(X, floorpx, fpts, mapsz=360, Z=5):
-    ''' i've completely forgotten what all those parameters mean ... '''
-    floormapbgr = np.zeros((mapsz, mapsz, 3))
-    floormapN = np.ones((mapsz, mapsz))
+def render_floor(X, floorpx, fpts, mapsz=(1000, 500), Z=50):
+    ''' render floor from a sequence of masked images
+    X: ndarray; X[i] = x, y, theta location of floorpx[i] data
+    floorpx: pre-masked list of floor pixels
+    fpts: lookup table of pixel locations to camera rays
+    mapsz: pixels to render map
+    Z: zoom factor, pixels per meter
+    '''
+
+    floormapbgr = np.zeros((mapsz[1], mapsz[0], 3))
+    floormapN = np.ones((mapsz[1], mapsz[0]))
 
     # FIXME: do it all in one bincount
     for k in range(len(X)):
         b = X[k]
         p = Z*(np.dot(Rmat(b[2]), fpts * FLOOR_HEIGHT).T + CEIL_HEIGHT * b[:2])
-        mask2 = (p[:, 0] >= 0) & (p[:, 1] >= 0) & (p[:, 0] < mapsz-1) & (p[:, 1] < mapsz-1)
+        mask2 = (p[:, 0] >= 0) & (p[:, 1] >= 0) & (p[:, 0] < mapsz[0]-1) & (p[:, 1] < mapsz[1]-1)
         p = p[mask2]
         pi = p.astype(np.int)
-        idxs = pi[:, 1] * mapsz + pi[:, 0]
+        idxs = pi[:, 1] * mapsz[0] + pi[:, 0]
 
-        floormapN[:] += np.bincount(idxs, np.ones(len(idxs)), mapsz*mapsz).reshape((-1, mapsz))
+        floormapN[:] += np.bincount(idxs, np.ones(len(idxs)), mapsz[0]*mapsz[1]).reshape((-1, mapsz[0]))
         for i in range(3):
-            floormapbgr[:, :, i] += np.bincount(idxs, floorpx[k][mask2, i], mapsz*mapsz).reshape((-1, mapsz))
+            floormapbgr[:, :, i] += np.bincount(idxs, floorpx[k][mask2, i], mapsz[0]*mapsz[1]).reshape((-1, mapsz[0]))
 
     return (floormapbgr / floormapN[:, :, None]).astype(np.uint8)

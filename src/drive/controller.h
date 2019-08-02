@@ -4,7 +4,6 @@
 #include <math.h>
 #include <Eigen/Dense>
 
-#include "coneslam/localize.h"
 #include "drive/config.h"
 #include "drive/vflookup.h"
 
@@ -18,9 +17,9 @@ class DriveController {
       uint8_t servo_pos,
       const uint16_t *wheel_encoders, float dt);
 
-  void UpdateLocation(const DriverConfig &config, const coneslam::Localizer *l);
+  void UpdateLocation(const DriverConfig &config, const float *xytheta);
 
-  void Plan(const DriverConfig &config, const coneslam::Particle *ps, int np);
+  void Plan(const DriverConfig &config);
 
   bool GetControl(const DriverConfig &config,
       float throttle_in, float steering_in,
