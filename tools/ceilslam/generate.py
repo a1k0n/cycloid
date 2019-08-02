@@ -30,7 +30,7 @@ def rle(mask):
 
 
 def main():
-    ceilmask, pts = ceiltrack.genlut()
+    ceilmask, pts = ceiltrack.ceillut()
 
     fname = "ceillut.bin"
     f = open(fname, "wb")

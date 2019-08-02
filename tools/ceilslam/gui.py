@@ -12,6 +12,12 @@ from imgui.integrations.glfw import GlfwRenderer
 import ceiltrack
 import recordreader
 
+# starting position for localization
+HOME = [5, 2.5]
+# x coordinate about which to mirror the map
+# for a top-down view instead of bottom-up
+MIRRORX = 4.5
+
 
 def load_texture(im):
     # gl.glEnable(gl.GL_TEXTURE_2D)
@@ -69,20 +75,24 @@ class SLAMGUI:
         self.frametexid = None
         self.playing = False
         self.ts = []
-        self.camdata = ceiltrack.genlut()
+        self.camdata = ceiltrack.ceillut()
         self.f.seek(0, 0)
 
         # do a full tracking here on load
-        B = np.zeros(3)  # this is the initial state
+        B = np.float32([HOME[0], HOME[1], 0])
         self.track = []
         match_time = 0
         opt_time = 0
         first = True
+        floordata = []
+        floormask = None
         for frdata in recordreader.RecordIterator(self.f):
             self.ts.append(frdata['tstamp'])
             yuv420 = frdata['yuv420']
+            gray = yuv420[:480]
+            bgr = cv2.cvtColor(yuv420, cv2.COLOR_YUV2BGR_I420)
             t0 = time.time()
-            xy = ceiltrack.match(yuv420[:480], *self.camdata)
+            xy = ceiltrack.match(gray, *self.camdata)
             tm = time.time()
             if first:
                 first = False
@@ -90,12 +100,16 @@ class SLAMGUI:
                     cost, dB = ceiltrack.cost(xy, *B)
                     B += dB
                 B_straight, cost_straight = B, cost
-                B = np.array([0., 0., np.pi/2])
+                B = np.float32([HOME[0], HOME[1], np.pi/2])
                 for i in range(6):
                     cost, dB = ceiltrack.cost(xy, *B)
                     B += dB
                 if cost_straight < cost:
                     B = B_straight
+                # we need an example frame to initialize the floor lookup table
+                # to filter out the visible body posts
+                self.floorlut = ceiltrack.floorlut(gray)
+                floormask = self.floorlut[0]
             else:
                 for i in range(2):
                     c, dB = ceiltrack.cost(xy, *B)
@@ -104,11 +118,20 @@ class SLAMGUI:
             match_time += tm - t0
             opt_time += topt - tm
             self.track.append(B.copy())
+            floordata.append(bgr[floormask])
         self.ts = np.array(self.ts)
         self.track = np.array(self.track)
+        self.origtrack = self.track.copy()
+        self.track[:, 0] = 2*MIRRORX - self.track[:, 0]
+        self.track[:, 2] = -self.track[:, 2]
+        # mirror the floor-pixel lookup table x coordinates also
+        self.floorlut[1][0] = -self.floorlut[1][0]
+        self.floordata = np.array(floordata)
 
         self.loadframe(0)
         print("done,", match_time, "secs match_time", opt_time, "sec opt_time")
+        self.floortex = load_texture(ceiltrack.render_floor(
+            self.track, self.floordata, self.floorlut[1]))
 
     def loadframe(self, i):
         if self.frametexid is not None:
@@ -119,7 +142,8 @@ class SLAMGUI:
         # optional: front view and annotated ceiling view?
         im = cv2.cvtColor(yuv420, cv2.COLOR_YUV2BGR_I420)
 
-        for gp in ceiltrack.mkgrid(ceiltrack.X_GRID, ceiltrack.Y_GRID, 31, *-self.track[i])[0]:
+        for gp in ceiltrack.mkgrid(ceiltrack.X_GRID, ceiltrack.Y_GRID, 31,
+                                   *-self.origtrack[i])[0]:
             cv2.circle(im, (int(gp[0]), int(gp[1])), 3, (255, 0, 0), 1)
 
         self.frametexid = load_texture(im)
@@ -166,34 +190,39 @@ class SLAMGUI:
 
     def render_map(self):
         imgui.begin("map")
-        imgui.slider_float("x", self.track[self.i, 0], -10, 10)
-        imgui.slider_float("y", self.track[self.i, 1], -10, 10)
+        imgui.slider_float("x (feet)", self.track[self.i, 0] * ceiltrack.CEIL_HEIGHT, -80, 80)
+        imgui.slider_float("y (feet)", self.track[self.i, 1] * ceiltrack.CEIL_HEIGHT, -80, 80)
         imgui.slider_float("theta", self.track[self.i, 2] % (np.pi*2), -7, 7)
+        imgui.slider_float("x (grid)", self.track[self.i, 0] / ceiltrack.X_GRID, -10, 10)
+        imgui.slider_float("y (grid)", self.track[self.i, 1] / ceiltrack.X_GRID, -10, 10)
 
         dl = imgui.get_window_draw_list()
         pos = imgui.get_cursor_screen_pos()
         siz = imgui.get_content_region_available()
         if siz[1] == 0:
             siz = [400, 300]
-        imgui.invisible_button("overview", siz[0], siz[1])
-        origin = [pos[0] + siz[0]/2, pos[1] + siz[1]/2]
-        scale = min(*siz) / 10.0
+        # just use a fixed size
+        w = siz[0]
+        imgui.image_button(self.floortex, w, w, frame_padding=0)
+        # imgui.image_button(self.floortex, siz[0], siz[0])
+        origin = [pos[0], pos[1]]
+        scale = 5 * ceiltrack.CEIL_HEIGHT * w/360
         trackcolor = imgui.get_color_u32_rgba(0.3, 0.5, 0.3, 1)
         for i in range(1, self.i):
             dl.add_line(
-                origin[0] - scale * self.track[i-1, 0],
+                origin[0] + scale * self.track[i-1, 0],
                 origin[1] + scale * self.track[i-1, 1],
-                origin[0] - scale * self.track[i, 0],
+                origin[0] + scale * self.track[i, 0],
                 origin[1] + scale * self.track[i, 1],
                 trackcolor, 1.5)
 
         carcolor = imgui.get_color_u32_rgba(0, 1, 0.6, 1)
         B = self.track[self.i]
         dl.add_line(
-            origin[0] - scale * B[0],
+            origin[0] + scale * B[0],
             origin[1] + scale * B[1],
-            origin[0] - scale * (B[0] - np.cos(B[2])),
-            origin[1] + scale * (B[1] + np.sin(B[2])),
+            origin[0] + scale * (B[0] + np.cos(B[2])),
+            origin[1] + scale * (B[1] - np.sin(B[2])),
             carcolor, 1.5)
 
         imgui.end()

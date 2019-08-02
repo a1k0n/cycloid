@@ -10,7 +10,7 @@ Y_GRID = 12/CEIL_HEIGHT
 # camera stands 90mm off the ground, which is almost exactly 0.3 feet (4")
 # however, this value was determined empirically to work and isn't
 # based on a measurement
-FLOOR_HEIGHT = 0.23 / CEIL_HEIGHT
+FLOOR_HEIGHT = 0.30
 K, dist = None, None
 
 
@@ -28,7 +28,7 @@ def undistortMap():
     return np.dot(R, pts.transpose(1, 0, 2)), origpts
 
 
-def genlut():
+def ceillut():
     pts, origpts = undistortMap()
     centerlimit = 8
     ceillimit = 3
@@ -37,6 +37,15 @@ def genlut():
                 & (np.sum(origpts**2, axis=2) < centerlimit**2))
     pts = pts[:2, ceilmask] / pts[2, ceilmask]
     return ceilmask, pts
+
+
+def floorlut(sampleframe):
+    floorlut, origpts = undistortMap()
+    fxy = floorlut[:2] / floorlut[2]
+    floormask = (floorlut[2] < 0) & (np.sum(fxy**2, axis=0) < 16**2) & (
+        np.sum(origpts**2, axis=2) < 6**2) & (sampleframe > 50)
+    fpts = fxy[:, floormask]
+    return floormask, fpts
 
 
 def moddist(x, q):
@@ -80,3 +89,24 @@ def cost(xy, u, v, theta):
     JTJ = np.array([[N, 0, S2], [0, N, S3], [S2, S3, np.sum(x**2 + y**2)]])
     JTr = np.array([-np.sum(dx), -np.sum(dy), -np.sum(dx*dRx + dy*dRy)])
     return 0.5*np.sum(dx**2 + dy**2), -np.linalg.solve(JTJ + np.eye(3), JTr)
+
+
+def render_floor(X, floorpx, fpts, mapsz=360, Z=5):
+    ''' i've completely forgotten what all those parameters mean ... '''
+    floormapbgr = np.zeros((mapsz, mapsz, 3))
+    floormapN = np.ones((mapsz, mapsz))
+
+    # FIXME: do it all in one bincount
+    for k in range(len(X)):
+        b = X[k]
+        p = Z*(np.dot(Rmat(b[2]), fpts * FLOOR_HEIGHT).T + CEIL_HEIGHT * b[:2])
+        mask2 = (p[:, 0] >= 0) & (p[:, 1] >= 0) & (p[:, 0] < mapsz-1) & (p[:, 1] < mapsz-1)
+        p = p[mask2]
+        pi = p.astype(np.int)
+        idxs = pi[:, 1] * mapsz + pi[:, 0]
+
+        floormapN[:] += np.bincount(idxs, np.ones(len(idxs)), mapsz*mapsz).reshape((-1, mapsz))
+        for i in range(3):
+            floormapbgr[:, :, i] += np.bincount(idxs, floorpx[k][mask2, i], mapsz*mapsz).reshape((-1, mapsz))
+
+    return (floormapbgr / floormapN[:, :, None]).astype(np.uint8)
