@@ -124,9 +124,12 @@ class ReplayGUI:
         self.i = i
         self.frame = self.scanner.frame(i)
         yuv420 = self.frame['yuv420']
-        act = self.frame['activations'].astype(np.float32)
-        act[1:] -= act[:-1]
-        self.acts = act
+        if 'activations' in self.frame:
+            act = self.frame['activations'].astype(np.float32)
+            act[1:] -= act[:-1]
+            self.acts = act
+        else:
+            self.acts = None
         im = cv2.cvtColor(yuv420, cv2.COLOR_YUV2BGR_I420)
         self.frametexid = load_texture(im)
 
@@ -163,15 +166,17 @@ class ReplayGUI:
         w = imgui.get_window_width()
         imgui.image(self.frametexid, w, 480*w/640)
 
-        imgui.plot_lines("activations", self.acts)
+        if self.acts is not None:
+            imgui.plot_lines("activations", self.acts)
 
         # make a histogram of expected cone locations
-        hist = np.zeros(len(self.acts)*2, np.float32)
-        np.add.at(hist, self.frame['c0'], 1)
-        np.add.at(hist, self.frame['c1'], -1)
-        hist = np.cumsum(hist)
-        hist = hist[:len(self.acts)] + hist[-len(self.acts):]
-        imgui.plot_lines("expected cone locations", hist)
+        if self.acts is not None:
+            hist = np.zeros(len(self.acts)*2, np.float32)
+            np.add.at(hist, self.frame['c0'], 1)
+            np.add.at(hist, self.frame['c1'], -1)
+            hist = np.cumsum(hist)
+            hist = hist[:len(self.acts)] + hist[-len(self.acts):]
+            imgui.plot_lines("expected cone locations", hist)
 
         changed, i = imgui.slider_int(
             "frame", self.i, 0, self.scanner.num_frames()-1)
@@ -193,25 +198,24 @@ class ReplayGUI:
         imgui.plot_lines("control v", temp)
         temp = self.controls[mi:i+1, 1].copy()
         imgui.plot_lines("control steer", temp)
-        temp = self.controlstate[mi:i+1, 11].copy()
+        temp = self.controlstate[mi:i+1, 9].copy()
         imgui.plot_lines("target w", temp)
-        temp = self.controlstate[mi:i+1, 5].copy()
+        temp = self.controlstate[mi:i+1, 4].copy()
         imgui.plot_lines("yaw rate", temp)
 
         # live variables
         maxv = int(np.ceil(np.max(self.controlstate[:, 3]) * 1.1))
         imgui.slider_float("velocity", self.controlstate[i, 3], 0, maxv)
-        imgui.slider_float("target_v", self.controlstate[i, 10], 0, maxv)
+        imgui.slider_float("target_v", self.controlstate[i, 8], 0, maxv)
 
         imgui.slider_float("control motor", self.controls[i, 0]/127., -1, 1)
         imgui.slider_float("control steer", self.controls[i, 1]/127., -1, 1)
 
         # for yaw rate and curvature, set the limits backwards
         # so that turning right is to the right
-        maxw = int(np.ceil(np.max(np.abs(self.controlstate[:, 5])) * 1.1))
-        imgui.slider_float("yaw rate", self.controlstate[i, 5], maxw, -maxw)
-        imgui.slider_float("target w", self.controlstate[i, 11], maxw, -maxw)
-        imgui.slider_float("target k", self.controlstate[i, 9], 2, -2)
+        maxw = int(np.ceil(np.max(np.abs(self.controlstate[:, 4])) * 1.1))
+        imgui.slider_float("yaw rate", self.controlstate[i, 4], maxw, -maxw)
+        imgui.slider_float("target w", self.controlstate[i, 9], maxw, -maxw)
         v = self.controlstate[i, 3]
         if v > 0.5:
             k = self.controlstate[i, 5] / v
@@ -219,8 +223,7 @@ class ReplayGUI:
             k = 0
         imgui.slider_float("curvature", k, 2, -2)
 
-        imgui.slider_float("windup v", self.controlstate[i, 6], -5, 5)
-        imgui.slider_float("windup w", self.controlstate[i, 7], -1, 1)
+        imgui.slider_float("windup k", self.controlstate[i, 7], -1, 1)
 
         # render overview
         pos = imgui.get_cursor_screen_pos()
@@ -250,21 +253,33 @@ class ReplayGUI:
         particlecolor = imgui.get_color_u32_rgba(1, 1, 1, 0.3)
         dl.add_rect(pos[0], pos[1], pos[0]+siz[0],
                     pos[1]+siz[1], particlecolor, 1)
-        ps = self.frame['particles']
-        for p in ps:
-            dl.add_rect_filled(
-                origin[0] + p[0]*scale, origin[1] - p[1]*scale,
-                origin[0] + p[0]*scale + 1, origin[1] - p[1]*scale + 1,
-                particlecolor)
-        # also draw a mean velocity vector
-        mxy = scale*np.mean(ps[:, :2], axis=0)
-        vxy = scale * v * .1 * np.array([
-            np.mean(np.cos(ps[:, 3])),
-            np.mean(np.sin(ps[:, 3]))])
-        dl.add_line(origin[0] + mxy[0], origin[1] - mxy[1],
-                    origin[0] + mxy[0] + vxy[0],
-                    origin[1] - mxy[1] - vxy[1],
-                    imgui.get_color_u32_rgba(0, 1, 0, 1), 1)
+        if 'particles' in self.frame:
+            ps = self.frame['particles']
+            for p in ps:
+                dl.add_rect_filled(
+                    origin[0] + p[0]*scale, origin[1] - p[1]*scale,
+                    origin[0] + p[0]*scale + 1, origin[1] - p[1]*scale + 1,
+                    particlecolor)
+            # also draw a mean velocity vector
+            mxy = scale*np.mean(ps[:, :2], axis=0)
+            vxy = scale * v * .1 * np.array([
+                np.mean(np.cos(ps[:, 3])),
+                np.mean(np.sin(ps[:, 3]))])
+            dl.add_line(origin[0] + mxy[0], origin[1] - mxy[1],
+                        origin[0] + mxy[0] + vxy[0],
+                        origin[1] - mxy[1] - vxy[1],
+                        imgui.get_color_u32_rgba(0, 1, 0, 1), 1)
+        else:
+            x = self.controlstate[self.i, 0]
+            y = self.controlstate[self.i, 1]
+            theta = self.controlstate[self.i, 2]
+            v = self.controlstate[self.i, 3]
+            S, C = np.sin(theta), np.cos(theta)
+            dl.add_line(origin[0] + x*scale, origin[1] - y*scale,
+                        origin[0] + scale*(x + v*C*scale),
+                        origin[1] - scale*(y + v*S*scale),
+                        imgui.get_color_u32_rgba(0, 1, 0, 1), 1)
+
         imgui.end()
 
     def render_controllearn(self):
@@ -302,7 +317,7 @@ class ReplayGUI:
         # let's also solve for steering ratios
         XTX = np.eye(2)
         XTY = np.array([1., 0])
-        w = self.controlstate[1:n, 5].copy()
+        w = self.controlstate[1:n, 4].copy()
         u = self.controls[:n-1, 1] / 127.0
         X = np.vstack([u*v, v])
         XTX += np.dot(X, X.T)

@@ -29,6 +29,7 @@ class UIDisplay {
 
  private:
   LCDScreen screen_;
+  uint8_t *backgroundyuv_;
 };
 
 #endif  // UI_DISPLAY_H_

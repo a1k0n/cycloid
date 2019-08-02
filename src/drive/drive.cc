@@ -184,15 +184,15 @@ class Driver: public CameraReceiver {
     ceiltrack_.Update(buf, 240, CEIL_X_GRID, CEIL_Y_GRID, carstate_.ceiltrack_pos, 2, false);
     float xytheta[3];
     // convert ceiling homogeneous coordinates to actual meters on the ground
-    // also we need to convert from bottom-up to top-down coordinates so we mirror around X
+    // also we need to convert from bottom-up to top-down coordinates so we negate through
     xytheta[0] = -carstate_.ceiltrack_pos[0] * CEIL_HEIGHT;
-    xytheta[1] = carstate_.ceiltrack_pos[1] * CEIL_HEIGHT;
+    xytheta[1] = -carstate_.ceiltrack_pos[1] * CEIL_HEIGHT;
     xytheta[2] = -carstate_.ceiltrack_pos[2];
     controller_.UpdateLocation(config_, xytheta);
     controller_.Plan(config_);
 
     uint16_t ds = last_encoders_[0] - carstate_.wheel_pos[0];
-    display_.UpdateConeView(buf, 0, NULL);
+    // display_.UpdateConeView(buf, 0, NULL);
     display_.UpdateEncoders(carstate_.wheel_pos);
     // FIXME: hardcoded map size 20mx10m
     display_.UpdateCeiltrackView(xytheta, CEIL_X_GRID*CEIL_HEIGHT, CEIL_Y_GRID*CEIL_HEIGHT, 20, 10);

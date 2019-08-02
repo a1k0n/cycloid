@@ -16,6 +16,15 @@ bool UIDisplay::Init() {
   memset(screen_.GetBuffer(), 0, 320*240*2);
   UpdateStatus("cycloid started", 0x01ff);
 
+  FILE *fp = fopen("map.yuv420", "rb");
+  if (!fp) {
+    perror("map.yuv420");
+    return false;
+  }
+  backgroundyuv_ = new uint8_t[76800];
+  fread(backgroundyuv_, 1, 76800, fp);
+  fclose(fp);
+
   return true;
 }
 
@@ -129,9 +138,22 @@ void UIDisplay::UpdateParticleView(const coneslam::Localizer *l) {
 
 void UIDisplay::UpdateCeiltrackView(const float *xytheta, float xgrid, float ygrid, float sizx, float sizy) {
   uint16_t *buf = screen_.GetBuffer();
-  static const uint16_t green = (6<<11) + (63<<5) + (6);
-  static const uint16_t yellow = (31<<11) + (63<<5) + (6);
+  static const uint16_t green = (6 << 11) + (63 << 5) + (6);
+  {
+    const uint8_t *yuv = backgroundyuv_;
+    for (int j = 0; j < 112; j++) {
+      const uint8_t *y = yuv + j * 320;
+      const uint8_t *u = yuv + 320 * 160 + (j>>1) * 160;
+      const uint8_t *v = yuv + 320 * (160+40) + (j>>1) * 160;
+      for (int i = 0; i < 320; i++) {
+        buf[j * 320 + i] = YUVtoRGB565(y[i], u[i>>1], v[i>>1]);
+      }
+    }
+  }
+
   float scale = 320 / sizx;
+#if 0
+  static const uint16_t yellow = (31<<11) + (63<<5) + (6);
   for (float x = 0; x < 320; x += xgrid * scale) {
     int xi = (int)x;
     for (float y = 0; y < 112; y += ygrid * scale) {
@@ -144,13 +166,15 @@ void UIDisplay::UpdateCeiltrackView(const float *xytheta, float xgrid, float ygr
       if (xi < 319) buf[idx + 1] = yellow;
     }
   }
+#endif
+
   float x0 = xytheta[0] * scale;
-  float y0 = xytheta[1] * scale;
+  float y0 = xytheta[1] * -scale;
   float C = cos(xytheta[2]);
   float S = sin(xytheta[2]);
   for (int i = 0; i < 10; i++) {
     int x = x0 + C*i;
-    int y = y0 + S*i;  // plus or minus?
+    int y = y0 - S*i;
     if (x >= 0 && x < 320 && y >= 0 && y < 112) {
       buf[y*320 + x] = green;
     }

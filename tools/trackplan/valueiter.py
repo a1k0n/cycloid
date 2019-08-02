@@ -166,7 +166,7 @@ def main():
     rm1, rm2, pcosts = computeremaps(V.shape[2], V.shape[1], pathcost)
 
     v0 = np.sum(V, dtype=np.float64)
-    s = tqdm.trange(2000)
+    s = tqdm.trange(200)
     s.set_postfix_str(str(v0))
     for i in s:
         runiter(V, rm1, rm2, pcosts)

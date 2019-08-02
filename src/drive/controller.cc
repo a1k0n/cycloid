@@ -59,7 +59,7 @@ void DriveController::UpdateLocation(const DriverConfig &config, const float *xy
 void DriveController::Plan(const DriverConfig &config) {
   // TODO(asloane): consider more feasible maneuvers
   // curvature can swing about 0.3 1/m from wherever it is now in 10ms
-  const int nangles = 5;
+  const int nangles = 3;
   float k0 = 0;
   float kmax = 1.3;
   float dk = config.lookahead_krate * 0.01 / nangles;
@@ -106,7 +106,7 @@ void DriveController::Plan(const DriverConfig &config) {
   // compute target curvature at all times, just for datalogging purposes
   float bestV = target_k_Vs_[0];
   target_k_ = target_ks_[0];
-  for (int a = 1; a < 7; a++) {
+  for (int a = 1; a < (nangles * 2 + 1); a++) {
     float V = target_k_Vs_[a];
     if (V < bestV) {
       bestV = V;
@@ -218,7 +218,7 @@ int DriveController::Serialize(uint8_t *buf, int buflen) const {
   buf += 4;
   memcpy(buf, &y_, 4);
   buf += 4;
-  memcpy(buf, &vf_, 4);
+  memcpy(buf, &theta_, 4);
   buf += 4;
   memcpy(buf, &vr_, 4);
   buf += 4;
