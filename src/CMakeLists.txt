@@ -6,7 +6,7 @@ find_package(PkgConfig)
 set(CMAKE_CXX_STANDARD 11)
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall")
 
-add_definitions("-ftree-vectorize -ffast-math -march=native -mtune=native")
+add_definitions("-ftree-vectorize -ffast-math")
 
 add_subdirectory(userland)
 
