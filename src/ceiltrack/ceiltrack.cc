@@ -50,7 +50,7 @@ bool CeilingTracker::Open(const char *fname) {
 
   mask_rle_ = new uint16_t[rlesiz];
   mask_rlelen_ = rlesiz;
-  uvmap_ = new __fp16[uvsiz * 2];
+  uvmap_ = new uint32_t[uvsiz];
   uvmaplen_ = uvsiz;
   if (fread(mask_rle_, 2, rlesiz, fp) != rlesiz) {
     fprintf(stderr, "CeilingTracker::Open: short read on rle table\n");
@@ -180,18 +180,17 @@ float CeilingTracker::Update(const uint8_t *img, uint8_t thresh, float xgrid,
       vst1q_f32(tdx, dxxxx);
       vst1q_f32(tdy, dyyyy);
       for (int j = 0; j < 4; j++) {
-	float x = xybuf[i + j*2];
-	float y = xybuf[i + j*2 + 1];
-	float Rx = x * C + y * S, Ry = -x * S + y * C;
-	float dx = moddist(Rx - u, xgrid, ooxg);
-	float dy = moddist(Ry - v, ygrid, ooyg);
-	printf("neon%d dx: %f %f %f %f plain: %f %f %f %f\n", j,
-	    tx[j], ty[j], txr[j], tyr[j],
-	    (Rx-u)*ooxg, roundf((Rx-u)*ooxg),
-	    (Ry-v)*ooyg, roundf((Ry-u)*ooyg));
-	printf("  %f %f -> %f %f\n", tdx[j], tdy[j], dx, dy);
+        float x = xybuf[i + j * 2];
+        float y = xybuf[i + j * 2 + 1];
+        float Rx = x * C + y * S, Ry = -x * S + y * C;
+        float dx = moddist(Rx - u, xgrid, ooxg);
+        float dy = moddist(Ry - v, ygrid, ooyg);
+        printf("neon%d dx: %f %f %f %f plain: %f %f %f %f\n", j, tx[j], ty[j],
+               txr[j], tyr[j], (Rx - u) * ooxg, roundf((Rx - u) * ooxg),
+               (Ry - v) * ooyg, roundf((Ry - u) * ooyg));
+        printf("  %f %f -> %f %f\n", tdx[j], tdy[j], dx, dy);
       }
-      
+
       return 0;
 #endif
 
@@ -262,12 +261,12 @@ float CeilingTracker::Update(const uint8_t *img, uint8_t thresh, float xgrid,
   float ooxg = 1.0 / xgrid, ooyg = 1.0 / ygrid;
 
   // first step: lookup all the camera ray vectors of white pixels looking up
-  static float *xybuf = NULL;
+  static uint32_t *xybuf = NULL;
   int bufptr = 0;
   if (xybuf == NULL) {
     // needs to have 16-byte alignment, which it should, being a relatively
     // large allocation
-    xybuf = new float[uvmaplen_];
+    xybuf = new uint32_t[uvmaplen_];
   }
   while (rleptr < mask_rlelen_) {
     // read zero-len
@@ -275,11 +274,9 @@ float CeilingTracker::Update(const uint8_t *img, uint8_t thresh, float xgrid,
     int n = mask_rle_[rleptr++];
     while (n--) {
       if ((*img++) > thresh) {
-        xybuf[bufptr] = uvmap_[uvptr];
-        xybuf[bufptr + 1] = uvmap_[uvptr + 1];
-        bufptr += 2;
+        xybuf[bufptr++] = uvmap_[uvptr];
       }
-      uvptr += 2;
+      uvptr++;
     }
   }
 
@@ -301,12 +298,25 @@ float CeilingTracker::Update(const uint8_t *img, uint8_t thresh, float xgrid,
     __m128 Sdxvec = _mm_setzero_ps();
     __m128 Sdyvec = _mm_setzero_ps();
     __m128 costvec = _mm_setzero_ps();
-    int M = bufptr & (~7);
-    for (int i = 0; i < M; i += 8) {
-      __m128 xyxy1 = _mm_load_ps(&xybuf[i]);
-      __m128 xyxy2 = _mm_load_ps(&xybuf[i + 4]);
+    int M = bufptr & (~3);
+    for (int i = 0; i < M; i += 4) {
+      // convert from fp16 to fp32
+      __m128i xyfp16x8 = _mm_loadu_si128((__m128i const*) (xybuf+i));
+      __m128 xyxy1 = _mm_cvtph_ps(xyfp16x8);
+      __m128 xyxy2 = _mm_cvtph_ps(_mm_unpackhi_epi64(xyfp16x8, xyfp16x8));
       __m128 xxxx = _mm_shuffle_ps(xyxy1, xyxy2, _MM_SHUFFLE(2, 0, 2, 0));
       __m128 yyyy = _mm_shuffle_ps(xyxy1, xyxy2, _MM_SHUFFLE(3, 1, 3, 1));
+      #if 0
+      {
+        float t1[4], t2[4];
+        _mm_store_ps(t1, xxxx);
+        _mm_store_ps(t2, yyyy);
+        for (int j = 0; j < 4; j++) {
+          printf("%f %f\n", t1[j], t2[j]);
+        }
+        exit(0);
+      }
+      #endif
       Rvec = _mm_add_ps(
           Rvec, _mm_add_ps(_mm_mul_ps(xxxx, xxxx), _mm_mul_ps(yyyy, yyyy)));
       __m128 Rxxxx = _mm_add_ps(_mm_mul_ps(xxxx, Cvec), _mm_mul_ps(yyyy, Svec));
@@ -333,7 +343,7 @@ float CeilingTracker::Update(const uint8_t *img, uint8_t thresh, float xgrid,
 
     // Levenberg-Marquardt damping factor (if no detections, prevents blowups)
     const float lambda = 1;
-    float N = M >> 1;
+    float N = M;
     float R = hsum_ps_sse3(Rvec);
     cost = hsum_ps_sse3(costvec);
     float S2 = hsum_ps_sse3(S2vec);
@@ -390,7 +400,7 @@ float CeilingTracker::Update(const uint8_t *img, uint8_t thresh, float xgrid,
 
     if (verbose) {
       printf("CeilTrack::Update iter %d: cost %f xyt %f %f %f (%d pixels)\n",
-             iter, cost * 0.5, xytheta[0], xytheta[1], xytheta[2], M / 2);
+             iter, cost * 0.5, xytheta[0], xytheta[1], xytheta[2], M);
     }
   }
 

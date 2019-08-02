@@ -17,8 +17,8 @@ class CeilingTracker {
  private:
   uint16_t *mask_rle_;
   int mask_rlelen_;
-  __fp16 *uvmap_;
+  uint32_t *uvmap_;  // two 16-bit floats packed into one 32-bit chunk
   int uvmaplen_;
 };
 
-#endif // CEILTRACK_CEILTRACK_H_
+#endif  // CEILTRACK_CEILTRACK_H_
