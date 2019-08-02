@@ -93,12 +93,12 @@ float CeilingTracker::Update(const uint8_t *img, uint8_t thresh, float xgrid,
   float ooxg = 1.0 / xgrid, ooyg = 1.0 / ygrid;
 
   // first step: lookup all the camera ray vectors of white pixels looking up
-  static float *xybuf = NULL;
+  static uint32_t *xybuf = NULL;
   int bufptr = 0;
   if (xybuf == NULL) {
     // needs to have 16-byte alignment, which it should, being a relatively
     // large allocation
-    xybuf = new float[uvmaplen_];
+    xybuf = new uint32_t[uvmaplen_];
   }
   while (rleptr < mask_rlelen_) {
     // read zero-len
@@ -106,11 +106,9 @@ float CeilingTracker::Update(const uint8_t *img, uint8_t thresh, float xgrid,
     int n = mask_rle_[rleptr++];
     while (n--) {
       if ((*img++) > thresh) {
-        xybuf[bufptr] = uvmap_[uvptr];
-        xybuf[bufptr + 1] = uvmap_[uvptr + 1];
-        bufptr += 2;
+        xybuf[bufptr++] = uvmap_[uvptr];
       }
-      uvptr += 2;
+      uvptr++;
     }
   }
 
@@ -128,12 +126,12 @@ float CeilingTracker::Update(const uint8_t *img, uint8_t thresh, float xgrid,
     float32x4_t Cvec = vld1q_dup_f32(&C);
     float32x4_t Svec = vld1q_dup_f32(&S);
 
-    int M = bufptr & (~7);
-    for (int i = 0; i < M; i += 8) {
-      // load four interleaved coordinates
-      float32x4x2_t xxxxyyyy = vld2q_f32(&xybuf[i]);
-      float32x4_t xxxx = xxxxyyyy.val[0];
-      float32x4_t yyyy = xxxxyyyy.val[1];
+    int M = bufptr & (~3);
+    for (int i = 0; i < M; i += 4) {
+      // load four interleaved coordinates, cvt to 32-bit floats
+      float16x4x2_t xxxxyyyy = vld2_f16((const __fp16*)&xybuf[i]);
+      float32x4_t xxxx = vcvt_f32_f16(xxxxyyyy.val[0]);
+      float32x4_t yyyy = vcvt_f32_f16(xxxxyyyy.val[1]);
 
       Rvec = vaddq_f32(Rvec,
                        vaddq_f32(vmulq_f32(xxxx, xxxx), vmulq_f32(yyyy, yyyy)));
@@ -152,13 +150,11 @@ float CeilingTracker::Update(const uint8_t *img, uint8_t thresh, float xgrid,
       float32x4_t Rxoqp5 = vaddq_f32(Rxoq, vmovq_n_f32(0.5));
       float32x4_t Ryoqp5 = vaddq_f32(Ryoq, vmovq_n_f32(0.5));
       // NEON only supports truncating toward zero but we need to round to
-      // nearest
-      // so we do a trick here: first we use compare w/ 0 and reinterpret the
-      // bit
-      // pattern so that if element i was negative, negx[i] = -1
-      // then we add 0.5, truncate, and add negx which will have the effect of
-      // adding -0.5 if the original number was negative, which achieves correct
-      // rounding.
+      // nearest so we do a trick here: first we use compare w/ 0 and
+      // reinterpret the bit pattern so that if element i was negative, negx[i]
+      // = -1. then we add 0.5, truncate, and add negx which will have the
+      // effect of adding -0.5 if the original number was negative, which
+      // achieves correct rounding.
       int32x4_t negx = vreinterpretq_s32_u32(vcltq_f32(Rxoqp5, vmovq_n_f32(0)));
       int32x4_t negy = vreinterpretq_s32_u32(vcltq_f32(Ryoqp5, vmovq_n_f32(0)));
       float32x4_t Rxrounded =
@@ -202,7 +198,7 @@ float CeilingTracker::Update(const uint8_t *img, uint8_t thresh, float xgrid,
                                                vmulq_f32(Ryyyy, dxxxx)));
     }
 
-    float N = M >> 1;
+    float N = M;
     float R = hsum_f32_neon(Rvec);
     cost = hsum_f32_neon(costvec);
     float S2 = hsum_f32_neon(S2vec);
