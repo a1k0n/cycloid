@@ -76,7 +76,9 @@ def genpathcost(w, h):
     ye, tk, tN = initgrid(w, h)
     tang = np.arctan2(tN[0], tN[1])
     angs = np.arange(96)*2*np.pi/96.
-    yelim = 0.99 / np.max(np.abs(track[:, 4]))
+    # yelim = 0.99 / np.max(np.abs(track[:, 4]))
+    # FIXME FIXME FIXME
+    yelim = 38.0/50.0
     coneradius = conepenalty(w, h)
     pathcost = ((1 - tk*np.clip(ye, -yelim, yelim))[:, :, None] /
                 np.clip(np.cos(angs+tang[:, :, None]), 1e-2, 1))
@@ -166,7 +168,7 @@ def main():
     rm1, rm2, pcosts = computeremaps(V.shape[2], V.shape[1], pathcost)
 
     v0 = np.sum(V, dtype=np.float64)
-    s = tqdm.trange(200)
+    s = tqdm.trange(2000)
     s.set_postfix_str(str(v0))
     for i in s:
         runiter(V, rm1, rm2, pcosts)
@@ -176,6 +178,10 @@ def main():
         dv = v1 - v0
         v0 = v1
         s.set_postfix_str(str(v0) + " dv " + str(dv))
+        if (i > 0) and (i % 100) == 0:
+            print("checkpointing...   ")
+            np.save("V.npy", V)
+            savebin(V, penalty)
     np.save("V.npy", V)
     savebin(V, penalty)
 

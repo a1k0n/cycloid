@@ -273,11 +273,11 @@ class ReplayGUI:
             x = self.controlstate[self.i, 0]
             y = self.controlstate[self.i, 1]
             theta = self.controlstate[self.i, 2]
-            v = self.controlstate[self.i, 3]
+            v = 1 # self.controlstate[self.i, 3]
             S, C = np.sin(theta), np.cos(theta)
-            dl.add_line(origin[0] + x*scale, origin[1] - y*scale,
-                        origin[0] + scale*(x + v*C*scale),
-                        origin[1] - scale*(y + v*S*scale),
+            dl.add_rect_filled(origin[0] + x*scale - 3, origin[1] - y*scale - 3,
+                        origin[0] + scale*x + 3,
+                        origin[1] - scale*y + 3,
                         imgui.get_color_u32_rgba(0, 1, 0, 1), 1)
 
         imgui.end()
