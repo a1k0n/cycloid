@@ -164,7 +164,7 @@ bool DriveController::GetControl(const DriverConfig &config,
   float target_k = clip(k, -2, 2);
   float target_w = k*vr_;
 
-  float verr = target_v - vr_;
+  float verr = 0.4*prev_v_err_ + 0.6*(target_v - vr_);
   float BW_w = 100. / config.servo_rate;
   float srv_off = 0.01 * config.servo_offset;
   float srv_fine = 0.01 * config.servo_finetune;
@@ -185,7 +185,7 @@ bool DriveController::GetControl(const DriverConfig &config,
   // heuristic: subtract magnitude of yaw rate error from throttle control
   float werr = fabsf(target_w - w_) * 0.01 * config.turnin_lift;
 
-  float du = BW_v * (dverr + k2 * prev_throttle_ * verr * dt);
+  float du = BW_v * (dverr + k2 * fabsf(prev_throttle_) * verr * dt);
 
   *throttle_out = clip(prev_throttle_ + du, -1, 1);
   prev_throttle_ = *throttle_out;
