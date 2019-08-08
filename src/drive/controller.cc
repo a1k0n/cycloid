@@ -23,7 +23,7 @@ void DriveController::ResetState() {
   w_ = 0;
   prev_throttle_ = 0;
   prev_steer_ = 0;
-  prev_v_err_ = 0;
+  ierr_v_ = 0;
   ierr_k_ = 0;
 }
 
@@ -68,8 +68,6 @@ void DriveController::Plan(const DriverConfig &config) {
     k0 = clip(w_ / vr_, -kmax + 3 * dk, kmax - 3 * dk);
   }
 
-  timeval tv0, tv1;
-  gettimeofday(&tv0, NULL);
   float s = config.lookahead_dist * 0.01;
   for (int a = 0; a < (1+nangles*2); a++) {
     // compute next x, y, theta
@@ -99,9 +97,6 @@ void DriveController::Plan(const DriverConfig &config) {
     target_k_Vs_[a] = V+P;
     // printf("%0.1f/%0.1f ", V, P);
   }
-  // gettimeofday(&tv1, NULL);
-  // printf(" control %ld.%06lds\n", tv1.tv_sec - tv0.tv_sec,
-  //       tv1.tv_usec - tv0.tv_usec);
 
   // compute target curvature at all times, just for datalogging purposes
   float bestV = target_k_Vs_[0];
@@ -134,7 +129,7 @@ bool DriveController::GetControl(const DriverConfig &config,
         clip(steering_in, STEER_LIMIT_LOW / 127.0, STEER_LIMIT_HIGH / 127.0);
     prev_steer_ = *steering_out;
     prev_throttle_ = *throttle_out;
-    prev_v_err_ = 0;
+    ierr_v_ = 0;
     ierr_k_ = 0;
     return true;
   }
@@ -164,7 +159,6 @@ bool DriveController::GetControl(const DriverConfig &config,
   float target_k = clip(k, -2, 2);
   float target_w = k*vr_;
 
-  float verr = 0.4*prev_v_err_ + 0.6*(target_v - vr_);
   float BW_w = 100. / config.servo_rate;
   float srv_off = 0.01 * config.servo_offset;
   float srv_fine = 0.01 * config.servo_finetune;
@@ -178,20 +172,21 @@ bool DriveController::GetControl(const DriverConfig &config,
                        STEER_LIMIT_LOW / 127.0, STEER_LIMIT_HIGH / 127.0);
   prev_steer_ = *steering_out;
 
-  float BW_v = 0.01 * config.motor_bw;
-  float dverr = verr - prev_v_err_;
-  float k2 = 0.01 * config.motor_k2;
+  float BW_v = 0.01 * config.motor_gain;
+  float kI = 0.01 * config.motor_kI;
+  // boost control gain at high velocities
+  float vgain = clip(BW_v / (1 - 0.025*vr_), 0.01, 2.0);
+  float verr = target_v - vr_;
+  float u = vgain * (verr + kI*ierr_v_);
+  if (u > -1 && u < 1) {
+    ierr_v_ += verr * dt;
+  }
+  *throttle_out = clip(u, -1, 1);
+  prev_throttle_ = *throttle_out;
 
   // heuristic: subtract magnitude of yaw rate error from throttle control
   float werr = fabsf(target_w - w_) * 0.01 * config.turnin_lift;
-
-  float du = BW_v * (dverr + k2 * fabsf(prev_throttle_) * verr * dt);
-
-  *throttle_out = clip(prev_throttle_ + du, -1, 1);
-  prev_throttle_ = *throttle_out;
-  // hack in yaw error here
   *throttle_out = clip(*throttle_out - werr, -1, 1);
-  prev_v_err_ = verr;
 
   // update state for datalogging
   target_v_ = target_v;
@@ -208,7 +203,7 @@ int DriveController::SerializedSize() const {
 
 int DriveController::Serialize(uint8_t *buf, int buflen) const {
   uint32_t len = SerializedSize();
-  assert(buflen >= len);
+  assert(buflen >= (int)len);
 
   memcpy(buf, "CTL2", 4);  // controller state
   memcpy(buf + 4, &len, 4);

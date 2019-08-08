@@ -38,7 +38,7 @@ class DriveController {
   float w_;              // yaw rate
   float prev_throttle_;  // previous throttle control
   float prev_steer_;     // previous steer control
-  float prev_v_err_;     // previous velocity error
+  float ierr_v_;         // integrated velocity error
   float ierr_k_;         // integrated curvature error
 
   float target_ks_[7];    // next potential control actions

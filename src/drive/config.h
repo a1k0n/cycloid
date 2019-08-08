@@ -25,8 +25,8 @@ class DriverConfig {
   int16_t path_penalty;     // cone / lane penalty magnitude
 
   // motor parameters
-  int16_t motor_bw;     // input magnitude
-  int16_t motor_k2;     // back-EMF const
+  int16_t motor_gain;  // control gain for motor
+  int16_t motor_kI;    // integral term
 
   int16_t turnin_lift;  // amount to lift the throttle on turn-in
 
@@ -46,8 +46,8 @@ class DriverConfig {
     lookahead_krate = 0.8 * 100;
     path_penalty = 3;
 
-    motor_bw = 0.14 * 100;
-    motor_k2 = 0.50 * 100;
+    motor_gain = 0.25 * 100;
+    motor_kI = 3.0 * 100;
 
     turnin_lift = 0;
 

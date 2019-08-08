@@ -191,7 +191,6 @@ class Driver: public CameraReceiver {
     controller_.UpdateLocation(config_, xytheta);
     controller_.Plan(config_);
 
-    uint16_t ds = last_encoders_[0] - carstate_.wheel_pos[0];
     // display_.UpdateConeView(buf, 0, NULL);
     display_.UpdateEncoders(carstate_.wheel_pos);
     // FIXME: hardcoded map size 20mx10m
@@ -452,8 +451,8 @@ const char *DriverInputReceiver::configmenu[] = {
   "lookahead dist",
   "lookahead dkdt",
   "cone/lane penalty",
-  "motor input",
-  "motor back-EMF",
+  "motorcontrol gain",
+  "motorcontrol kI",
   "turn-in lift",
   "servo rate",
   "servo offset",
