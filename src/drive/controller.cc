@@ -59,14 +59,16 @@ void DriveController::UpdateLocation(const DriverConfig &config, const float *xy
 void DriveController::Plan(const DriverConfig &config) {
   // TODO(asloane): consider more feasible maneuvers
   // curvature can swing about 0.3 1/m from wherever it is now in 10ms
-  const int nangles = 3;
+  const int nangles = kLookaheadAngles;
   float k0 = 0;
   float kmax = 1.3;
   float dk = config.lookahead_krate * 0.01 / nangles;
 
+/*
   if (vr_ > 0.3) {
     k0 = clip(w_ / vr_, -kmax + 3 * dk, kmax - 3 * dk);
   }
+  */
 
   float s = config.lookahead_dist * 0.01;
   for (int a = 0; a < (1+nangles*2); a++) {
@@ -76,7 +78,11 @@ void DriveController::Plan(const DriverConfig &config) {
     float V = 0;
     float P = 0;
     {
+      // jump ahead 30ms before we start planning
+      float lookaheadx = 0.090 * vr_;
       float x0 = x_, y0 = y_, t0 = theta_;
+      x0 += lookaheadx*cos(t0);
+      y0 += lookaheadx*sin(t0);
       float theta1 = t0 + ks;
       float C = cos(t0), S = sin(t0);
       if (fabs(k) < 1e-2)
@@ -172,10 +178,11 @@ bool DriveController::GetControl(const DriverConfig &config,
                        STEER_LIMIT_LOW / 127.0, STEER_LIMIT_HIGH / 127.0);
   prev_steer_ = *steering_out;
 
-  float BW_v = 0.01 * config.motor_gain;
+  float vgain = 0.01 * config.motor_gain;
   float kI = 0.01 * config.motor_kI;
   // boost control gain at high velocities
-  float vgain = clip(BW_v / (1 - 0.025*vr_), 0.01, 2.0);
+  // ...or don't, we need to prevent oscillation
+  // vgain = clip(vgain / (1 - 0.025*vr_), 0.01, 2.0);
   float verr = target_v - vr_;
   float u = vgain * (verr + kI*ierr_v_);
   if (u > -1 && u < 1) {
@@ -192,13 +199,13 @@ bool DriveController::GetControl(const DriverConfig &config,
   target_v_ = target_v;
   target_w_ = target_w;
   bw_w_ = BW_w;
-  bw_v_ = BW_v;
+  bw_v_ = vgain;
 
   return true;
 }
 
 int DriveController::SerializedSize() const {
-  return 8 + sizeof(float) * (12 + 2 * 7);
+  return 8 + sizeof(float) * (12 + 2 * (1+kLookaheadAngles*2));
 }
 
 int DriveController::Serialize(uint8_t *buf, int buflen) const {
@@ -233,11 +240,11 @@ int DriveController::Serialize(uint8_t *buf, int buflen) const {
   buf += 4;
   memcpy(buf, &bw_v_, 4);
   buf += 4;
-  for (int a = 0; a < 7; a++) {
+  for (int a = 0; a < (1+kLookaheadAngles*2); a++) {
     memcpy(buf, &target_ks_[a], 4);
     buf += 4;
   }
-  for (int a = 0; a < 7; a++) {
+  for (int a = 0; a < (1+kLookaheadAngles*2); a++) {
     memcpy(buf, &target_k_Vs_[a], 4);
     buf += 4;
   }

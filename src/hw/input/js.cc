@@ -64,7 +64,11 @@ bool JoystickInput::ReadInput(InputReceiver *receiver) {
     if (type == 0x01) {  // button
       value = value ? 1 : 0;
       int16_t oldvalue = (buttons_ >> number) & 1;
+#ifdef WiiUPro
       static const char *buttonmap = "BAXYLRlr-+H,.";
+#else
+      static const char *buttonmap = "BAXYLR-+H,.??";
+#endif
       if (oldvalue != value) {
         if (number < 13) {
           if (value) {
@@ -87,7 +91,22 @@ bool JoystickInput::ReadInput(InputReceiver *receiver) {
         buttons_ &= ~(1 << number);
       }
     } else if (type == 0x02) {  // axis
-      receiver->OnAxisMove(number, value);
+      // logitech F710 axes 6, 7 are DPad
+      if (number == 6) {
+        if (value < 0) {
+          receiver->OnDPadPress('L');
+        } else if (value > 0) {
+          receiver->OnDPadPress('R');
+        }
+      } else if (number == 7) {
+        if (value < 0) {
+          receiver->OnDPadPress('U');
+        } else if (value > 0) {
+          receiver->OnDPadPress('D');
+        }
+      } else {
+        receiver->OnAxisMove(number, value);
+      }
     }
   }
   return newvalue;

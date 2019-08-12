@@ -85,6 +85,18 @@ class DriverConfig {
     fclose(fp);
     return n == 1;
   }
+
+  int SerializedSize() const {
+    return 8 + sizeof(*this);
+  }
+
+  int Serialize(uint8_t *buf, int buflen) {
+    int siz = SerializedSize();
+    memcpy(buf, "cfg1", 4);
+    memcpy(buf+4, &siz, 4);
+    memcpy(buf+8, this, sizeof(*this));
+    return siz;
+  }
 };
 
 #endif  // DRIVE_CONFIG_H_

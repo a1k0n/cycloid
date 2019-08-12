@@ -15,13 +15,10 @@
 const int STEER_LIMIT_LOW = -85;
 const int STEER_LIMIT_HIGH = 127;
 
-const float WHEEL_DIAMETER = 0.0666;
+const float WHEEL_DIAMETER = 0.065;
 const float DRIVE_RATIO = 84./25. * 2.1;  // 84t spur, 25t pinion, 2.1 final drive
 const float MOTOR_POLES = 3;  // brushless sensor counts per motor revolution
 const float V_SCALE = WHEEL_DIAMETER*M_PI / DRIVE_RATIO / MOTOR_POLES;
-
-const float MOTOR_BW = 2 * 6.28;  // motor control loop bandwidth
-const float YAW_BW = 0.5 * 6.28;  // yaw control loop bandwidth
 
 using Eigen::Vector3f;
 using Eigen::Matrix3f;
@@ -39,7 +36,7 @@ class CFIR : public InputReceiver {
     js_steering_ = 0;
     exit_ = false;
     recording_ = NULL;
-    mode_ = SysId;
+    mode_ = Control;
   }
   virtual ~CFIR() {}
 
@@ -82,7 +79,7 @@ class CFIR : public InputReceiver {
       perror(fnamebuf);
       return;
     }
-    setlinebuf(recording_);
+    // setlinebuf(recording_);
     fprintf(recording_, "# dt u_esc u_steer dw wperiod gx gy gz ax ay az\n");
     fprintf(stderr, "recording %s\n", fnamebuf);
   }
@@ -230,17 +227,19 @@ int main(int argc, char *argv[]) {
   CFIR ir;
 
   SysIdentifier steer_id;
-  PILoop steer_pi;
+  PIDLoop steer_pi;
   SysIdentifier motor_id;
-  PILoop motor_pi;
+  PIDLoop motor_pi;
 
-  bool was_learning = true;
+  bool was_learning = false;
   setlinebuf(stdout);
+  float T = 0, phi = 0;
   while (!ir.exit_ && car.AwaitSync(&wpos, &wperiod)) {
     timeval t1;
     gettimeofday(&t1, NULL);
     float dt = (t1.tv_sec + t1.tv_usec * 1e-6)
       - (t0.tv_sec + t0.tv_usec * 1e-6);
+    T += dt;
 
     js.ReadInput(&ir);
     {
@@ -264,58 +263,72 @@ int main(int argc, char *argv[]) {
     int8_t u_esc = 0;
     int8_t u_steer = 0;
     switch (ir.mode_) {
-      case ir.SysId:
-        {
-          u_esc = clipi16(ir.Throttle() >> 8, -127, 127);
-          u_steer = clipi16(ir.Steering() >> 8,
-              STEER_LIMIT_LOW, STEER_LIMIT_HIGH);
+      case ir.SysId: {
+        if (!was_learning) {
+          T = 0;
+          phi = 0;
+          fprintf(stderr, "starting system identification\n");
+        }
+        // u_esc = clipi16(ir.Throttle() >> 8, -127, 127);
+        // u_steer = clipi16(ir.Steering() >> 8, STEER_LIMIT_LOW,
+        // STEER_LIMIT_HIGH); sine sweep, 2Hz..20Hz
+        float f = exp(log(2.0) + ((log(20)-log(2.0)) * T / 10.0));
+        if (f > 20.0) {
+          u_esc = 0;
+        } else {
+          float u = 0.5 + 0.5 * sin(phi * 2 * M_PI);
+          phi += dt*f;
+          u_esc = clipi16(127 * u, -127, 127);
+        }
+#if 0
           if (v > 0) {
             // separate brake_id is unsafe for now
             motor_id.AddObservation(v, 1, u_esc, dt);
             steer_id.AddObservation(gyro[2], v, u_steer, dt);
           }
-        }
+#endif
         // hold PID loops in reset while learning
         motor_pi.Reset();
         steer_pi.Reset();
         was_learning = true;
         break;
-      case ir.Control:
-        {
-          float v_target = 8 * ir.Throttle() / 32767.0;
-          if (v_target <= 0) {
-            // don't wind up the integrator! just stop the car.
-            v_target = 0;
-          }
-          // turn left -> positive gyro rate, hence negative sign
-          float k_target = -ir.Steering() / 32768.0;  // +-1m turning radius
-
-          if (was_learning) {
-            auto km = motor_id.Solve();
-            fprintf(stderr, "motor sysid: %f %f %f %f %f\n", km[0], km[1],
-                    km[2], km[3], km[4]);
-            auto k = steer_id.Solve();
-            fprintf(stderr, "steer sysid: %f %f %f %f\n", k[0], k[1], k[2],
-                    k[3]);
-            was_learning = false;
-          }
-
-          auto k = motor_id.Solve();
-          motor_pi.SetK(1, 0);
-          u_esc = motor_pi.Control(v_target - v, dt);
-          k = steer_id.Solve();
-          steer_pi.SetK(1, 0);
-          float kerr = 0;
-          if (v > 0.5) {  // must be going at least 0.5 m/s for closed loop yaw control
-            kerr = k_target - gyro[2]/v;
-          } else {
-            // reset wind-up at low speeds
-            steer_pi.Reset();
-          }
-          u_steer = clipi16(k_target*k[0] + k[3] + steer_pi.Control(kerr, dt),
-              STEER_LIMIT_LOW, STEER_LIMIT_HIGH);
+      }
+      case ir.Control: {
+        float v_target = 8 * ir.Throttle() / 32767.0;
+        if (v_target <= 0) {
+          // don't wind up the integrator! just stop the car.
+          v_target = 0;
         }
-        break;
+        // turn left -> positive gyro rate, hence negative sign
+        float k_target = -ir.Steering() / 32768.0;  // +-1m turning radius
+
+        if (was_learning) {
+          /*
+          auto km = motor_id.Solve();
+          fprintf(stderr, "motor sysid: %f %f %f %f %f\n", km[0], km[1], km[2],
+                  km[3], km[4]);
+          auto k = steer_id.Solve();
+          fprintf(stderr, "steer sysid: %f %f %f %f\n", k[0], k[1], k[2], k[3]);
+          */
+          was_learning = false;
+        }
+
+        auto k = motor_id.Solve();
+        motor_pi.SetK(1, 0, 0);
+        u_esc = motor_pi.Control(v_target - v, dt);
+        k = steer_id.Solve();
+        steer_pi.SetK(1, 0, 0);
+        float kerr = 0;
+        if (v > 0.5) {  // must be going at least 0.5 m/s for closed loop yaw
+                        // control
+          kerr = k_target - gyro[2] / v;
+        } else {
+          // reset wind-up at low speeds
+          steer_pi.Reset();
+        }
+        u_steer = clipi16(k_target * k[0] + k[3] + steer_pi.Control(kerr, dt),
+                          STEER_LIMIT_LOW, STEER_LIMIT_HIGH);
+      } break;
     }
 
     if (!car.SetControls(n >> 4, u_esc, u_steer)) {

@@ -18,10 +18,10 @@ class TestInputReceiver : public InputReceiver {
   }
 
   void OnButtonPress(char button) {
-    printf("ButtonPress   %d\n", button);
+    printf("ButtonPress   %c\n", button);
   }
   void OnButtonRelease(char button) {
-    printf("ButtonRelease %d\n", button);
+    printf("ButtonRelease %c\n", button);
   }
 
   void OnAxisMove(int axis, int16_t value) {

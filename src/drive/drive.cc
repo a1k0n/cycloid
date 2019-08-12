@@ -69,7 +69,7 @@ struct CarState {
   int SerializedSize() { return 8 + 4 * 3 * 2 + 3 + 2 * 4 * 2; }
 
   int Serialize(uint8_t *buf, int bufsiz) {
-    uint32_t len = SerializedSize();
+    int len = SerializedSize();
     assert(bufsiz >= len);
     memcpy(buf, "CSta", 4);
     memcpy(buf + 4, &len, 4);
@@ -117,6 +117,12 @@ class Driver: public CameraReceiver {
       return false;
     }
     printf("--- recording %s ---\n", fname);
+    // write header IFF chunk immediately: store the car config
+    int siz = config_.SerializedSize();
+    uint8_t *hdrbuf = new uint8_t[siz];
+    config_.Serialize(hdrbuf, siz);
+    write(output_fd_, hdrbuf, siz);
+    delete[] hdrbuf;
     return true;
   }
 
@@ -428,7 +434,8 @@ class DriverInputReceiver : public InputReceiver {
       case 1:  // left stick y axis
         js_throttle_ = -value;
         break;
-      case 2:  // right stick x axis
+      case 3:  // right stick x axis
+        // changed! 2 for Wii U Pro controller, 3 for Logitech F710
         js_steering_ = value;
         break;
     }

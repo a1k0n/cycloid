@@ -7,6 +7,8 @@
 #include "drive/config.h"
 #include "drive/vflookup.h"
 
+static const int kLookaheadAngles = 20;
+
 class DriveController {
  public:
   DriveController();
@@ -41,8 +43,8 @@ class DriveController {
   float ierr_v_;         // integrated velocity error
   float ierr_k_;         // integrated curvature error
 
-  float target_ks_[7];    // next potential control actions
-  float target_k_Vs_[7];  // total value of each action over all particles
+  float target_ks_[1+kLookaheadAngles*2];    // next potential control actions
+  float target_k_Vs_[1+kLookaheadAngles*2];  // total value of each action over all particles
   float target_k_;
 
   float target_v_, target_w_;  // control targets
