@@ -3,6 +3,23 @@ import numpy as np
 import struct
 
 
+def read_header(f):
+    try:
+        ck = chunk.Chunk(f, False, False, True)
+    except EOFError:
+        return False, None
+    if ck.getname() == b'cfg1':
+        hdr = ck.read()
+        print("read header: ", struct.unpack("=%dh" % (len(hdr)/2), hdr))
+        return True, hdr
+    if ck.getname() == b'CYCF':
+        f.seek(0)
+        return True, None
+    else:
+        print("Not a cycloid IFF log file (got ", ck.getname(), "?)")
+        return False, None
+
+
 def read_frame(f):
     try:
         ck = chunk.Chunk(f, False, False, True)
@@ -51,7 +68,8 @@ def read_frame(f):
         elif n == b'CTLs':  # controller state
             framedata['controldata'] = struct.unpack("=17f", ick.read())
         elif n == b'CTL2':  # controller state
-            framedata['controldata2'] = struct.unpack("=26f", ick.read())
+            dat = ick.read()
+            framedata['controldata2'] = struct.unpack("=%df" % (len(dat)/4), dat)
         elif n == b'Y420':  # YUV420 frame
             w, = struct.unpack('=H', ick.read(2))
             framedata['yuv420'] = np.frombuffer(
@@ -65,6 +83,7 @@ def read_frame(f):
 class RecordIterator:
     def __init__(self, f):
         self.f = f
+        _, self.header = read_header(f)
 
     def __iter__(self):
         return self
@@ -95,6 +114,7 @@ class RecordScanner:
 
     def __init__(self, f):
         self.f = f
+        _, self.header = read_header(f)
         self.idx = self.ScanIndex()
 
     def num_frames(self):

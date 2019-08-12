@@ -11,6 +11,8 @@ import time
 
 import recordreader
 
+K, dist, frontmap = None, None, None
+
 
 def load_texture(im):
     # gl.glEnable(gl.GL_TEXTURE_2D)
@@ -72,21 +74,44 @@ def motor_step_response(ks, N, dt=1.0/30):
     return vs
 
 
+def renderfront(bgr):
+    global K, dist
+    if K is None:
+        K = np.load("../../tools/camcal/camera_matrix.npy")
+        K[:2] /= 4.05
+        dist = np.load("../../tools/camcal/dist_coeffs.npy")
+    Knew = np.array([
+        [-250, 0, 320],
+        [0, 250, 260],
+        [0, 0, 1]
+    ])
+    R = cv2.Rodrigues(np.array([0, (22.-90)*np.pi/180., 0]))[0]
+    R = np.dot(np.array([[0, 1, 0], [1, 0, 0], [0, 0, 1]]), R)
+    return cv2.fisheye.undistortImage(
+        bgr, K=K, D=dist, Knew=np.dot(Knew, R), new_size=(640, 360))
+
+
 class ReplayGUI:
     def __init__(self, fname):
         self.f = open(fname, "rb")
         print("scanning ", fname, "...")
         self.scanner = recordreader.RecordScanner(self.f)
         self.frametexid = None
+        self.fronttexid = None
         self.f.seek(0, 0)
         self.controlstate = []
         self.controls = []
+        self.carstate = []
         self.ts = []
         self.learn_controls = False
+        self.lap_timer = False
+        self.show_frontview = False
+        self.startlinexy = np.array([450/50.0, 160/60.0])
         for frdata in recordreader.RecordIterator(self.f):
             self.ts.append(frdata['tstamp'])
             (throttle, steering, accel, gyro, servo,
              wheels, periods) = frdata['carstate']
+            self.carstate.append(frdata['carstate'])
             self.controls.append([throttle, steering])
             self.controlstate.append(frdata['controldata2'])
         self.controlstate = np.float32(self.controlstate)
@@ -121,6 +146,8 @@ class ReplayGUI:
     def loadframe(self, i):
         if self.frametexid is not None:
             self.unloadlist.append(self.frametexid)
+        if self.fronttexid is not None:
+            self.unloadlist.append(self.fronttexid)
         self.i = i
         self.frame = self.scanner.frame(i)
         yuv420 = self.frame['yuv420']
@@ -132,6 +159,8 @@ class ReplayGUI:
             self.acts = None
         im = cv2.cvtColor(yuv420, cv2.COLOR_YUV2BGR_I420)
         self.frametexid = load_texture(im)
+        frontim = renderfront(im)
+        self.fronttexid = load_texture(frontim)
 
     def nextframe(self):
         if self.i < self.scanner.num_frames() - 1:
@@ -164,10 +193,17 @@ class ReplayGUI:
         imgui.text(tstring)
 
         w = imgui.get_window_width()
-        imgui.image(self.frametexid, w, 480*w/640)
+        if self.show_frontview:
+            imgui.image(self.fronttexid, w, w/2)  # 2:1 aspect for front view
+        else:  # 4:3 aspect
+            imgui.image(self.frametexid, w, 3*w/4)
 
         if self.acts is not None:
             imgui.plot_lines("activations", self.acts)
+
+        nCtrlAngles = (len(self.controlstate[self.i]) - 12) / 2
+        imgui.plot_lines(
+            "control costs", np.clip(self.controlstate[self.i][-nCtrlAngles:], 0, 100))
 
         # make a histogram of expected cone locations
         if self.acts is not None:
@@ -192,7 +228,7 @@ class ReplayGUI:
         mi = max(0, i - 30*3)
         temp = self.controlstate[mi:i+1, 3].copy()
         imgui.plot_lines("velocity", temp)
-        temp = self.controlstate[mi:i+1, 10].copy()
+        temp = self.controlstate[mi:i+1, 8].copy()
         imgui.plot_lines("target v", temp)
         temp = self.controls[mi:i+1, 0].copy()
         imgui.plot_lines("control v", temp)
@@ -218,10 +254,15 @@ class ReplayGUI:
         imgui.slider_float("target w", self.controlstate[i, 9], maxw, -maxw)
         v = self.controlstate[i, 3]
         if v > 0.5:
-            k = self.controlstate[i, 5] / v
+            k = self.controlstate[i, 4] / v
         else:
             k = 0
         imgui.slider_float("curvature", k, 2, -2)
+
+        nCtrlAngles = (len(self.controlstate[self.i]) - 12) / 2
+        targetK = self.controlstate[self.i][
+            12 + np.argmin(self.controlstate[self.i][-nCtrlAngles:])]
+        imgui.slider_float("target k", targetK, 2, -2)
 
         imgui.slider_float("windup k", self.controlstate[i, 7], -1, 1)
 
@@ -273,13 +314,60 @@ class ReplayGUI:
             x = self.controlstate[self.i, 0]
             y = self.controlstate[self.i, 1]
             theta = self.controlstate[self.i, 2]
-            v = 1 # self.controlstate[self.i, 3]
+            v = 0.3*self.controlstate[self.i, 3]
             S, C = np.sin(theta), np.cos(theta)
             dl.add_rect_filled(origin[0] + x*scale - 3, origin[1] - y*scale - 3,
                         origin[0] + scale*x + 3,
                         origin[1] - scale*y + 3,
                         imgui.get_color_u32_rgba(0, 1, 0, 1), 1)
+            dl.add_line(origin[0] + x*scale, origin[1] - y*scale,
+                        origin[0] + scale*(x + v*C),
+                        origin[1] - scale*(y + v*S),
+                        imgui.get_color_u32_rgba(0, 1, 0, 1), 1)
 
+        accel = self.carstate[self.i][2]
+        ox, oy = origin[0] + scale*3, origin[1] + scale*9
+        for i in range(100):
+            t0 = i*2*np.pi / 100
+            t1 = (i+1)*2*np.pi / 100
+            dl.add_line(
+                ox + 2*scale*np.cos(t0), oy - 2*scale*np.sin(t0),
+                ox + 2*scale*np.cos(t1), oy - 2*scale*np.sin(t1),
+                imgui.get_color_u32_rgba(0.7, 0.7, 0.7, 1), 1)
+            dl.add_line(
+                ox + scale*np.cos(t0), oy - scale*np.sin(t0),
+                ox + scale*np.cos(t1), oy - scale*np.sin(t1),
+                imgui.get_color_u32_rgba(0.7, 0.7, 0.7, 1), 1)
+        dl.add_line(ox, oy, ox + scale*accel[1], oy - scale*accel[0],
+                    imgui.get_color_u32_rgba(0.3, 1, 0.5, 1), 3)
+
+        imgui.end()
+
+    def render_laptimer(self):
+        _, self.lap_timer = imgui.begin("lap timer", True)
+        if not self.lap_timer:
+            imgui.end()
+            return
+
+        # _, self.startlinexy[0] = imgui.slider_float("start line x", self.startlinexy[0], 0, 20)
+        # _, self.startlinexy[1] = imgui.slider_float("top lane y", self.startlinexy[0], 0, 10)
+        x = self.controlstate[:, 0]
+        y = self.controlstate[:, 1]
+        lapidxs = np.nonzero((x[:-1] < self.startlinexy[0]) &
+                             (x[1:] > self.startlinexy[0]) & (
+                                 y[1:] < self.startlinexy[1]))[0]
+
+        n = 0
+        for i in range(1, len(lapidxs)):
+            if self.i < lapidxs[i]:
+                break
+            dt = self.ts[lapidxs[i]] - self.ts[lapidxs[i-1]]
+            n += 1
+            imgui.text("Lap %d: %d.%03d" % (n, int(dt), 1000*(dt-int(dt))))
+        if self.i > lapidxs[0]:
+            dt = self.ts[self.i] - self.ts[lapidxs[n]]
+            imgui.text("Lap %d: %d.%03d" % (n+1, int(dt), 1000*(dt-int(dt))))
+        imgui.set_scroll_here(1.0)
         imgui.end()
 
     def render_controllearn(self):
@@ -336,6 +424,8 @@ class ReplayGUI:
         self.render_graphs()
         if self.learn_controls:
             self.render_controllearn()
+        if self.lap_timer:
+            self.render_laptimer()
 
 
 def replay(fname):
@@ -356,10 +446,17 @@ def replay(fname):
                 if clicked_quit:
                     exit(0)
                 imgui.end_menu()
+            if imgui.begin_menu("View", True):
+                _, replaygui.show_frontview = imgui.menu_item(
+                    "Front view", selected=replaygui.show_frontview)
+                imgui.end_menu()
             if imgui.begin_menu("Tools", True):
                 clicked, _ = imgui.menu_item("Learn control params")
                 if clicked:
                     replaygui.learn_controls = True
+                clicked, _ = imgui.menu_item("Lap timer")
+                if clicked:
+                    replaygui.lap_timer = True
                 imgui.end_menu()
             imgui.end_main_menu_bar()
 
