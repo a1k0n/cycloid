@@ -209,7 +209,7 @@ int DriveController::SerializedSize() const {
 
 int DriveController::Serialize(uint8_t *buf, int buflen) const {
   uint32_t len = SerializedSize();
-  assert(buflen >= reinterpret_cast<int>(len));
+  assert(buflen >= static_cast<int>(len));
 
   memcpy(buf, "CTL2", 4);  // controller state
   memcpy(buf + 4, &len, 4);
