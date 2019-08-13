@@ -1,5 +1,4 @@
-#FROM resin/rpi-raspbian:stretch AS build
-FROM mitchallen/pi-cross-compile AS build
+FROM a1k0n/rpi3-gcc8:v0.1.0 AS build
 
 # Make the number of compile jobs configurable.
 ARG jobs=8
@@ -10,37 +9,27 @@ RUN apt-get install -yq --no-install-recommends \
   build-essential \
   cmake \
   libeigen3-dev \
-  curl \
+  wget \
   pkg-config
 
-# Install debugging packages. TODO Remove once this Dockerfile is stable.
-RUN apt-get install -yq --no-install-recommends \
-  cmake-curses-gui \
-  git \
-  vim
-RUN apt-get clean 
+# Build our binary
+WORKDIR /build/src
+ENV PATH "$PATH:/build/x-tools/armv8-rpi3-linux-gnueabihf/bin/"
+RUN wget -O - http://www.zlib.net/zlib-1.2.11.tar.gz | tar zxvf -
+WORKDIR /build/src/zlib-1.2.11
+RUN CHOST=armv8-rpi3-linux-gnueabihf ./configure && make && make install prefix=/build/x-tools/armv8-rpi3-linux-gnueabihf/armv8-rpi3-linux-gnueabihf/sysroot/usr
 
 # Copy all the app source into docker context
-COPY . /usr/cycloid
-WORKDIR /usr/cycloid
+COPY . /build/cycloid
 
-RUN cat crosscompile.cmake.patch >> crosscompile.cmake
-
-# Build our binary
-WORKDIR /usr/build
-ENV PATH "$PATH:/pitools/arm-bcm2708/gcc-linaro-arm-linux-gnueabihf-raspbian-x64/bin"
-RUN curl https://www.zlib.net/zlib-1.2.11.tar.gz | tar zxvf -
-WORKDIR /usr/build/zlib-1.2.11
-RUN CHOST=arm-linux-gnueabihf ./configure && make && make install prefix=/pitools/arm-bcm2708/gcc-linaro-arm-linux-gnueabihf-raspbian-x64/arm-linux-gnueabihf/libc/usr
-
-WORKDIR /usr/build
+WORKDIR /build/o
 # LIBRARY_TYPE is a custom way of 'userland' to switch between static/shared.
 # There is also a 'vcos' library whose static behavior can be controlled through
 # VCOS_PTHREADS_BUILD_SHARED; however setting this to FALSE does not work (obvious link error).
 # In order not to modify 'userland', we just set the library install target correctly.
 # VMCS_INSTALL_PREFIX.
-RUN cmake /usr/cycloid/src \
-  -DCMAKE_TOOLCHAIN_FILE=/usr/cycloid/crosscompile.travis \
+RUN cmake /build/cycloid/src \
+  -DCMAKE_TOOLCHAIN_FILE=/build/cycloid/crosscompile.travis \
   -DBUILD_SHARED_LIBS=OFF -DLIBRARY_TYPE=STATIC \
   -DCMAKE_INSTALL_PREFIX=/usr/local -DVMCS_INSTALL_PREFIX=/usr/local
 RUN cmake --build . -- --jobs=$jobs
@@ -52,5 +41,3 @@ RUN cmake --build . -- --jobs=$jobs
 # RUN ldconfig
 # #switch on systemd init system in container
 # ENV INITSYSTEM on
-# 
-# CMD drive
