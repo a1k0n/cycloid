@@ -7,19 +7,12 @@
 
 #if (defined __ARM_NEON) || (defined __ARM_NEON__)
 #include <arm_neon.h>
-#else
+#elif defined __SSE3__  // you'll probably need -msse3 to enable this
 #include <emmintrin.h>
 #include <immintrin.h>
 #include <pmmintrin.h>
 #include <xmmintrin.h>
 #endif
-
-/*
-static inline float moddist(float x, float q, float ooq) {
-  float xoq = x * ooq;
-  return q * (xoq - __builtin_roundf(xoq));
-}
- */
 
 bool CeilingTracker::Open(const char *fname) {
   uint8_t header[20];
@@ -241,7 +234,7 @@ float CeilingTracker::Update(const uint8_t *img, uint8_t thresh, float xgrid,
   return 0.5 * cost;
 }
 
-#else
+#elif defined __SSE3__
 
 float hsum_ps_sse3(__m128 v) {
   __m128 shuf = _mm_movehdup_ps(v);  // broadcast elements 3,1 to 2,0
@@ -351,11 +344,13 @@ float CeilingTracker::Update(const uint8_t *img, uint8_t thresh, float xgrid,
     float Sdy = hsum_ps_sse3(Sdyvec);
     float SdRxy = hsum_ps_sse3(SdRxyvec);
 #if 0
-  printf("sse: R=%f cost=%f\n", R, cost);
-  printf("JTJ | %f %f %f\n", N + lambda, 0.0f, S2);
-  printf("    | %f %f %f\n", 0.0f, N + lambda, S3);
-  printf("    | %f %f %f\n", S2, S3, R + lambda);
-  printf("JTr | %f %f %f\n", -Sdx, -Sdy, -SdRxy);
+  if (verbose) {
+    printf("sse: R=%f cost=%f\n", R, cost);
+    printf("JTJ | %f %f %f\n", N + lambda, 0.0f, S2);
+    printf("    | %f %f %f\n", 0.0f, N + lambda, S3);
+    printf("    | %f %f %f\n", S2, S3, R + lambda);
+    printf("JTr | %f %f %f\n", -Sdx, -Sdy, -SdRxy);
+  }
 #endif
 
 #if 0
@@ -376,10 +371,10 @@ float CeilingTracker::Update(const uint8_t *img, uint8_t thresh, float xgrid,
     }
 
 #if 0
-  printf("JTJ | %f %f %f\n", N + lambda, 0.0f, S2);
-  printf("    | %f %f %f\n", 0.0f, N + lambda, S3);
-  printf("    | %f %f %f\n", S2, S3, R + lambda);
-  printf("JTr | %f %f %f\n", -Sdx, -Sdy, -SdRxy);
+    printf("JTJ | %f %f %f\n", N + lambda, 0.0f, S2);
+    printf("    | %f %f %f\n", 0.0f, N + lambda, S3);
+    printf("    | %f %f %f\n", S2, S3, R + lambda);
+    printf("JTr | %f %f %f\n", -Sdx, -Sdy, -SdRxy);
 #endif
 #endif
     {
@@ -400,6 +395,121 @@ float CeilingTracker::Update(const uint8_t *img, uint8_t thresh, float xgrid,
     if (verbose) {
       printf("CeilTrack::Update iter %d: cost %f xyt %f %f %f (%d pixels)\n",
              iter, cost * 0.5, xytheta[0], xytheta[1], xytheta[2], M);
+    }
+  }
+
+  return 0.5 * cost;
+}
+
+#else  // plain ol' unvectorized float version
+
+static inline float moddist(float x, float q, float ooq) {
+  float xoq = x * ooq;
+  // hack: avoid extra work doing directional rounding by just adding 1024
+  return q * (xoq - ((int)(xoq+1024.5f)) + 1024.f);
+}
+
+static inline float half_to_float_fast5(uint16_t h) {
+  typedef union {
+    uint32_t u;
+    float f;
+  } FP32;
+  static const FP32 magic = {(254 - 15) << 23};
+  FP32 o;
+
+  o.u = (h & 0x7fff) << 13;  // exponent/mantissa bits
+  o.f *= magic.f;            // exponent adjust
+  o.u |= (h & 0x8000) << 16;  // sign bit
+  return o.f;
+}
+
+float CeilingTracker::Update(const uint8_t *img, uint8_t thresh, float xgrid,
+                             float ygrid, float *xytheta, int niter,
+                             bool verbose) {
+  int rleptr = 0;
+  int uvptr = 0;
+
+  float ooxg = 1.0 / xgrid, ooyg = 1.0 / ygrid;
+
+  // first step: lookup all the camera ray vectors of white pixels looking up
+  static uint32_t *xybuf = NULL;
+  int bufptr = 0;
+  if (xybuf == NULL) {
+    // needs to have 16-byte alignment, which it should, being a relatively
+    // large allocation
+    xybuf = new uint32_t[uvmaplen_];
+  }
+  while (rleptr < mask_rlelen_) {
+    // read zero-len
+    img += mask_rle_[rleptr++];
+    int n = mask_rle_[rleptr++];
+    while (n--) {
+      if ((*img++) > thresh) {
+        xybuf[bufptr++] = uvmap_[uvptr];
+      }
+      uvptr++;
+    }
+  }
+
+  float cost = 0;
+  for (int iter = 0; iter < niter; iter++) {
+    // this is solvable in closed form! it's a pre-inverted 3x3 matrix * a 3x1
+    // vector
+    float u = xytheta[0], v = xytheta[1], theta = xytheta[2];
+    float S = sin(theta), C = cos(theta);
+
+    cost = 0;
+    float R = 0;
+    float S2 = 0;
+    float S3 = 0;
+    float Sdx = 0;
+    float Sdy = 0;
+    float SdRxy = 0;
+
+    // unvectorized remainder
+    for (int i = 0; i < bufptr; i++) {
+      float x = half_to_float_fast5(*((uint16_t *)(xybuf + i)));
+      float y = half_to_float_fast5(*((uint16_t *)(xybuf + i) + 1));
+      float Rx = x * C + y * S, Ry = -x * S + y * C;
+      R += x * x + y * y;
+      S2 -= Ry;
+      S3 += Rx;
+      float dx = moddist(Rx - u, xgrid, ooxg);
+      float dy = moddist(Ry - v, ygrid, ooyg);
+      cost += dx * dx + dy * dy;
+      Sdx += dx;
+      Sdy += dy;
+      SdRxy += -dx * Ry + dy * Rx;
+    }
+
+    const float lambda = 1;
+    float N = bufptr;
+#if 0
+    if (verbose) {
+      printf("JTJ | %f %f %f\n", N + lambda, 0.0f, S2);
+      printf("    | %f %f %f\n", 0.0f, N + lambda, S3);
+      printf("    | %f %f %f\n", S2, S3, R + lambda);
+      printf("JTr | %f %f %f\n", -Sdx, -Sdy, -SdRxy);
+    }
+#endif
+    {
+      float x0 = S3 * Sdy;
+      float x1 = N + lambda;
+      float x2 = SdRxy * x1;
+      float x3 = -x1 * (R + lambda);
+      float x4 = S3 * S3 + x3;
+      float x5 = S2 * S2;
+      float x6 = 1.0 / (x4 + x5);
+      float x7 = x6 / x1;
+      float x8 = S2 * Sdx;
+      xytheta[0] -= x7 * (S2 * (x0 - x2) - Sdx * x4);
+      xytheta[1] -= x7 * (-S3 * x2 + S3 * x8 - Sdy * (x3 + x5));
+      xytheta[2] -= x6 * (-x0 + x2 - x8);
+    }
+
+    if (verbose) {
+      printf("CeilTrack::Update iter %d: cost %f xyt %f %f %f (%d pixels)\n",
+             iter, cost * 0.5, xytheta[0], xytheta[1], xytheta[2], bufptr);
     }
   }
 
