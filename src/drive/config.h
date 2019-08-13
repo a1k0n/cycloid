@@ -4,6 +4,7 @@
 #include <cmath>
 #include <cstdint>
 #include <cstdio>
+#include <cstring>
 
 // circumference of tire (meters) / number of encoder ticks
 const float WHEEL_DIAMETER = 0.0666;

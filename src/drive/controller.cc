@@ -61,7 +61,6 @@ void DriveController::Plan(const DriverConfig &config) {
   // curvature can swing about 0.3 1/m from wherever it is now in 10ms
   const int nangles = kLookaheadAngles;
   float k0 = 0;
-  float kmax = 1.3;
   float dk = config.lookahead_krate * 0.01 / nangles;
 
 /*
@@ -210,7 +209,7 @@ int DriveController::SerializedSize() const {
 
 int DriveController::Serialize(uint8_t *buf, int buflen) const {
   uint32_t len = SerializedSize();
-  assert(buflen >= (int)len);
+  assert(buflen >= reinterpret_cast<int>(len));
 
   memcpy(buf, "CTL2", 4);  // controller state
   memcpy(buf + 4, &len, 4);
