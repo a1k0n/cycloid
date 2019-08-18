@@ -10,6 +10,8 @@ add_definitions("-ftree-vectorize -ffast-math")
 
 add_subdirectory(userland)
 
+add_subdirectory(pigpio)
+
 pkg_check_modules(EIGEN REQUIRED eigen3)
 
 include_directories(${PROJECT_SOURCE_DIR})

@@ -3,7 +3,7 @@
 #include <unistd.h>
 
 #include "hw/gpio/i2c.h"
-#include "hw/imu/imu.h"
+#include "hw/imu/icm20600.h"
 
 using Eigen::Vector3f;
 
@@ -13,7 +13,7 @@ const int INTERVAL_us = 2500;
 
 int main() {
   I2C i2c;
-  IMU imu(i2c);
+  ICM20600 imu(i2c);
 
   if (!i2c.Open()) {
     return 1;

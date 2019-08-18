@@ -1,11 +1,11 @@
 #include "hw/gpio/i2c.h"
-#include "hw/imu/imu.h"
+#include "hw/imu/mpu9150.h"
 
 using Eigen::Vector3f;
 
 int main() {
   I2C i2c;
-  IMU imu(i2c);
+  MPU9150 imu(i2c);
 
   if (!i2c.Open()) {
     return 1;

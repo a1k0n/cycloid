@@ -16,14 +16,15 @@ bool UIDisplay::Init() {
   memset(screen_.GetBuffer(), 0, 320*240*2);
   UpdateStatus("cycloid started", 0x01ff);
 
+  backgroundyuv_ = new uint8_t[76800];
+  memset(backgroundyuv_, 0, 76800);
   FILE *fp = fopen("map.yuv420", "rb");
   if (!fp) {
-    perror("map.yuv420");
-    return false;
+    perror("no background map loaded; map.yuv420");
+  } else {
+    fread(backgroundyuv_, 1, 76800, fp);
+    fclose(fp);
   }
-  backgroundyuv_ = new uint8_t[76800];
-  fread(backgroundyuv_, 1, 76800, fp);
-  fclose(fp);
 
   return true;
 }

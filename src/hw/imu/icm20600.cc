@@ -1,20 +1,10 @@
 // ICM-20600 accel + gyro, no magnetometer
 
-#include <linux/i2c.h>
-#include <linux/i2c-dev.h>
-#include <sys/ioctl.h>
-#include <sys/time.h>
-#include <fcntl.h>
-#include <stdio.h>
-#include <stdint.h>
 #include <unistd.h>
-#include <math.h>
 #include <Eigen/Dense>
-#include <Eigen/Eigenvalues>
-#include <iostream>
 
 #include "hw/gpio/i2c.h"
-#include "hw/imu/imu.h"
+#include "hw/imu/icm20600.h"
 
 using Eigen::Vector3f;
 using Eigen::VectorXd;
@@ -25,7 +15,9 @@ using Eigen::MatrixXd;
 // readout is (16384 >> ACCEL_SHIFT) LSB/g
 const int ACCEL_SHIFT = 3;  // 0..3
 
-bool IMU::Init() {
+ICM20600::~ICM20600() {}
+
+bool ICM20600::Init() {
   i2c_.Write(0x69, 107, 0x80);  // reset
   usleep(10000);
   i2c_.Write(0x69, 107, 0);  // wake up
@@ -63,7 +55,7 @@ bool IMU::Init() {
   return true;
 }
 
-bool IMU::ReadIMU(Vector3f *accel, Vector3f *gyro, float *temp) {
+bool ICM20600::ReadIMU(Vector3f *accel, Vector3f *gyro, float *temp) {
   uint8_t readbuf[14];
   // mpu-9150 accel & gyro
   if (i2c_.Read(0x69, 0x3b, 14, readbuf)) {
