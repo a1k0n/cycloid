@@ -12,6 +12,8 @@ add_subdirectory(userland)
 
 add_subdirectory(pigpio)
 
+add_library(inih inih/ini.c inih/ini.h inih/cpp/INIReader.h inih/cpp/INIReader.cpp)
+
 pkg_check_modules(EIGEN REQUIRED eigen3)
 
 include_directories(${PROJECT_SOURCE_DIR})

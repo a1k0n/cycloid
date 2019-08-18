@@ -16,10 +16,6 @@
 #include "hw/input/js.h"
 #include "ui/display.h"
 
-// #undef this to disable camera, just to record w/ raspivid while
-// driving around w/ controller
-#define CAMERA 1
-
 volatile bool done = false;
 
 // hardcoded garbage for the time being
@@ -36,7 +32,7 @@ void handle_sigint(int signo) { done = true; }
 
 I2C i2c;
 STM32HatSerial stm32hat;
-IMU imu(i2c);
+IMU *imu_;
 UIDisplay display_;
 FlushThread flush_thread_;
 CeilingTracker ceiltrack_;
@@ -474,16 +470,27 @@ int main(int argc, char *argv[]) {
 
   feenableexcept(FE_INVALID | FE_DIVBYZERO | FE_OVERFLOW | FE_UNDERFLOW);
 
-  int fps = 30;
+  INIReader ini("cycloid.ini");
+  {
+    int inierr = ini.ParseError();
+    if (inierr != 0) {
+      if (inierr == -1) {
+        fprintf(stderr, "please create cycloid.ini!\n");
+      } else {
+        fprintf(stderr, "error loading cycloid.ini on line %d\n", inierr);
+      }
+      return 1;
+    }
+  }
+
+  int fps = ini.GetInteger("camera", "fps", 30);
 
   if (!flush_thread_.Init()) {
     return 1;
   }
 
-#ifdef CAMERA
   if (!Camera::Init(640, 480, fps))
     return 1;
-#endif
 
   JoystickInput js;
 
@@ -511,21 +518,23 @@ int main(int argc, char *argv[]) {
     fprintf(stderr, "joystick not detected, but continuing anyway!\n");
   }
 
-  imu.Init();
+  imu_ = IMU::GetI2CIMU(i2c, ini);
+  if (!imu_) {
+    return 1;
+  }
+  imu_->Init();
 
   struct timeval tv;
   gettimeofday(&tv, NULL);
   fprintf(stderr, "%ld.%06ld camera on @%d fps\n", tv.tv_sec, tv.tv_usec, fps);
 
   DriverInputReceiver input_receiver(&driver_.config_);
-#ifdef CAMERA
   if (!Camera::StartRecord(&driver_)) {
     return 1;
   }
 
   gettimeofday(&tv, NULL);
   fprintf(stderr, "%ld.%06ld started camera\n", tv.tv_sec, tv.tv_usec);
-#endif
 
   uint16_t last_wpos = 0;
   stm32hat.Init();
@@ -542,10 +551,7 @@ int main(int argc, char *argv[]) {
       js.ReadInput(&input_receiver);
     }
 
-    {
-      float temp;
-      imu.ReadIMU(&carstate_.accel, &carstate_.gyro, &temp);
-    }
+    imu_->ReadIMU(&carstate_.accel, &carstate_.gyro);
 
     timeval t;
     gettimeofday(&t, NULL);
@@ -563,7 +569,5 @@ int main(int argc, char *argv[]) {
     // printf("%d.%06d %f\n", t1.tv_sec - t.tv_sec, t1.tv_usec - t.tv_usec, dt);
   }
 
-#ifdef CAMERA
   Camera::StopRecord();
-#endif
 }

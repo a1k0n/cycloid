@@ -7,7 +7,7 @@
 class CameraReceiver {
  public:
   virtual ~CameraReceiver();
-  virtual void OnFrame(uint8_t *buf, size_t len)=0;
+  virtual void OnFrame(uint8_t *buf, size_t len) = 0;
 };
 
 struct MMAL_BUFFER_HEADER_T;

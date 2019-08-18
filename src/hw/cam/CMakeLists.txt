@@ -1,4 +1,4 @@
-add_library(cam cam.cc)
+add_library(cam cam.h cam.cc)
 add_executable(camtest camtest.cc)
 
 target_link_libraries(cam mmal)

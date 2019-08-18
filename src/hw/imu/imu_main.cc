@@ -3,7 +3,8 @@
 #include <unistd.h>
 
 #include "hw/gpio/i2c.h"
-#include "hw/imu/icm20600.h"
+#include "hw/imu/imu.h"
+#include "inih/cpp/INIReader.h"
 
 using Eigen::Vector3f;
 
@@ -12,14 +13,19 @@ void sighandler(int sig) {}
 const int INTERVAL_us = 2500;
 
 int main() {
+  INIReader ini("cycloid.ini");
+
   I2C i2c;
-  ICM20600 imu(i2c);
+  IMU *imu = IMU::GetI2CIMU(i2c, ini);
+  if (!imu) {
+    return 1;
+  }
 
   if (!i2c.Open()) {
     return 1;
   }
 
-  if (!imu.Init()) {
+  if (!imu->Init()) {
     return 1;
   }
 
@@ -38,13 +44,12 @@ int main() {
 
   for (;;) {
     Vector3f acc, gyro;
-    float temp;
     gettimeofday(&tv, NULL);
-    if (imu.ReadIMU(&acc, &gyro, &temp)) {
-      printf("%ld.%06ld a [%f,%f,%f] g [%f,%f,%f] temp %0.2f C\n",
+    if (imu->ReadIMU(&acc, &gyro)) {
+      printf("%ld.%06ld a [%f,%f,%f] g [%f,%f,%f]\n",
           tv.tv_sec, tv.tv_usec,
           acc[0], acc[1], acc[2],
-          gyro[0], gyro[1], gyro[2], temp);
+          gyro[0], gyro[1], gyro[2]);
       fflush(stdout);
     }
     pause();

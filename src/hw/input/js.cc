@@ -6,10 +6,11 @@
 #include <unistd.h>
 
 #include "hw/input/js.h"
+#include "inih/cpp/INIReader.h"
 
 // assumes Wii U Procontroller, doesn't bother to read axis labels or anything
 
-JoystickInput::JoystickInput() {
+JoystickInput::JoystickInput(const INIFile &ini) {
   fd_ = -1;
   buttons_ = 0;
   memset(axes_, 0, sizeof(axes_));

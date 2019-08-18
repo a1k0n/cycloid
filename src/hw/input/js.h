@@ -8,9 +8,11 @@
 
 #include "./input.h"
 
+class INIFile;
+
 class JoystickInput {
  public:
-  JoystickInput();
+  explicit JoystickInput(const INIFile &ini);
   ~JoystickInput();
 
   bool Open();

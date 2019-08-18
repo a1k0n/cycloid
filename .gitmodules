@@ -1,9 +1,9 @@
 [submodule "src/userland"]
 	path = src/userland
 	url = https://github.com/raspberrypi/userland
-[submodule "src/cpptoml"]
-	path = src/cpptoml
-	url = https://github.com/skystrife/cpptoml
 [submodule "src/pigpio"]
 	path = src/pigpio
 	url = https://github.com/joan2937/pigpio
+[submodule "src/inih"]
+	path = src/inih
+	url = https://github.com/benhoyt/inih
