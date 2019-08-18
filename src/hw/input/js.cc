@@ -10,7 +10,7 @@
 
 // assumes Wii U Procontroller, doesn't bother to read axis labels or anything
 
-JoystickInput::JoystickInput(const INIFile &ini) {
+JoystickInput::JoystickInput(const INIReader &ini) {
   fd_ = -1;
   buttons_ = 0;
   memset(axes_, 0, sizeof(axes_));

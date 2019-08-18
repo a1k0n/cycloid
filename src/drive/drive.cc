@@ -492,7 +492,7 @@ int main(int argc, char *argv[]) {
   if (!Camera::Init(640, 480, fps))
     return 1;
 
-  JoystickInput js;
+  JoystickInput js(ini);
 
   if (!i2c.Open()) {
     fprintf(stderr, "need to enable i2c in raspi-config, probably\n");

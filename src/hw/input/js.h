@@ -8,11 +8,11 @@
 
 #include "./input.h"
 
-class INIFile;
+class INIReader;
 
 class JoystickInput {
  public:
-  explicit JoystickInput(const INIFile &ini);
+  explicit JoystickInput(const INIReader &ini);
   ~JoystickInput();
 
   bool Open();
@@ -27,6 +27,7 @@ class JoystickInput {
 
   uint32_t buttons_;
   int16_t axes_[8];
+  const char *buttonmap_;
 };
 
 #endif  // HW_INPUT_JS_H_
