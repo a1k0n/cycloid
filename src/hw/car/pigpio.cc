@@ -66,6 +66,7 @@ void PiGPIOCar::RunMainLoop(ControlCallback *cb) {
     gettimeofday(&t, NULL);
     float dt = (t.tv_usec - t0.tv_usec)*1e-6 + t.tv_sec - t0.tv_sec;
     t0 = t;
+
     if (!cb->OnControlFrame(this, dt)) {
       break;
     }
