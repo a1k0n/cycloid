@@ -6,7 +6,6 @@
 #include <string.h>
 #include <sys/time.h>
 
-#include "ceiltrack/ceiltrack.h"
 #include "drive/config.h"
 #include "drive/controller.h"
 #include "drive/flushthread.h"
@@ -14,6 +13,7 @@
 #include "hw/car/stm32rs232.h"
 #include "hw/imu/imu.h"
 #include "hw/input/js.h"
+#include "localization/ceiltrack/ceiltrack.h"
 #include "ui/display.h"
 
 volatile bool done = false;
@@ -492,7 +492,7 @@ int main(int argc, char *argv[]) {
   if (!Camera::Init(640, 480, fps))
     return 1;
 
-  JoystickInput js(ini);
+  JoystickInput js;
 
   if (!i2c.Open()) {
     fprintf(stderr, "need to enable i2c in raspi-config, probably\n");
@@ -512,17 +512,17 @@ int main(int argc, char *argv[]) {
   }
 
   bool has_joystick = false;
-  if (js.Open()) {
+  if (js.Open(ini)) {
     has_joystick = true;
   } else {
     fprintf(stderr, "joystick not detected, but continuing anyway!\n");
   }
 
   imu_ = IMU::GetI2CIMU(i2c, ini);
-  if (!imu_) {
+  if (!imu_ || !imu_->Init()) {
+    fprintf(stderr, "unable to connect to IMU; aborting\n");
     return 1;
   }
-  imu_->Init();
 
   struct timeval tv;
   gettimeofday(&tv, NULL);

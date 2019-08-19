@@ -1,5 +1,5 @@
-#ifndef CEILTRACK_CEILTRACK_H_
-#define CEILTRACK_CEILTRACK_H_
+#ifndef LOCALIZATION_CEILTRACK_CEILTRACK_H_
+#define LOCALIZATION_CEILTRACK_CEILTRACK_H_
 
 #include <stdint.h>
 
@@ -21,4 +21,4 @@ class CeilingTracker {
   int uvmaplen_;
 };
 
-#endif  // CEILTRACK_CEILTRACK_H_
+#endif  // LOCALIZATION_CEILTRACK_CEILTRACK_H_

@@ -3,7 +3,7 @@
 #include <stdio.h>
 #include <string.h>
 
-#include "coneslam/localize.h"
+#include "localization/coneslam/localize.h"
 
 namespace coneslam {
 

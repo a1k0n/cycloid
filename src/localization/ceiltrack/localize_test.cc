@@ -4,7 +4,7 @@
 #include <sys/time.h>
 #include <zlib.h>
 
-#include "ceiltrack/ceiltrack.h"
+#include "localization/ceiltrack/ceiltrack.h"
 
 const float CEIL_HEIGHT = 8.25;
 const float X_GRID = 10/CEIL_HEIGHT;

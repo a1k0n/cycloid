@@ -2,11 +2,7 @@
 #include <unistd.h>
 
 #include "hw/input/js.h"
-
-#include <stdio.h>
-#include <unistd.h>
-
-#include "hw/input/js.h"
+#include "inih/cpp/INIReader.h"
 
 class TestInputReceiver : public InputReceiver {
   void OnDPadPress(char direction) {
@@ -31,8 +27,9 @@ class TestInputReceiver : public InputReceiver {
 
 int main() {
   JoystickInput js;
+  INIReader ini("cycloid.ini");
 
-  if (!js.Open()) {
+  if (!js.Open(ini)) {
     return 1;
   }
 

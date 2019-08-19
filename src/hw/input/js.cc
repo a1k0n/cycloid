@@ -8,9 +8,7 @@
 #include "hw/input/js.h"
 #include "inih/cpp/INIReader.h"
 
-// assumes Wii U Procontroller, doesn't bother to read axis labels or anything
-
-JoystickInput::JoystickInput(const INIReader &ini) {
+JoystickInput::JoystickInput() {
   fd_ = -1;
   buttons_ = 0;
   memset(axes_, 0, sizeof(axes_));
@@ -22,10 +20,30 @@ JoystickInput::~JoystickInput() {
   }
 }
 
-bool JoystickInput::Open() {
-  fd_ = open("/dev/input/js0", O_RDONLY);
+bool JoystickInput::Open(const INIReader &ini) {
+  std::string buttonmap = ini.GetString("joystick", "buttonmap", "");
+  std::string jtype = ini.GetString("joystick", "type", "");
+
+  // N.B. there's no axis map; the axes are mostly the same on the two
+  // controllers we support, but that may have to change
+
+  if (buttonmap != "") {
+    buttonmap_ = buttonmap.c_str();
+  } else if (jtype == "wiiupro") {  // Wii U Pro controller via Bluetooth
+    buttonmap_ = "BAXYLRlr-+H,.";
+  } else if (jtype == "f710") {  // Logitech F710 via USB dongle
+    buttonmap_ = "BAXYLR-+H,.??";
+  } else {
+    fprintf(stderr,
+            "Please specify cycloid.ini [joystick]:\n"
+            "  either buttonmap=BAXY... or type=wiiupro/f710/etc\n");
+    return false;
+  }
+
+  std::string jsdevice = ini.GetString("joystick", "device", "/dev/input/js0");
+  fd_ = open(jsdevice.c_str(), O_RDONLY);
   if (fd_ == -1) {
-    perror("/dev/input/js0");
+    perror(jsdevice.c_str());
     return false;
   }
 
@@ -65,17 +83,12 @@ bool JoystickInput::ReadInput(InputReceiver *receiver) {
     if (type == 0x01) {  // button
       value = value ? 1 : 0;
       int16_t oldvalue = (buttons_ >> number) & 1;
-#ifdef WiiUPro
-      static const char *buttonmap = "BAXYLRlr-+H,.";
-#else
-      static const char *buttonmap = "BAXYLR-+H,.??";
-#endif
       if (oldvalue != value) {
         if (number < 13) {
           if (value) {
-            receiver->OnButtonPress(buttonmap[number & 15]);
+            receiver->OnButtonPress(buttonmap_[number & 15]);
           } else {
-            receiver->OnButtonRelease(buttonmap[number & 15]);
+            receiver->OnButtonRelease(buttonmap_[number & 15]);
           }
         } else if (number < 17) {
           static const char *dpadmap = "UDLR";

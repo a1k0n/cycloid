@@ -6,16 +6,16 @@
 
 #include <stdint.h>
 
-#include "./input.h"
+#include "hw/input/input.h"
 
 class INIReader;
 
 class JoystickInput {
  public:
-  explicit JoystickInput(const INIReader &ini);
+  JoystickInput();
   ~JoystickInput();
 
-  bool Open();
+  bool Open(const INIReader &ini);
 
   // Read latest car input from joystick
   bool ReadInput(InputReceiver *receiver);

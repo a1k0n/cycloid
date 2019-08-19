@@ -7,6 +7,7 @@
 #include "hw/car/stm32rs232.h"
 #include "hw/imu/imu.h"
 #include "hw/input/js.h"
+#include "inih/cpp/INIReader.h"
 
 #include "controlloop/fit.h"
 #include "controlloop/pid.h"
@@ -191,21 +192,22 @@ void controltest() {
 int main(int argc, char *argv[]) {
   STM32HatSerial car;
   JoystickInput js;
+  INIReader ini("cycloid.ini");
   I2C i2c;
-  IMU imu(i2c);
+  IMU *imu = IMU::GetI2CIMU(i2c, ini);
 
   if (!i2c.Open()) {
     fprintf(stderr, "need to enable i2c in raspi-config, probably\n");
     return 1;
   }
 
-  if (!js.Open()) {
+  if (!js.Open(ini)) {
     return 1;
   }
   if (!car.Init()) {
     return 1;
   }
-  if (!imu.Init()) {
+  if (!imu->Init()) {
     return 1;
   }
 
@@ -242,10 +244,7 @@ int main(int argc, char *argv[]) {
     T += dt;
 
     js.ReadInput(&ir);
-    {
-      float temp;
-      imu.ReadIMU(&accel, &gyro, &temp);
-    }
+    imu->ReadIMU(&accel, &gyro);
 
     uint16_t dw = wpos - last_wpos;
     float v = 0;

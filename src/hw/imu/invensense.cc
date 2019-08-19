@@ -18,7 +18,9 @@ const int ACCEL_SHIFT = 3;  // 0..3
 InvensenseIMU::~InvensenseIMU() {}
 
 bool InvensenseIMU::Init() {
-  i2c_.Write(i2caddr_, 107, 0x80);  // reset
+  if (!i2c_.Write(i2caddr_, 107, 0x80)) {  // reset
+    return false;
+  }
   usleep(10000);
   i2c_.Write(i2caddr_, 107, 0);  // wake up
   i2c_.Write(i2caddr_, 107, 1);  // use PLL clock
@@ -49,7 +51,9 @@ bool InvensenseIMU::Init() {
   i2c_.Write(i2caddr_, 29, 0x06);
 
   uint8_t id;
-  i2c_.Read(i2caddr_, 117, 1, &id);  // whoami
+  if (!i2c_.Read(i2caddr_, 117, 1, &id)) {  // whoami
+    return false;
+  }
   fprintf(stderr, "\r\ninvensense IMU id: %02x\r\n", id);
 
   return true;

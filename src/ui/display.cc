@@ -2,7 +2,7 @@
 #include <string.h>
 #include <math.h>
 
-#include "coneslam/imgproc.h"
+#include "localization/coneslam/imgproc.h"
 #include "ui/display.h"
 #include "ui/drawtext.h"
 #include "ui/yuvrgb565.h"

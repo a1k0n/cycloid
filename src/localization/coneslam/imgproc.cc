@@ -1,6 +1,6 @@
 #include <algorithm>
 #include <stdio.h>
-#include "coneslam/imgproc.h"
+#include "localization/coneslam/imgproc.h"
 
 namespace coneslam {
 

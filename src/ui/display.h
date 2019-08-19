@@ -1,9 +1,8 @@
 #ifndef UI_DISPLAY_H_
 #define UI_DISPLAY_H_
 
-#include <Eigen/Dense>
 #include "hw/lcd/fbdev.h"
-#include "coneslam/localize.h"
+#include "localization/coneslam/localize.h"
 
 class UIDisplay {
  public:

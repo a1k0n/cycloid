@@ -3,7 +3,6 @@
 #include <stdio.h>
 #include <sys/time.h>
 
-#include "coneslam/localize.h"
 #include "drive/controller.h"
 
 using Eigen::Vector3f;

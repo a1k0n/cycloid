@@ -1,6 +1,6 @@
 #include <stdio.h>
 #include <string.h>
-#include "coneslam/imgproc.h"
+#include "localization/coneslam/imgproc.h"
 
 #include "drive/config.h"
 
