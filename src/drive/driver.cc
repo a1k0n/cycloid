@@ -21,6 +21,23 @@ const float CEIL_HEIGHT = 8.25*0.3048;
 const float CEIL_X_GRID = 0.3048*10/CEIL_HEIGHT;
 const float CEIL_Y_GRID = 0.3048*12/CEIL_HEIGHT;
 
+const char *Driver::configmenu[] = {
+  "max speed",
+  "traction limit",
+  "lookahead dist",
+  "lookahead dkdt",
+  "cone/lane penalty",
+  "motorcontrol gain",
+  "motorcontrol kI",
+  "turn-in lift",
+  "servo rate",
+  "servo offset",
+  "servo finetune",
+  "cone precision",
+};
+
+const int Driver::N_CONFIGITEMS =
+    sizeof(configmenu) / sizeof(configmenu[0]);
 
 // const int PWMCHAN_STEERING = 14;
 // const int PWMCHAN_ESC = 15;
@@ -376,20 +393,3 @@ void Driver::UpdateDisplay() {
   display_->UpdateConfig(configmenu, N_CONFIGITEMS, config_item_, values);
 }
 
-const char *Driver::configmenu[] = {
-  "max speed",
-  "traction limit",
-  "lookahead dist",
-  "lookahead dkdt",
-  "cone/lane penalty",
-  "motorcontrol gain",
-  "motorcontrol kI",
-  "turn-in lift",
-  "servo rate",
-  "servo offset",
-  "servo finetune",
-  "cone precision",
-};
-
-const int Driver::N_CONFIGITEMS =
-    sizeof(configmenu) / sizeof(configmenu[0]);

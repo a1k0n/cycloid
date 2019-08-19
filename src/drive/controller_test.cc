@@ -29,7 +29,6 @@ int main() {
   float x = 8, y = -7, theta = 3.14;
   float v = 0, w = 0;
   float s = 0;
-  uint16_t lastenc = 0;
 
   Eigen::Vector3f gyro(0, 0, 0), accel(0, 0, 0);
 
@@ -38,11 +37,7 @@ int main() {
   for (int i = 0; i < 900; i++) {
     float throttle, steering;
 
-    uint16_t encoders[4];
-    uint16_t enc = 50*s;
-    encoders[0] = encoders[1] = encoders[2] = encoders[3] = enc - lastenc;
-
-    control.UpdateState(config, accel, gyro, 1, encoders, dt);
+    control.UpdateState(config, accel, gyro, s, dt);
     #if 0
     // broken now by a dependency on coneslam. oops.
     control.UpdateLocation(config, x, y, theta);
@@ -65,6 +60,5 @@ int main() {
     x += dt*v*C;
     y += dt*v*S;
     s += dt*v;
-    lastenc = enc;
   }
 }

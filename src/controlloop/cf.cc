@@ -30,9 +30,11 @@ static int16_t clipi16(int16_t x, int16_t min, int16_t max) {
   return x;
 }
 
-class CFIR : public InputReceiver {
+class CFIR : public InputReceiver, public ControlCallback {
  public:
-  CFIR() {
+  CFIR(IMU *imu, JoystickInput *js) {
+    imu_ = imu;
+    js_ = js;
     js_throttle_ = 0;
     js_steering_ = 0;
     exit_ = false;
@@ -102,10 +104,101 @@ class CFIR : public InputReceiver {
   bool exit_;
   FILE *recording_;
 
+  bool was_learning = false;
+
+  IMU *imu_;
+  JoystickInput *js_;
+
   enum {
     SysId = 0,
     Control = 1
   } mode_;
+
+  int n = 0;
+
+  virtual bool OnControlFrame(CarHW *car, float dt) {
+    Vector3f accel, gyro;
+
+    js_->ReadInput(this);
+    imu_->ReadIMU(&accel, &gyro);
+
+    float ds, v;
+    car->GetWheelMotion(&ds, &v);
+
+    float u_esc = 0;
+    float u_steer = 0;
+    switch (mode_) {
+      case SysId: {
+        if (!was_learning) {
+          fprintf(stderr, "starting system identification\n");
+        }
+#if 0
+          if (v > 0) {
+            // separate brake_id is unsafe for now
+            motor_id.AddObservation(v, 1, u_esc, dt);
+            steer_id.AddObservation(gyro[2], v, u_steer, dt);
+          }
+#endif
+        // hold PID loops in reset while learning
+        // motor_pi.Reset();
+        // steer_pi.Reset();
+        was_learning = true;
+        break;
+      }
+      case Control: {
+        float v_target = 8 * Throttle() / 32767.0;
+        if (v_target <= 0) {
+          // don't wind up the integrator! just stop the car.
+          v_target = 0;
+        }
+        // turn left -> positive gyro rate, hence negative sign
+        float k_target = -Steering() / 32768.0;  // +-1m turning radius
+
+        if (was_learning) {
+          /*
+          auto km = motor_id.Solve();
+          fprintf(stderr, "motor sysid: %f %f %f %f %f\n", km[0], km[1], km[2],
+                  km[3], km[4]);
+          auto k = steer_id.Solve();
+          fprintf(stderr, "steer sysid: %f %f %f %f\n", k[0], k[1], k[2], k[3]);
+          */
+          was_learning = false;
+        }
+
+#if 0
+        auto k = motor_id.Solve();
+        motor_pi.SetK(1, 0, 0);
+        u_esc = motor_pi.Control(v_target - v, dt);
+        k = steer_id.Solve();
+        steer_pi.SetK(1, 0, 0);
+        float kerr = 0;
+        if (v > 0.5) {  // must be going at least 0.5 m/s for closed loop yaw
+                        // control
+          kerr = k_target - gyro[2] / v;
+        } else {
+          // reset wind-up at low speeds
+          steer_pi.Reset();
+        }
+        u_steer = clipi16(k_target * k[0] + k[3] + steer_pi.Control(kerr, dt),
+                          STEER_LIMIT_LOW, STEER_LIMIT_HIGH);
+#endif
+      } break;
+    }
+
+    if (!car->SetControls(n >> 4, u_esc, u_steer)) {
+      fprintf(stderr, "SetControls returned false?\n");
+    }
+
+    if (recording_) {
+      fprintf(recording_, "%0.3f %d %d %f %f %f %f %f %f %f %f %f %f\n",
+          dt, Throttle(), Steering(), u_esc, u_steer, ds, v,
+          gyro[0], gyro[1], gyro[2],
+          accel[0], accel[1], accel[2]);
+    }
+
+    n++;
+    return !exit_;
+  }
 };
 
 /*
@@ -190,11 +283,11 @@ void controltest() {
 */
 
 int main(int argc, char *argv[]) {
-  STM32HatSerial car;
   JoystickInput js;
   INIReader ini("cycloid.ini");
   I2C i2c;
   IMU *imu = IMU::GetI2CIMU(i2c, ini);
+  CarHW *car = CarHW::GetCar(ini);
 
   if (!i2c.Open()) {
     fprintf(stderr, "need to enable i2c in raspi-config, probably\n");
@@ -204,7 +297,7 @@ int main(int argc, char *argv[]) {
   if (!js.Open(ini)) {
     return 1;
   }
-  if (!car.Init()) {
+  if (!car->Init()) {
     return 1;
   }
   if (!imu->Init()) {
@@ -219,131 +312,10 @@ int main(int argc, char *argv[]) {
   uint16_t wpos, wperiod;
   uint16_t last_wpos = 0;
 
-  Eigen::Vector3f accel, gyro;
+  CFIR ir(imu, &js);
 
-  int n = 0;
-  car.AwaitSync(&last_wpos, &wperiod);
-  timeval t0;
-  gettimeofday(&t0, NULL);
-
-  CFIR ir;
-
-  SysIdentifier steer_id;
-  PIDLoop steer_pi;
-  SysIdentifier motor_id;
-  PIDLoop motor_pi;
-
-  bool was_learning = false;
   setlinebuf(stdout);
-  float T = 0, phi = 0;
-  while (!ir.exit_ && car.AwaitSync(&wpos, &wperiod)) {
-    timeval t1;
-    gettimeofday(&t1, NULL);
-    float dt = (t1.tv_sec + t1.tv_usec * 1e-6)
-      - (t0.tv_sec + t0.tv_usec * 1e-6);
-    T += dt;
 
-    js.ReadInput(&ir);
-    imu->ReadIMU(&accel, &gyro);
-
-    uint16_t dw = wpos - last_wpos;
-    float v = 0;
-    if (wperiod != 0) {
-      v = V_SCALE * 1e6 / wperiod;
-    } else {
-      v = V_SCALE * dw / dt;
-    }
-    // special case: if we stopped really quickly, then wperiod might still be
-    // nonzero but dw is zero; this is only valid if wperiod is >10000us
-    if (dw == 0 && wperiod < 10000) {
-      v = 0;
-    }
-
-    int8_t u_esc = 0;
-    int8_t u_steer = 0;
-    switch (ir.mode_) {
-      case ir.SysId: {
-        if (!was_learning) {
-          T = 0;
-          phi = 0;
-          fprintf(stderr, "starting system identification\n");
-        }
-        // u_esc = clipi16(ir.Throttle() >> 8, -127, 127);
-        // u_steer = clipi16(ir.Steering() >> 8, STEER_LIMIT_LOW,
-        // STEER_LIMIT_HIGH); sine sweep, 2Hz..20Hz
-        float f = exp(log(2.0) + ((log(20)-log(2.0)) * T / 10.0));
-        if (f > 20.0) {
-          u_esc = 0;
-        } else {
-          float u = 0.5 + 0.5 * sin(phi * 2 * M_PI);
-          phi += dt*f;
-          u_esc = clipi16(127 * u, -127, 127);
-        }
-#if 0
-          if (v > 0) {
-            // separate brake_id is unsafe for now
-            motor_id.AddObservation(v, 1, u_esc, dt);
-            steer_id.AddObservation(gyro[2], v, u_steer, dt);
-          }
-#endif
-        // hold PID loops in reset while learning
-        motor_pi.Reset();
-        steer_pi.Reset();
-        was_learning = true;
-        break;
-      }
-      case ir.Control: {
-        float v_target = 8 * ir.Throttle() / 32767.0;
-        if (v_target <= 0) {
-          // don't wind up the integrator! just stop the car.
-          v_target = 0;
-        }
-        // turn left -> positive gyro rate, hence negative sign
-        float k_target = -ir.Steering() / 32768.0;  // +-1m turning radius
-
-        if (was_learning) {
-          /*
-          auto km = motor_id.Solve();
-          fprintf(stderr, "motor sysid: %f %f %f %f %f\n", km[0], km[1], km[2],
-                  km[3], km[4]);
-          auto k = steer_id.Solve();
-          fprintf(stderr, "steer sysid: %f %f %f %f\n", k[0], k[1], k[2], k[3]);
-          */
-          was_learning = false;
-        }
-
-        auto k = motor_id.Solve();
-        motor_pi.SetK(1, 0, 0);
-        u_esc = motor_pi.Control(v_target - v, dt);
-        k = steer_id.Solve();
-        steer_pi.SetK(1, 0, 0);
-        float kerr = 0;
-        if (v > 0.5) {  // must be going at least 0.5 m/s for closed loop yaw
-                        // control
-          kerr = k_target - gyro[2] / v;
-        } else {
-          // reset wind-up at low speeds
-          steer_pi.Reset();
-        }
-        u_steer = clipi16(k_target * k[0] + k[3] + steer_pi.Control(kerr, dt),
-                          STEER_LIMIT_LOW, STEER_LIMIT_HIGH);
-      } break;
-    }
-
-    if (!car.SetControls(n >> 4, u_esc, u_steer)) {
-      fprintf(stderr, "SetControls returned false?\n");
-    }
-
-    if (ir.recording_) {
-      fprintf(ir.recording_, "%0.3f %d %d %d %d %d %d %f %f %f %f %f %f\n",
-          dt, ir.Throttle(), ir.Steering(), u_esc, u_steer, dw, wperiod,
-          gyro[0], gyro[1], gyro[2],
-          accel[0], accel[1], accel[2]);
-    }
-
-    t0 = t1;
-    last_wpos = wpos;
-    n++;
-  }
+  car->RunMainLoop(&ir);
 }
 

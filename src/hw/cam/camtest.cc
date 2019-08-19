@@ -32,7 +32,7 @@ class Recorder: public CameraReceiver {
     if (output_file_) fclose(output_file_);
   }
 
-  void OnFrame(uint8_t *buf, size_t length) {
+  void OnCameraFrame(uint8_t *buf, size_t length) {
     struct timeval t;
     gettimeofday(&t, NULL);
     fwrite(&t.tv_sec, sizeof(t.tv_sec), 1, output_file_);
