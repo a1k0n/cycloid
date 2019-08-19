@@ -28,7 +28,7 @@ void Camera::BufferCallback(MMAL_PORT_T *port,
   if (buffer->length) {
     if (receiver_ != NULL) {
       mmal_buffer_header_mem_lock(buffer);
-      receiver_->OnFrame(buffer->data, buffer->length);
+      receiver_->OnCameraFrame(buffer->data, buffer->length);
       mmal_buffer_header_mem_unlock(buffer);
     }
   }

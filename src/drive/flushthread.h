@@ -3,8 +3,8 @@
 
 #include <pthread.h>
 #include <semaphore.h>
+#include <stdint.h>
 #include <unistd.h>
-
 #include <deque>
 
 // asynchronous flush to sdcard

@@ -1,24 +1,33 @@
 #include <fcntl.h>
+#include <stdint.h>
 #include <stdio.h>
 #include <sys/ioctl.h>
 #include <sys/stat.h>
+#include <sys/time.h>
 #include <sys/types.h>
 #include <termios.h>
 #include <unistd.h>
 
 #include "hw/car/stm32rs232.h"
+#include "inih/cpp/INIReader.h"
 
-const char *DEVICE = "/dev/serial0";
-
-STM32HatSerial::STM32HatSerial() {
+STM32HatSerial::STM32HatSerial(const INIReader &ini) {
   fd_ = -1;
   sync_ = false;
+  device_ = ini.GetString("car", "device", "/dev/serial0").c_str();
+  if (!ini.HasValue("car", "meters_per_wheeltick")) {
+    fprintf(stderr,
+            "STM32HatSerial: please specify [car] meters_per_wheeltick\n"
+            " -- cannot use wheel encoder without it\n");
+  }
+  meters_per_tick_ = ini.GetReal("car", "meters_per_wheeltick", 0);
+  ds_ = v_ = 0;
 }
 
 bool STM32HatSerial::Init() {
-  fd_ = open(DEVICE, O_RDWR);
+  fd_ = open(device_, O_RDWR);
   if (fd_ == -1) {
-    perror(DEVICE);
+    perror(device_);
     return false;
   }
 
@@ -32,7 +41,7 @@ bool STM32HatSerial::Init() {
   tios.c_oflag = 0;
   tios.c_lflag = 0;
   tios.c_cc[VTIME] = 0;  // no read timeout
-  tios.c_cc[VMIN] = 1;  // reads must have at least 1 byte
+  tios.c_cc[VMIN] = 1;   // reads must have at least 1 byte
   cfsetspeed(&tios, B115200);
 
   if (tcsetattr(fd_, TCSAFLUSH, &tios)) {
@@ -51,21 +60,37 @@ bool STM32HatSerial::Init() {
   return true;
 
 error:
-  perror(DEVICE);
+  perror(device_);
   close(fd_);
   fd_ = -1;
   return false;
 }
 
-bool STM32HatSerial::SetControls(uint8_t led, int8_t esc, int8_t servo) {
+bool STM32HatSerial::SetControls(unsigned led, float throttle, float steering) {
+  if (throttle < -1) throttle = -1;
+  else if (throttle > 1) throttle = 1;
+  if (steering < -1) steering = -1;
+  else if (steering > 1) steering = 1;
+
+  int8_t esc = 127.0*throttle;
+  int8_t servo = 127.0*steering;
   // write control packet w/ header and checksum
-  uint8_t buf[5] = {0x55, led, (uint8_t)esc, (uint8_t)servo, 0};
+  uint8_t buf[5] = {0x55, (uint8_t)led, (uint8_t)esc, (uint8_t)servo, 0};
   buf[4] = 0;
   for (int i = 0; i < 4; i++) {
     buf[4] += buf[i];
   }
   buf[4] = ~buf[4];
   return write(fd_, buf, 5) == 5;
+}
+
+bool STM32HatSerial::GetWheelMotion(float *ds, float *v) {
+  if (meters_per_tick_ == 0) {
+    return false;
+  }
+  *ds = ds_;
+  *v = v_;
+  return true;
 }
 
 static int read_fully(int fd, uint8_t *buf, int ntoread) {
@@ -83,6 +108,38 @@ static int read_fully(int fd, uint8_t *buf, int ntoread) {
   return 0;
 }
 
+void STM32HatSerial::RunMainLoop(ControlCallback *cb) {
+  uint16_t last_wpos, wheeldt;
+  timeval last_t;
+
+  AwaitSync(&last_wpos, &wheeldt);
+  gettimeofday(&last_t, NULL);
+  for (;;) {
+    uint16_t wpos;
+    if (!AwaitSync(&wpos, &wheeldt)) {
+      continue;
+    }
+    timeval t;
+    gettimeofday(&t, NULL);
+
+    uint16_t wheel_delta = last_wpos - wpos;
+    last_wpos = wpos;
+    ds_ = meters_per_tick_ * wheel_delta;
+    if (wheel_delta == 0) {
+      v_ = 0;
+    } else if (wheeldt > meters_per_tick_ * 1e6 / 30.0) {
+      // occasionally the firmware outputs a ridiculously small but nonzero
+      // wheel period, so restrict to reasonable values (< 30m/s max)
+      v_ = meters_per_tick_ * 1e6 / wheeldt;
+    }
+    float dt = t.tv_sec - last_t.tv_sec + (t.tv_usec - last_t.tv_usec) * 1e-6;
+
+    if (!cb->OnControlFrame(this, dt)) {
+      break;
+    }
+  }
+}
+
 bool STM32HatSerial::AwaitSync(uint16_t *encoder_pos, uint16_t *encoder_dt) {
   uint8_t buf[32];
   if (!sync_) {
@@ -90,7 +147,7 @@ bool STM32HatSerial::AwaitSync(uint16_t *encoder_pos, uint16_t *encoder_dt) {
       int n = read(fd_, buf, 1);
       if (n < 1) {
         if (n == -1) {
-          perror(DEVICE);
+          perror(device_);
         }
         if (n == 0) {
           continue;
@@ -104,7 +161,7 @@ bool STM32HatSerial::AwaitSync(uint16_t *encoder_pos, uint16_t *encoder_dt) {
         fprintf(stderr, "STM32HatSerial: remote checksum err\n");
       }
     }
-    if (read_fully(fd_, buf+1, 5)) {
+    if (read_fully(fd_, buf + 1, 5)) {
       return false;
     }
     sync_ = true;
@@ -131,7 +188,7 @@ bool STM32HatSerial::AwaitSync(uint16_t *encoder_pos, uint16_t *encoder_dt) {
   }
 
   *encoder_pos = buf[1] + (buf[2] << 8);
-  *encoder_dt  = buf[3] + (buf[4] << 8);
+  *encoder_dt = buf[3] + (buf[4] << 8);
 
   return true;
 }

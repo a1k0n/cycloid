@@ -33,19 +33,9 @@ static inline float clip(float x, float min, float max) {
 }
 
 void DriveController::UpdateState(const DriverConfig &config,
-    const Vector3f &accel, const Vector3f &gyro,
-    uint8_t servo_pos, const uint16_t *wheel_period, float dt) {
-
-  // with new STM32 hat firmware, this isn't necessary and we have a better
-  // wheel speed estimate
-  if (wheel_period[0] == 0) {
-    vf_ = vr_ = 0;
-  } else if (wheel_period[0] > V_SCALE * 1e6 / 30.0) {
-    // occasionally the firmware outputs a ridiculously small but nonzero wheel
-    // period, so restrict to reasonable values (< 30m/s max)
-    vf_ = vr_ = V_SCALE * 1e6 / wheel_period[0];
-  }
-
+                                  const Vector3f &accel, const Vector3f &gyro,
+                                  float wheel_v, float dt) {
+  vr_ = vf_ = wheel_v;
   w_ = gyro[2];
 }
 

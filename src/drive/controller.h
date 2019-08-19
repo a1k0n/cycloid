@@ -13,11 +13,8 @@ class DriveController {
  public:
   DriveController();
 
-  void UpdateState(const DriverConfig &config,
-      const Eigen::Vector3f &accel,
-      const Eigen::Vector3f &gyro,
-      uint8_t servo_pos,
-      const uint16_t *wheel_encoders, float dt);
+  void UpdateState(const DriverConfig &config, const Eigen::Vector3f &accel,
+                   const Eigen::Vector3f &gyro, float wheel_v, float dt);
 
   void UpdateLocation(const DriverConfig &config, const float *xytheta);
 

@@ -1,6 +1,6 @@
 add_executable(drive
-    drive.cc controller.cc trajtrack.cc
-    config.h controller.h trajtrack.h vflookup.h vflookup.cc)
+    main.cc driver.cc controller.cc trajtrack.cc
+    config.h controller.h driver.h flushthread.h trajtrack.h vflookup.h vflookup.cc)
 
 target_link_libraries(drive car cam mmal input gpio imu ui lcd coneslam ceiltrack pigpio inih)
 install(TARGETS drive DESTINATION bin)
