@@ -30,6 +30,8 @@ def undistortMap():
 
 
 def ceillut():
+    ''' generate an undistorted pixel->x,y coordinate map of all pixels
+    pointing toward the ceiling '''
     pts, origpts = undistortMap()
     centerlimit = 8
     ceillimit = 3
@@ -41,12 +43,24 @@ def ceillut():
 
 
 def floorlut(sampleframe):
+    ''' generate an undistorted pixel->x,y coordinate map of all pixels
+    pointing toward the floor '''
     floorlut, origpts = undistortMap()
     fxy = floorlut[:2] / floorlut[2]
     floormask = (floorlut[2] < 0) & (np.sum(fxy**2, axis=0) < 16**2) & (
         np.sum(origpts**2, axis=2) < 6**2) & (sampleframe > 50)
     fpts = fxy[:, floormask]
     return floormask, fpts
+
+
+def horizonlut():
+    ''' generate a lookup table for pixels on the horizon, where obstacles
+    might be found '''
+    pts, origpts = undistortMap()
+    horizonang = np.tan(10*np.pi/180)  # 10 degrees +/-
+    horizonmask = np.abs(pts[2]) >= horizonang
+    hpts = pts[:2, horizonmask] / pts[2, horizonmask]
+    return horizonmask, hpts
 
 
 def moddist(x, q):

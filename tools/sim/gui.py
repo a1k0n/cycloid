@@ -63,14 +63,16 @@ class Car:
         self.theta = 0
         self.v = 0
         self.w = 0
+        self.k = 0
 
         self.maxa = 10
-        self.mk1 = 10
-        self.mk2 = 1
+        self.mk1 = 51
+        self.mk2 = 1.8
 
     def clone(self):
         c = Car()
-        c.x, c.y, c.theta, c.v, c.w = self.x, self.y, self.theta, self.v, self.w
+        (c.x, c.y, c.theta, c.v, c.w, c.k) = (
+            self.x, self.y, self.theta, self.v, self.w, self.k)
         return c
 
     def step(self, u_v, u_delta, dt):
@@ -102,12 +104,15 @@ class Car:
         self.theta %= 2*np.pi
         self.x += v*np.cos(theta)*dt
         self.y += v*np.sin(theta)*dt
+        self.k = k
 
-    def kstep(self, k, dt):
+    def kstep(self, dk, dt):
         v = 10
+        k = self.k + dk
         if k != 0:
             v = np.sqrt(self.maxa / np.abs(k))
-        dv = v - self.v
+        # fixme: PI control
+        dv = 0.1*(v - self.v)
         self.step(np.clip(dv, -1, 1), k, dt)
 
 
@@ -330,15 +335,15 @@ class SimGUI:
         # test: downsample
         if not hasattr(self, 'Vd'):
             # FIXME: area resampling; be careful of how angles are handled though
-            #self.Vd = self.V[::4, ::5, ::5].astype(np.float16)
-            self.Vd = self.V.astype(np.float16)
+            self.Vd = self.V[::4, ::5, ::5].astype(np.float16)
+            #self.Vd = self.V.astype(np.float16)
             #self.Vd = self.V[:, ::5, ::5].astype(np.float16)
         Vd = self.Vd
-        x = np.clip(x/.02, 0, self.V.shape[2]-2)
-        y = np.clip(-y/.02, 0, self.V.shape[1]-2)
+        #x = np.clip(x/.02, 0, self.V.shape[2]-2)
+        #y = np.clip(-y/.02, 0, self.V.shape[1]-2)
         ang = (theta*Vd.shape[0]/2/np.pi) % Vd.shape[0]
-        #x = np.clip(x/.1, 0, Vd.shape[2]-2)
-        #y = np.clip(-y/.1, 0, Vd.shape[1]-2)
+        x = np.clip(x/.1, 0, Vd.shape[2]-2)
+        y = np.clip(-y/.1, 0, Vd.shape[1]-2)
         x0, y0, a0 = int(x), int(y), int(ang)
         fx, fy, fa = x - x0, y - y0, ang - a0
         # trilinear interpolation
@@ -350,12 +355,12 @@ class SimGUI:
 
     def bestkv(self, car, dt):
         bestk, bestV, bestC = None, None, None
-        for k in np.linspace(-1.3, 1.3, 7):
+        for dk in np.linspace(-0.3, +0.3, 7):
             c = car.clone()
-            c.kstep(k, dt)
+            c.kstep(dk, dt)
             v = self.Value(c.x, c.y, c.theta)
             if bestV is None or v < bestV:
-                bestk, bestV, bestC = k, v, c
+                bestk, bestV, bestC = dk, v, c
         return bestk, bestV, bestC
 
     def Vplan(self):
