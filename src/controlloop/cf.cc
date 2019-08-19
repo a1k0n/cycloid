@@ -24,12 +24,6 @@ const float V_SCALE = WHEEL_DIAMETER*M_PI / DRIVE_RATIO / MOTOR_POLES;
 using Eigen::Vector3f;
 using Eigen::Matrix3f;
 
-static int16_t clipi16(int16_t x, int16_t min, int16_t max) {
-  if (x < min) x = min;
-  if (x > max) x = max;
-  return x;
-}
-
 class CFIR : public InputReceiver, public ControlCallback {
  public:
   CFIR(IMU *imu, JoystickInput *js) {
@@ -287,7 +281,7 @@ int main(int argc, char *argv[]) {
   INIReader ini("cycloid.ini");
   I2C i2c;
   IMU *imu = IMU::GetI2CIMU(i2c, ini);
-  CarHW *car = CarHW::GetCar(ini);
+  CarHW *car = CarHW::GetCar(&i2c, ini);
 
   if (!i2c.Open()) {
     fprintf(stderr, "need to enable i2c in raspi-config, probably\n");

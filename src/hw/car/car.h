@@ -1,9 +1,9 @@
 #ifndef HW_CAR_CAR_H_
 #define HW_CAR_CAR_H_
 
-class INIReader;
-
 class CarHW;
+class INIReader;
+class I2C;
 
 class ControlCallback {
  public:
@@ -27,7 +27,8 @@ class CarHW {
   // returns false.
   virtual void RunMainLoop(ControlCallback *cb) = 0;
 
-  static CarHW *GetCar(const INIReader &ini);
+  // Get the car hardware specified by the configuration, optionally accessed over i2c
+  static CarHW *GetCar(I2C *i2c, const INIReader &ini);
 };
 
 #endif  // HW_CAR_CAR_H_

@@ -62,12 +62,13 @@ int main(int argc, char *argv[]) {
   }
 
   // FIXME(a1k0n): INI
+  bool has_display = true;
   if (!display_.Init()) {
     fprintf(stderr,
             "run this:\n"
-            "sudo modprobe fbtft_device name=adafruit22a rotate=90\n");
-    // TODO(asloane): support headless mode
-    return 1;
+            "sudo modprobe fbtft_device name=adafruit22a rotate=90\n"
+            "running without display support for now\n");
+    has_display = false;
   }
 
   // FIXME(a1k0n): INI
@@ -101,14 +102,15 @@ int main(int argc, char *argv[]) {
   gettimeofday(&tv, NULL);
   fprintf(stderr, "%ld.%06ld started camera\n", tv.tv_sec, tv.tv_usec);
 
-  carhw_ = CarHW::GetCar(ini);
+  carhw_ = CarHW::GetCar(&i2c, ini);
   if (!carhw_->Init()) {
     fprintf(stderr, "failed to init car hardware\n");
     return 1;
   }
 
-  driver_ = new Driver(&ceiltrack_, &flush_thread_, imu_,
-                       has_joystick ? &js : NULL, &display_);
+  driver_ =
+      new Driver(&ceiltrack_, &flush_thread_, imu_, has_joystick ? &js : NULL,
+                 has_display ? &display_ : NULL);
   carhw_->RunMainLoop(driver_);
 
   Camera::StopRecord();

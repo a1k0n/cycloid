@@ -191,8 +191,10 @@ void Driver::UpdateFromCamera(uint8_t *buf, float dt) {
   // display_.UpdateConeView(buf, 0, NULL);
   // display_->UpdateEncoders(carstate_.wheel_pos);
   // FIXME: hardcoded map size 20mx10m
-  display_->UpdateCeiltrackView(xytheta, CEIL_X_GRID * CEIL_HEIGHT,
-                                CEIL_Y_GRID * CEIL_HEIGHT, 20, 10);
+  if (display_) {
+    display_->UpdateCeiltrackView(xytheta, CEIL_X_GRID * CEIL_HEIGHT,
+                                  CEIL_Y_GRID * CEIL_HEIGHT, 20, 10);
+  }
 }
 
   // Called each camera frame, 30Hz
@@ -305,7 +307,7 @@ void Driver::OnButtonPress(char button) {
         if (StartRecording(fnamebuf, 0)) {
           fprintf(stderr, "%ld.%06ld started recording %s\n", tv.tv_sec,
                   tv.tv_usec, fnamebuf);
-          display_->UpdateStatus(fnamebuf, 0xffe0);
+          if (display_) display_->UpdateStatus(fnamebuf, 0xffe0);
         }
       }
       break;
@@ -313,12 +315,12 @@ void Driver::OnButtonPress(char button) {
       if (IsRecording()) {
         StopRecording();
         fprintf(stderr, "%ld.%06ld stopped recording\n", tv.tv_sec, tv.tv_usec);
-        display_->UpdateStatus("recording stopped", 0xffff);
+        if (display_) display_->UpdateStatus("recording stopped", 0xffff);
       }
       break;
     case 'H':  // home button: init to start line
       carstate_.SetHome();
-      display_->UpdateStatus("starting line", 0x07e0);
+      if (display_) display_->UpdateStatus("starting line", 0x07e0);
       break;
     case 'L':
       if (!autodrive_) {
@@ -331,15 +333,18 @@ void Driver::OnButtonPress(char button) {
       if (config_.Load()) {
         fprintf(stderr, "config loaded\n");
         int16_t *values = ((int16_t *)&config_);
-        display_->UpdateConfig(configmenu, N_CONFIGITEMS, config_item_, values);
-        display_->UpdateStatus("config loaded", 0xffff);
+        if (display_) {
+          display_->UpdateConfig(configmenu, N_CONFIGITEMS, config_item_,
+                                 values);
+          display_->UpdateStatus("config loaded", 0xffff);
+        }
       }
       fprintf(stderr, "reset kalman filter\n");
       break;
     case 'A':
       if (config_.Save()) {
         fprintf(stderr, "config saved\n");
-        display_->UpdateStatus("config saved", 0xffff);
+        if (display_) display_->UpdateStatus("config saved", 0xffff);
       }
       break;
     case 'X':
@@ -390,6 +395,8 @@ void Driver::UpdateDisplay() {
   // FIXME: does this work for negative values?
   fprintf(stderr, "%s %d.%02d\r", configmenu[config_item_], value / 100,
           value % 100);
-  display_->UpdateConfig(configmenu, N_CONFIGITEMS, config_item_, values);
+
+  if (display_)
+    display_->UpdateConfig(configmenu, N_CONFIGITEMS, config_item_, values);
 }
 

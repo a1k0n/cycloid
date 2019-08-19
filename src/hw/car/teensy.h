@@ -6,6 +6,7 @@
 // i2c-connected teensy running a program to write to servo / ESC, read from
 // encoders & analog servo position feedback
 
+// deprecated, doesn't conform to CarHW spec and no plans to add it now
 class Teensy {
  public:
   explicit Teensy(const I2C &i2cbus);

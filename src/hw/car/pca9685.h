@@ -3,6 +3,7 @@
 
 #include "hw/gpio/i2c.h"
 
+// deprecated, doesn't conform to CarHW spec and no plans to add it now
 class PCA9685 {
  public:
   explicit PCA9685(const I2C &i2cbus);

@@ -6,6 +6,7 @@
 // i2c-connected stm32f030 running a program to write to servo / ESC, read from
 // brushless motor sensor
 
+// deprecated, doesn't conform to CarHW spec and no plans to add it now
 class STM32Hat {
  public:
   explicit STM32Hat(const I2C &i2cbus);
