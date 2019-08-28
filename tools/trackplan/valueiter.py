@@ -170,6 +170,12 @@ def main():
     v0 = np.sum(V, dtype=np.float64)
     s = tqdm.trange(2000)
     s.set_postfix_str(str(v0))
+
+    def flush():
+        np.save("V.npy", V)
+        np.save("penalty.npy", penalty)
+        savebin(V, penalty)
+
     for i in s:
         runiter(V, rm1, rm2, pcosts)
         v1 = np.sum(V, dtype=np.float64)
@@ -180,11 +186,9 @@ def main():
         s.set_postfix_str(str(v0) + " dv " + str(dv))
         if (i > 0) and (i % 100) == 0:
             print("checkpointing...   ")
-            np.save("V.npy", V)
-            savebin(V, penalty)
-    np.save("V.npy", V)
-    savebin(V, penalty)
+            flush()
 
+    flush()
 
 if __name__ == '__main__':
     main()

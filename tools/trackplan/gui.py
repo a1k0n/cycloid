@@ -304,6 +304,18 @@ class TrackplanWindow:
         scale = self.scaleref
         turns = self.pts['turn']
         Nturns = len(turns)
+        f = open(fname, "w")
+        f.write("%d %f\n" % (Nturns, self.lanewidth * scale))
+        for t in turns:
+            t = np.float32(t) * scale
+            t[1] = -t[1]  # invert y
+            f.write("%f %f %f\n" % tuple(t))
+        f.close()
+
+    def save_raceline(self, fname):
+        scale = self.scaleref
+        turns = self.pts['turn']
+        Nturns = len(turns)
         if Nturns < 3:
             return
         t = np.float32(turns).T
@@ -366,12 +378,17 @@ def main(mapim):
                     mw.save_cones("lm.txt")
                     status = 'Exported lm.txt'
 
-                exporttrack, _ = imgui.menu_item("Export track")
+                exporttrack, _ = imgui.menu_item("Export track definition")
                 if exporttrack:
+                    mw.save_track("trackdef.txt")
+                    status = 'Exported trackdef.txt'
+
+                exportraceline, _ = imgui.menu_item("Export race line")
+                if exportraceline:
                     if mw.opttrack is None:
                         status = 'Optimized track not defined!'
                     else:
-                        mw.save_track("track.txt")
+                        mw.save_raceline("track.txt")
                         status = 'Exported track.txt'
 
                 clicked_quit, _ = imgui.menu_item(
