@@ -35,6 +35,8 @@ class DriverConfig {
   int16_t servo_rate;      // servo speed
   int16_t servo_offset;    // center offset
   int16_t servo_finetune;  // closed-loop adjust rate
+  int16_t servo_min;
+  int16_t servo_max;
 
   int16_t lm_precision;  // landmark precision (1/sigma^2)
 
@@ -52,9 +54,12 @@ class DriverConfig {
 
     turnin_lift = 0;
 
-    servo_rate = -1.70 * 100;
-    servo_offset = 0.30 * 100;
-    servo_finetune = -2.00 * 100;
+    servo_rate = 1.70 * 100;
+    servo_offset = 0;
+    servo_finetune = 1.00 * 100;
+
+    servo_min = -100;
+    servo_max = 100;
 
     lm_precision = 100;
   }

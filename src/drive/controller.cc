@@ -7,10 +7,6 @@
 
 using Eigen::Vector3f;
 
-// FIXME: put this into the .ini (or better, the dynamic config)
-const int STEER_LIMIT_LOW = -85;
-const int STEER_LIMIT_HIGH = 127;
-
 DriveController::DriveController() {
   ResetState();
   if (!V_.Init()) {
@@ -126,7 +122,8 @@ bool DriveController::GetControl(const DriverConfig &config,
     *throttle_out = throttle_in;
     // yaw is backwards
     *steering_out =
-        steering_in * (config.servo_rate < 0 ? 1 : -1) - srv_off * BW_w;
+        clip(steering_in * (config.servo_rate < 0 ? 1 : -1) - srv_off * BW_w,
+             config.servo_min * 0.01, config.servo_max * 0.01);
     prev_steer_ = *steering_out;
     prev_throttle_ = *throttle_out;
     ierr_v_ = 0;
@@ -165,7 +162,8 @@ bool DriveController::GetControl(const DriverConfig &config,
   } else {
     ierr_k_ = 0;
   }
-  *steering_out = (target_k - srv_off + ierr_k_) * BW_w;
+  *steering_out = clip((target_k - srv_off + ierr_k_) * BW_w,
+                       config.servo_min * 0.01, config.servo_max * 0.01);
 
   prev_steer_ = *steering_out;
 

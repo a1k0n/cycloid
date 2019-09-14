@@ -33,6 +33,8 @@ const char *Driver::configmenu[] = {
   "servo rate",
   "servo offset",
   "servo finetune",
+  "servo min",
+  "servo max",
   "cone precision",
 };
 
