@@ -19,7 +19,7 @@ class PiGPIOCar: public CarHW {
  private:
   int escpin_, servopin_;
   int pwmfreq_;
-  bool fwdonly_;
+  bool fwdonly_, escrev_;
 };
 
 #endif  // HW_CAR_PIGPIO_H_

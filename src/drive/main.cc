@@ -61,23 +61,6 @@ int main(int argc, char *argv[]) {
     return 1;
   }
 
-  // FIXME(a1k0n): INI
-  bool has_display = true;
-  if (!display_.Init()) {
-    fprintf(stderr,
-            "run this:\n"
-            "sudo modprobe fbtft_device name=adafruit22a rotate=90\n"
-            "running without display support for now\n");
-    has_display = false;
-  }
-
-  // FIXME(a1k0n): INI
-  if (!ceiltrack_.Open("ceillut.bin")) {
-    fprintf(stderr,
-            "can't open ceillut.bin, camera calibration lookup table\n");
-    return 1;
-  }
-
   bool has_joystick = false;
   if (js.Open(ini)) {
     has_joystick = true;
@@ -95,22 +78,40 @@ int main(int argc, char *argv[]) {
   gettimeofday(&tv, NULL);
   fprintf(stderr, "%ld.%06ld camera on @%d fps\n", tv.tv_sec, tv.tv_usec, fps);
 
-  if (!Camera::StartRecord(driver_)) {
-    return 1;
-  }
-
   gettimeofday(&tv, NULL);
   fprintf(stderr, "%ld.%06ld started camera\n", tv.tv_sec, tv.tv_usec);
 
   carhw_ = CarHW::GetCar(&i2c, ini);
-  if (!carhw_->Init()) {
+  if (!carhw_ || !carhw_->Init()) {
     fprintf(stderr, "failed to init car hardware\n");
     return 1;
   }
 
+  // FIXME(a1k0n): INI
+  bool has_display = true;
+  if (!display_.Init()) {
+    fprintf(stderr,
+            "run this:\n"
+            "sudo modprobe fbtft_device name=adafruit22a rotate=90\n"
+            "running without display support for now\n");
+    has_display = false;
+  }
+
+  // FIXME(a1k0n): INI
+  if (!ceiltrack_.Open("ceillut.bin")) {
+    fprintf(stderr,
+            "can't open ceillut.bin, camera calibration lookup table\n");
+    return 1;
+  }
+
   driver_ =
-      new Driver(&ceiltrack_, &flush_thread_, imu_, has_joystick ? &js : NULL,
+      new Driver(ini, &ceiltrack_, &flush_thread_, imu_, has_joystick ? &js : NULL,
                  has_display ? &display_ : NULL);
+
+  if (!Camera::StartRecord(driver_)) {
+    return 1;
+  }
+
   carhw_->RunMainLoop(driver_);
 
   Camera::StopRecord();

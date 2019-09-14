@@ -28,6 +28,7 @@ class JoystickInput {
   uint32_t buttons_;
   int16_t axes_[8];
   const char *buttonmap_;
+  const char *axismap_;
 };
 
 #endif  // HW_INPUT_JS_H_

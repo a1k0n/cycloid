@@ -12,15 +12,20 @@ PiGPIOCar::PiGPIOCar(const INIReader &ini) {
   pwmfreq_ = ini.GetInteger("car", "pwmfreq", 100);
   // "fwdonly" means the ESC starts at zero throttle at a 1ms pulse, and only
   // goes forward up to a max 2ms pulse, like an ESC for a quad or airplane.
-  // false means 1.5ms is neutral, more than that is forward, and less than that is brake.
+  // false means 1.5ms is neutral, more than that is forward, and less than that
+  // is brake.
   fwdonly_ = ini.GetBoolean("car", "fwdonly", false);
+  // "escrev" reverses the ESC direction, so that 1.5 down to 1ms is forward
+  // and 1.5..2ms is brake
+  escrev_ = ini.GetBoolean("car", "escrev", false);
 }
 
 bool PiGPIOCar::Init() {
+  gpioCfgSetInternals(PI_CFG_NOSIGHANDLER);
   if (gpioInitialise() == PI_INIT_FAILED) {
     return false;
   }
-  SetControls(0, 0, 0);
+  return SetControls(0, 0, 0);
 }
 
 bool PiGPIOCar::SetControls(unsigned led, float throttle, float steering) {
@@ -31,11 +36,16 @@ bool PiGPIOCar::SetControls(unsigned led, float throttle, float steering) {
     throttle = throttle*2 - 1;
     if (throttle < -1) throttle = -1;
   }
+  if (escrev_) {
+    throttle = -throttle;
+  }
 
   gpioHardwarePWM(escpin_, pwmfreq_,
                   (throttle * .0005 + .0015) * pwmfreq_ * PI_HW_PWM_RANGE);
   gpioHardwarePWM(servopin_, pwmfreq_,
                   (steering * .0005 + .0015) * pwmfreq_ * PI_HW_PWM_RANGE);
+
+  return true;
 }
 
 bool PiGPIOCar::GetWheelMotion(float *, float *) {
@@ -50,11 +60,14 @@ void PiGPIOCar::RunMainLoop(ControlCallback *cb) {
     timeval t;
     gettimeofday(&t, NULL);
     // sleep until we are at t0+dt
-    unsigned long sleepus = t0.tv_usec + 1000000 * t0.tv_sec + pwmusec -
-                            t.tv_usec - 1000000 * t.tv_sec;
+    uint64_t sleepus =
+        (t0.tv_usec - t.tv_usec) + 1000000 * (t0.tv_sec - t.tv_sec) + pwmusec;
     usleep(sleepus);
     gettimeofday(&t, NULL);
     float dt = (t.tv_usec - t0.tv_usec)*1e-6 + t.tv_sec - t0.tv_sec;
-    cb->OnControlFrame(this, dt);
+    t0 = t;
+    if (!cb->OnControlFrame(this, dt)) {
+      break;
+    }
   }
 }

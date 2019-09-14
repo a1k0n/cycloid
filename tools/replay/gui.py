@@ -201,9 +201,10 @@ class ReplayGUI:
         if self.acts is not None:
             imgui.plot_lines("activations", self.acts)
 
-        nCtrlAngles = (len(self.controlstate[self.i]) - 12) / 2
+        nCtrlAngles = (len(self.controlstate[self.i]) - 12) // 2
+        cc = self.controlstate[self.i][-nCtrlAngles:]
         imgui.plot_lines(
-            "control costs", np.clip(self.controlstate[self.i][-nCtrlAngles:], 0, 100))
+            "control costs", np.clip(cc, 0, 100))
 
         # make a histogram of expected cone locations
         if self.acts is not None:
@@ -259,9 +260,9 @@ class ReplayGUI:
             k = 0
         imgui.slider_float("curvature", k, 2, -2)
 
-        nCtrlAngles = (len(self.controlstate[self.i]) - 12) / 2
-        targetK = self.controlstate[self.i][
-            12 + np.argmin(self.controlstate[self.i][-nCtrlAngles:])]
+        nCtrlAngles = (len(self.controlstate[self.i]) - 12) // 2
+        cc = self.controlstate[self.i][-nCtrlAngles:]
+        targetK = self.controlstate[self.i][12 + np.argmin(cc)]
         imgui.slider_float("target k", targetK, 2, -2)
 
         imgui.slider_float("windup k", self.controlstate[i, 7], -1, 1)

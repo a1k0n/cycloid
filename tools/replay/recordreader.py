@@ -53,6 +53,15 @@ def read_frame(f):
             periods = np.uint16(data[13:17])
             framedata['carstate'] = (
                 throttle, steering, accel, gyro, servo, wheels, periods)
+        if n == b'CSt1':  # car state
+            data = struct.unpack("=bbffffffff", ick.read())
+            throttle, steering = data[0:2]
+            accel = np.float32(data[2:5])
+            gyro = np.float32(data[5:8])
+            wheeldist = np.float32(data[8:12])
+            wheelv = np.float32(data[12:16])
+            framedata['carstate'] = (
+                throttle, steering, accel, gyro, 0, wheeldist, wheelv)
         # monte carlo localization, 4-float state (particles w/ heading)
         elif n == b'MCL4':
             framedata['particles'] = np.frombuffer(

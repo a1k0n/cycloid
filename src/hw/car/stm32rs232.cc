@@ -90,6 +90,7 @@ bool STM32HatSerial::GetWheelMotion(float *ds, float *v) {
   }
   *ds = ds_;
   *v = v_;
+  ds_ = 0;
   return true;
 }
 
@@ -122,21 +123,22 @@ void STM32HatSerial::RunMainLoop(ControlCallback *cb) {
     timeval t;
     gettimeofday(&t, NULL);
 
-    uint16_t wheel_delta = last_wpos - wpos;
+    uint16_t wheel_delta = wpos - last_wpos;
     last_wpos = wpos;
-    ds_ = meters_per_tick_ * wheel_delta;
-    if (wheel_delta == 0) {
-      v_ = 0;
-    } else if (wheeldt > meters_per_tick_ * 1e6 / 30.0) {
+    ds_ += meters_per_tick_ * wheel_delta;
+    if (wheeldt > meters_per_tick_ * 1e6 / 30.0) {
       // occasionally the firmware outputs a ridiculously small but nonzero
       // wheel period, so restrict to reasonable values (< 30m/s max)
       v_ = meters_per_tick_ * 1e6 / wheeldt;
+    } else if (wheeldt == 0) {
+      v_ = 0;
     }
     float dt = t.tv_sec - last_t.tv_sec + (t.tv_usec - last_t.tv_usec) * 1e-6;
 
     if (!cb->OnControlFrame(this, dt)) {
       break;
     }
+    last_t = t;
   }
 }
 

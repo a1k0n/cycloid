@@ -1,6 +1,6 @@
 
-#ifndef DRIVE_DRIVE_H_
-#define DRIVE_DRIVE_H_
+#ifndef DRIVE_DRIVER_H_
+#define DRIVE_DRIVER_H_
 
 #include "drive/config.h"
 #include "drive/controller.h"
@@ -21,7 +21,8 @@ class Driver : public CameraReceiver,
                public InputReceiver {
  public:
   // FIXME(a1k0n): CeilingTracker -> Localizer
-  Driver(CeilingTracker *ceil, FlushThread *ft, IMU *imu, JoystickInput *js, UIDisplay *disp);
+  Driver(const INIReader &ini, CeilingTracker *ceil, FlushThread *ft, IMU *imu,
+         JoystickInput *js, UIDisplay *disp);
   ~Driver();
 
   virtual void OnCameraFrame(uint8_t *buf, size_t length);
@@ -35,7 +36,7 @@ class Driver : public CameraReceiver,
   virtual void OnAxisMove(int axis, int16_t value);
 
   void Quit() { done_ = true; }
-  
+
  private:
   bool StartRecording(const char *fname, int frameskip);
   bool IsRecording();
@@ -59,10 +60,13 @@ class Driver : public CameraReceiver,
   bool done_;
   int frame_;
 
+  const char *name;
   int output_fd_;
   int frameskip_;
   struct timeval last_t_;
   int16_t js_throttle_, js_steering_;
+
+  Eigen::Vector3f gyro_last_, gyro_bias_;
 
   static const char *configmenu[];
   static const int N_CONFIGITEMS;
@@ -70,4 +74,4 @@ class Driver : public CameraReceiver,
   bool x_down_, y_down_;
 };
 
-#endif  // DRIVE_DRIVE_H_
+#endif  // DRIVE_DRIVER_H_

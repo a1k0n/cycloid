@@ -4,6 +4,7 @@
 #include <stdio.h>
 #include <string.h>
 #include <unistd.h>
+#include <string>
 
 #include "hw/input/js.h"
 #include "inih/cpp/INIReader.h"
@@ -12,6 +13,8 @@ JoystickInput::JoystickInput() {
   fd_ = -1;
   buttons_ = 0;
   memset(axes_, 0, sizeof(axes_));
+  buttonmap_ = NULL;
+  axismap_ = NULL;
 }
 
 JoystickInput::~JoystickInput() {
@@ -21,22 +24,35 @@ JoystickInput::~JoystickInput() {
 }
 
 bool JoystickInput::Open(const INIReader &ini) {
-  std::string buttonmap = ini.GetString("joystick", "buttonmap", "");
   std::string jtype = ini.GetString("joystick", "type", "");
 
   // N.B. there's no axis map; the axes are mostly the same on the two
   // controllers we support, but that may have to change
 
+  if (jtype == "wiiupro") {  // Wii U Pro controller via Bluetooth
+    buttonmap_ = "BAXYLRlr-+H,.";
+    axismap_ = "01234567";
+  } else if (jtype == "f710") {  // Logitech F710 via USB dongle
+    // a few buttons and axes are swapped w.r.t. the Wii U controller here
+    buttonmap_ = "BAYXLR-+H,.??";
+    axismap_ = "01324567";
+  }
+
+  std::string buttonmap = ini.GetString("joystick", "buttonmap", "");
   if (buttonmap != "") {
     buttonmap_ = buttonmap.c_str();
-  } else if (jtype == "wiiupro") {  // Wii U Pro controller via Bluetooth
-    buttonmap_ = "BAXYLRlr-+H,.";
-  } else if (jtype == "f710") {  // Logitech F710 via USB dongle
-    buttonmap_ = "BAXYLR-+H,.??";
-  } else {
+  }
+
+  std::string axismap = ini.GetString("joystick", "axismap", "");
+  if (axismap != "") {
+    axismap_ = axismap.c_str();
+  }
+
+  if (!buttonmap_ || !axismap_) {
     fprintf(stderr,
             "Please specify cycloid.ini [joystick]:\n"
-            "  either buttonmap=BAXY... or type=wiiupro/f710/etc\n");
+            "  either axismap=0123... buttonmap=BAXY... or "
+            "type=wiiupro/f710/etc\n");
     return false;
   }
 
@@ -118,8 +134,8 @@ bool JoystickInput::ReadInput(InputReceiver *receiver) {
         } else if (value > 0) {
           receiver->OnDPadPress('D');
         }
-      } else {
-        receiver->OnAxisMove(number, value);
+      } else if (number < 8) {
+        receiver->OnAxisMove(axismap_[number] - '0', value);
       }
     }
   }

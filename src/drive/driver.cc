@@ -85,8 +85,14 @@ struct CarState {
   }
 } carstate_;
 
-Driver::Driver(CeilingTracker *ceil, FlushThread *ft, IMU *imu, JoystickInput *js, UIDisplay *disp)
-    : ceiltrack_(ceil), flush_thread_(ft), imu_(imu), js_(js), display_(disp) {
+Driver::Driver(const INIReader &ini, CeilingTracker *ceil, FlushThread *ft,
+               IMU *imu, JoystickInput *js, UIDisplay *disp)
+    : ceiltrack_(ceil),
+      flush_thread_(ft),
+      imu_(imu),
+      js_(js),
+      display_(disp),
+      gyro_bias_(0, 0, 0) {
   output_fd_ = -1;
   frame_ = 0;
   frameskip_ = 0;
@@ -228,17 +234,23 @@ bool Driver::OnControlFrame(CarHW *car, float dt) {
     js_->ReadInput(this);
   }
 
-  imu_->ReadIMU(&carstate_.accel, &carstate_.gyro);
+  Eigen::Vector3f gyro;
+  imu_->ReadIMU(&carstate_.accel, &gyro);
+  gyro_last_ = 0.95 * gyro_last_ + 0.05 * gyro;
+  carstate_.gyro = gyro - gyro_bias_;
 
   // a = v^2 k = v w
   // v = a/w
   float ds, v;
   if (car->GetWheelMotion(&ds, &v)) {  // use wheel encoders if we have 'em
     carstate_.wheel_v = v;
-  } else if (fabsf(carstate_.gyro[2] > 0.2)) {  // otherwise try to use the
-                                                // acceleromters/gyros to guess
-    // FIXME(a1k0n): does this axis need configuration in the .ini?0
-    carstate_.wheel_v = fabsf(carstate_.accel[0] / carstate_.gyro[2]);
+  } else {
+    // otherwise try to use the acceleromters/gyros to guess
+    // FIXME(a1k0n): do these axes need configuration in the .ini?
+    carstate_.wheel_v = 0.95 * (carstate_.wheel_v - 9.8*carstate_.accel[1]*dt);
+    if (fabsf(carstate_.gyro[2] > 0.1)) {
+      carstate_.wheel_v += 0.05 * fabsf(carstate_.accel[0] / carstate_.gyro[2]);
+    }
   }
   controller_.UpdateState(config_, carstate_.accel, carstate_.gyro,
                           carstate_.wheel_v, dt);
@@ -320,6 +332,9 @@ void Driver::OnButtonPress(char button) {
       break;
     case 'H':  // home button: init to start line
       carstate_.SetHome();
+      gyro_bias_ = gyro_last_;
+      printf("gyro bias %0.3f %0.3f %0.3f\n", gyro_bias_[0], gyro_bias_[1],
+             gyro_bias_[2]);
       if (display_) display_->UpdateStatus("starting line", 0x07e0);
       break;
     case 'L':
@@ -381,8 +396,7 @@ void Driver::OnAxisMove(int axis, int16_t value) {
     case 1:  // left stick y axis
       js_throttle_ = -value;
       break;
-    case 3:  // right stick x axis
-      // changed! 2 for Wii U Pro controller, 3 for Logitech F710
+    case 2:  // right stick x axis
       js_steering_ = value;
       break;
   }
