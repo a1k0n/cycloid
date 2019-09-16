@@ -87,9 +87,10 @@ struct CarState {
   }
 } carstate_;
 
-Driver::Driver(const INIReader &ini, CeilingTracker *ceil, FlushThread *ft,
-               IMU *imu, JoystickInput *js, UIDisplay *disp)
+Driver::Driver(const INIReader &ini, CeilingTracker *ceil, ObstacleDetector *od,
+               FlushThread *ft, IMU *imu, JoystickInput *js, UIDisplay *disp)
     : ceiltrack_(ceil),
+      obstacledetect_(od),
       flush_thread_(ft),
       imu_(imu),
       js_(js),
@@ -193,8 +194,13 @@ void Driver::UpdateFromCamera(uint8_t *buf, float dt) {
   xytheta[0] = -carstate_.ceiltrack_pos[0] * CEIL_HEIGHT;
   xytheta[1] = -carstate_.ceiltrack_pos[1] * CEIL_HEIGHT;
   xytheta[2] = -carstate_.ceiltrack_pos[2];
+
+  obstacledetect_->Update(buf, 40, 150);  // FIXME(a1k0n): needs config
+  const int32_t *pcar = obstacledetect_->GetCarPenalties();
+  const int32_t *pcone = obstacledetect_->GetConePenalties();
+
   controller_.UpdateLocation(config_, xytheta);
-  controller_.Plan(config_);
+  controller_.Plan(config_, pcar, pcone);
 
   // display_.UpdateConeView(buf, 0, NULL);
   // display_->UpdateEncoders(carstate_.wheel_pos);
@@ -266,6 +272,8 @@ bool Driver::OnControlFrame(CarHW *car, float dt) {
     leds |= IsRecording() ? 2 : 0;  // solid red when recording
     car->SetControls(leds, u_a, u_s);
   }
+  carstate_.throttle = 127*u_a;
+  carstate_.steering = 127*u_s;
 
   return !done_;
 }

@@ -4,6 +4,7 @@
 
 #include "drive/config.h"
 #include "drive/controller.h"
+#include "drive/obstacle.h"
 #include "hw/cam/cam.h"
 #include "hw/car/car.h"
 #include "hw/input/input.h"
@@ -21,8 +22,8 @@ class Driver : public CameraReceiver,
                public InputReceiver {
  public:
   // FIXME(a1k0n): CeilingTracker -> Localizer
-  Driver(const INIReader &ini, CeilingTracker *ceil, FlushThread *ft, IMU *imu,
-         JoystickInput *js, UIDisplay *disp);
+  Driver(const INIReader &ini, CeilingTracker *ceil, ObstacleDetector *od,
+         FlushThread *ft, IMU *imu, JoystickInput *js, UIDisplay *disp);
   ~Driver();
 
   virtual void OnCameraFrame(uint8_t *buf, size_t length);
@@ -49,6 +50,7 @@ class Driver : public CameraReceiver,
   void QueueRecordingData(const timeval &t, uint8_t *buf, size_t length);
 
   CeilingTracker *ceiltrack_;
+  ObstacleDetector *obstacledetect_;
   DriveController controller_;
   DriverConfig config_;
   FlushThread *flush_thread_;

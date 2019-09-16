@@ -23,11 +23,12 @@ void handle_sigint(int signo) {
 
 int main(int argc, char *argv[]) {
   I2C i2c;
-  CarHW *carhw_;
-  IMU *imu_;
-  UIDisplay display_;
-  FlushThread flush_thread_;
-  CeilingTracker ceiltrack_;
+  CarHW *carhw;
+  IMU *imu;
+  UIDisplay display;
+  FlushThread flush_thread;
+  CeilingTracker ceiltrack;
+  ObstacleDetector obstacledetector;
 
   signal(SIGINT, handle_sigint);
 
@@ -48,7 +49,7 @@ int main(int argc, char *argv[]) {
 
   int fps = ini.GetInteger("camera", "fps", 30);
 
-  if (!flush_thread_.Init()) {
+  if (!flush_thread.Init()) {
     return 1;
   }
 
@@ -68,8 +69,8 @@ int main(int argc, char *argv[]) {
     fprintf(stderr, "joystick not detected, but continuing anyway!\n");
   }
 
-  imu_ = IMU::GetI2CIMU(i2c, ini);
-  if (!imu_ || !imu_->Init()) {
+  imu = IMU::GetI2CIMU(i2c, ini);
+  if (!imu || !imu->Init()) {
     fprintf(stderr, "unable to connect to IMU; aborting\n");
     return 1;
   }
@@ -81,15 +82,15 @@ int main(int argc, char *argv[]) {
   gettimeofday(&tv, NULL);
   fprintf(stderr, "%ld.%06ld started camera\n", tv.tv_sec, tv.tv_usec);
 
-  carhw_ = CarHW::GetCar(&i2c, ini);
-  if (!carhw_ || !carhw_->Init()) {
+  carhw = CarHW::GetCar(&i2c, ini);
+  if (!carhw || !carhw->Init()) {
     fprintf(stderr, "failed to init car hardware\n");
     return 1;
   }
 
   // FIXME(a1k0n): INI
   bool has_display = true;
-  if (!display_.Init()) {
+  if (!display.Init()) {
     fprintf(stderr,
             "run this:\n"
             "sudo modprobe fbtft_device name=adafruit22a rotate=90\n"
@@ -98,21 +99,26 @@ int main(int argc, char *argv[]) {
   }
 
   // FIXME(a1k0n): INI
-  if (!ceiltrack_.Open("ceillut.bin")) {
+  if (!ceiltrack.Open("ceillut.bin")) {
     fprintf(stderr,
             "can't open ceillut.bin, camera calibration lookup table\n");
     return 1;
   }
 
+  if (!obstacledetector.Open("floorlut.bin")) {
+    fprintf(stderr, "can't open floorlut.bin, obstacle detection lookup table");
+    return 1;
+  }
+
   driver_ =
-      new Driver(ini, &ceiltrack_, &flush_thread_, imu_, has_joystick ? &js : NULL,
-                 has_display ? &display_ : NULL);
+      new Driver(ini, &ceiltrack, &obstacledetector, &flush_thread, imu,
+                 has_joystick ? &js : NULL, has_display ? &display : NULL);
 
   if (!Camera::StartRecord(driver_)) {
     return 1;
   }
 
-  carhw_->RunMainLoop(driver_);
+  carhw->RunMainLoop(driver_);
 
   Camera::StopRecord();
 }

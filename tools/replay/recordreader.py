@@ -81,8 +81,12 @@ def read_frame(f):
             framedata['controldata2'] = struct.unpack("=%df" % (len(dat)/4), dat)
         elif n == b'Y420':  # YUV420 frame
             w, = struct.unpack('=H', ick.read(2))
+            dat = ick.read()
+            # short read, just truncate file
+            if len(dat) < 640*480 + 320*240*2:
+                break
             framedata['yuv420'] = np.frombuffer(
-                ick.read(), np.uint8).reshape((-1, w))
+                dat, np.uint8).reshape((-1, w))
         else:
             ick.skip()
 

@@ -18,7 +18,8 @@ class DriveController {
 
   void UpdateLocation(const DriverConfig &config, const float *xytheta);
 
-  void Plan(const DriverConfig &config);
+  void Plan(const DriverConfig &config, const int32_t *cardetect,
+            const int32_t *conedetect);
 
   bool GetControl(const DriverConfig &config,
       float throttle_in, float steering_in,

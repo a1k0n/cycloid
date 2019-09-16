@@ -43,7 +43,8 @@ void DriveController::UpdateLocation(const DriverConfig &config,
   theta_ = xytheta[2];
 }
 
-void DriveController::Plan(const DriverConfig &config) {
+void DriveController::Plan(const DriverConfig &config, const int32_t *cardetect,
+                           const int32_t *conedetect) {
   // TODO(asloane): consider more feasible maneuvers
   // curvature can swing about 0.3 1/m from wherever it is now in 10ms
   const int nangles = kLookaheadAngles;
