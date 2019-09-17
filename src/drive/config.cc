@@ -10,6 +10,8 @@ const char *DriverConfig::confignames[] = {
   "lookahead dist",
   "lookahead kmax",
   "path penalty",
+  "cone penalty",
+  "car penalty",
   "motor gain",
   "motor kI",
   "servo rate",
@@ -19,7 +21,7 @@ const char *DriverConfig::confignames[] = {
   "servo max",
 };
 
-const int DriverConfig::N_CONFIGITEMS = 12;
+const int DriverConfig::N_CONFIGITEMS = 14;
 
 bool DriverConfig::Save() {
   FILE *fp = fopen("driverconf.txt", "w");
@@ -32,6 +34,8 @@ bool DriverConfig::Save() {
   fprintf(fp, "lookahead_dist       %d\n", lookahead_dist);
   fprintf(fp, "lookahead_kmax       %d\n", lookahead_kmax);
   fprintf(fp, "path_penalty         %d\n", path_penalty);
+  fprintf(fp, "cone_penalty         %d\n", cone_penalty);
+  fprintf(fp, "car_penalty          %d\n", car_penalty);
   fprintf(fp, "motor_gain           %d\n", motor_gain);
   fprintf(fp, "motor_kI             %d\n", motor_kI);
   fprintf(fp, "servo_rate           %d\n", servo_rate);
@@ -58,6 +62,8 @@ bool DriverConfig::Load() {
     else if (!strcmp(varbuf, "lookahead_dist"))    { lookahead_dist       = valuebuf; }
     else if (!strcmp(varbuf, "lookahead_kmax"))    { lookahead_kmax       = valuebuf; }
     else if (!strcmp(varbuf, "path_penalty"))      { path_penalty         = valuebuf; }
+    else if (!strcmp(varbuf, "cone_penalty"))      { cone_penalty         = valuebuf; }
+    else if (!strcmp(varbuf, "car_penalty"))       { car_penalty          = valuebuf; }
     else if (!strcmp(varbuf, "motor_gain"))        { motor_gain           = valuebuf; }
     else if (!strcmp(varbuf, "motor_kI"))          { motor_kI             = valuebuf; }
     else if (!strcmp(varbuf, "servo_rate"))        { servo_rate           = valuebuf; }

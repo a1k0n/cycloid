@@ -4,6 +4,8 @@ traction limit   9.00
 lookahead dist   1.75
 lookahead kmax   1.00
 path penalty     0.09
+cone penalty     0.10
+car penalty      0.10
 motor gain       0.13
 motor kI         2.00
 servo rate       1.00

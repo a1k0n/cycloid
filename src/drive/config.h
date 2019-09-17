@@ -12,6 +12,8 @@ class DriverConfig {
   int16_t lookahead_dist;
   int16_t lookahead_kmax;
   int16_t path_penalty;
+  int16_t cone_penalty;
+  int16_t car_penalty;
   int16_t motor_gain;
   int16_t motor_kI;
   int16_t servo_rate;
@@ -27,6 +29,8 @@ class DriverConfig {
     lookahead_dist       = 175;
     lookahead_kmax       = 100;
     path_penalty         = 9;
+    cone_penalty         = 10;
+    car_penalty          = 10;
     motor_gain           = 13;
     motor_kI             = 200;
     servo_rate           = 100;

@@ -84,8 +84,8 @@ void DriveController::Plan(const DriverConfig &config, const int32_t *cardetect,
         int iang = (relang*256/M_PI) + 128;
 
         // FIXME(a1k0n): configurable magnitudes here
-        P += cardetect[iang & 255];
-        P += conedetect[iang & 255] * 0.1;
+        P += cardetect[iang & 255] * config.car_penalty * 0.01;
+        P += conedetect[iang & 255] * config.cone_penalty * 0.01;
 
         float xt = x0 + (sin(t0 + k*st) - S) / k;
         float yt = y0 + (C - cos(t0 + k*st)) / k;
@@ -94,8 +94,8 @@ void DriveController::Plan(const DriverConfig &config, const int32_t *cardetect,
       // and then the final cost-to-go
       float relang = atan2f(1 - cos(ks) / k, sin(ks) / k);
       int iang = (relang * 256 / M_PI) + 128;
-      V += cardetect[iang & 255];
-      V += conedetect[iang & 255] * 0.1;
+      V += cardetect[iang & 255] * config.car_penalty * 0.01;
+      V += conedetect[iang & 255] * config.cone_penalty * 0.01;
       float x1 = x0 + (sin(t0 + ks) - S) / k;
       float y1 = y0 + (C - cos(t0 + ks)) / k;
       V += V_.V(x1, y1, theta1);
