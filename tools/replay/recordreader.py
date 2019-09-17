@@ -102,7 +102,10 @@ class RecordIterator:
         return self
 
     def __next__(self):
-        ok, data = read_frame(self.f)
+        try:
+            ok, data = read_frame(self.f)
+        except ValueError:
+            raise StopIteration
         if not ok:
             raise StopIteration
         return data
