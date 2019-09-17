@@ -1,4 +1,5 @@
 add_executable(drive
+    config.cc
     config.h
     controller.cc
     controller.h

@@ -70,8 +70,6 @@ class Driver : public CameraReceiver,
 
   Eigen::Vector3f gyro_last_, gyro_bias_;
 
-  static const char *configmenu[];
-  static const int N_CONFIGITEMS;
   int config_item_;
   bool x_down_, y_down_;
 };

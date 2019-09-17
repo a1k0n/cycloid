@@ -21,26 +21,6 @@ const float CEIL_HEIGHT = 8.25*0.3048;
 const float CEIL_X_GRID = 0.3048*10/CEIL_HEIGHT;
 const float CEIL_Y_GRID = 0.3048*12/CEIL_HEIGHT;
 
-const char *Driver::configmenu[] = {
-  "max speed",
-  "traction limit",
-  "lookahead dist",
-  "lookahead dkdt",
-  "cone/lane penalty",
-  "motorcontrol gain",
-  "motorcontrol kI",
-  "turn-in lift",
-  "servo rate",
-  "servo offset",
-  "servo finetune",
-  "servo min",
-  "servo max",
-  "cone precision",
-};
-
-const int Driver::N_CONFIGITEMS =
-    sizeof(configmenu) / sizeof(configmenu[0]);
-
 // const int PWMCHAN_STEERING = 14;
 // const int PWMCHAN_ESC = 15;
 
@@ -283,12 +263,12 @@ void Driver::OnDPadPress(char direction) {
   switch (direction) {
     case 'U':
       --config_item_;
-      if (config_item_ < 0) config_item_ = N_CONFIGITEMS - 1;
+      if (config_item_ < 0) config_item_ = DriverConfig::N_CONFIGITEMS - 1;
       fprintf(stderr, "\n");
       break;
     case 'D':
       ++config_item_;
-      if (config_item_ >= N_CONFIGITEMS) config_item_ = 0;
+      if (config_item_ >= DriverConfig::N_CONFIGITEMS) config_item_ = 0;
       fprintf(stderr, "\n");
       break;
     case 'L':
@@ -359,7 +339,8 @@ void Driver::OnButtonPress(char button) {
         fprintf(stderr, "config loaded\n");
         int16_t *values = ((int16_t *)&config_);
         if (display_) {
-          display_->UpdateConfig(configmenu, N_CONFIGITEMS, config_item_,
+          display_->UpdateConfig(DriverConfig::confignames,
+                                 DriverConfig::N_CONFIGITEMS, config_item_,
                                  values);
           display_->UpdateStatus("config loaded", 0xffff);
         }
@@ -417,10 +398,11 @@ void Driver::UpdateDisplay() {
   int16_t *values = ((int16_t *)&config_);
   int16_t value = values[config_item_];
   // FIXME: does this work for negative values?
-  fprintf(stderr, "%s %d.%02d\r", configmenu[config_item_], value / 100,
+  fprintf(stderr, "%s %d.%02d\r", DriverConfig::confignames[config_item_], value / 100,
           value % 100);
 
   if (display_)
-    display_->UpdateConfig(configmenu, N_CONFIGITEMS, config_item_, values);
+    display_->UpdateConfig(DriverConfig::confignames,
+                           DriverConfig::N_CONFIGITEMS, config_item_, values);
 }
 

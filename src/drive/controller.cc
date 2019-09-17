@@ -3,6 +3,7 @@
 #include <stdio.h>
 #include <sys/time.h>
 
+#include "drive/config.h"
 #include "drive/controller.h"
 
 using Eigen::Vector3f;
@@ -49,7 +50,7 @@ void DriveController::Plan(const DriverConfig &config, const int32_t *cardetect,
   // curvature can swing about 0.3 1/m from wherever it is now in 10ms
   const int nangles = kLookaheadAngles;
   float k0 = 0;
-  float dk = config.lookahead_krate * 0.01 / nangles;
+  float dk = config.lookahead_kmax * 0.01 / nangles;
 
 /*
   if (vr_ > 0.3) {
@@ -129,7 +130,7 @@ bool DriveController::GetControl(const DriverConfig &config,
   float srv_off = 0.01 * config.servo_offset;
 
   float BW_w = 100. / config.servo_rate;
-  float srv_fine = 0.01 * config.servo_finetune;
+  float srv_kI = 0.01 * config.servo_kI;
 
   // if we're braking or coasting, just control that manually
   if (!autodrive && throttle_in <= 0) {
@@ -172,7 +173,7 @@ bool DriveController::GetControl(const DriverConfig &config,
 
   if (vr_ > 0.2) {
     float kerr = target_k - w_ / vr_;
-    ierr_k_ = clip(ierr_k_ + dt * srv_fine * kerr, -2, 2);
+    ierr_k_ = clip(ierr_k_ + dt * srv_kI * kerr, -2, 2);
   } else {
     ierr_k_ = 0;
   }
@@ -194,9 +195,11 @@ bool DriveController::GetControl(const DriverConfig &config,
   *throttle_out = clip(u, -1, 1);
   prev_throttle_ = *throttle_out;
 
+#if 0  // this is crap
   // heuristic: subtract magnitude of yaw rate error from throttle control
   float werr = fabsf(target_w - w_) * 0.01 * config.turnin_lift;
   *throttle_out = clip(*throttle_out - werr, -1, 1);
+#endif
 
   // update state for datalogging
   target_v_ = target_v;
