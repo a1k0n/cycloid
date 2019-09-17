@@ -57,7 +57,13 @@ void DriveController::Plan(const DriverConfig &config, const int32_t *cardetect,
   }
   */
 
-  float s = config.lookahead_dist * 0.01;
+  const float s = config.lookahead_dist * 0.01;
+  const float lookaheadx = 0.090 * vr_;
+  const float t0 = theta_;
+  const float C = cos(t0), S = sin(t0);
+  const float x0 = x_ + lookaheadx * C;
+  const float y0 = y_ + lookaheadx * S;
+
   for (int a = 0; a < (1+nangles*2); a++) {
     // compute next x, y, theta
     float k = k0 - (a-nangles)*dk;
@@ -66,22 +72,29 @@ void DriveController::Plan(const DriverConfig &config, const int32_t *cardetect,
     float P = 0;
     {
       // jump ahead 30ms before we start planning
-      float lookaheadx = 0.090 * vr_;
-      float x0 = x_, y0 = y_, t0 = theta_;
-      x0 += lookaheadx*cos(t0);
-      y0 += lookaheadx*sin(t0);
       float theta1 = t0 + ks;
-      float C = cos(t0), S = sin(t0);
       if (fabs(k) < 1e-2)
         k = 1e-2;  // hack: avoid special cases for zero curvature
 
-      // add up the path cost every 10cm
+      // add up the path cost every 30cm
       for (float st = 0.30; st < s; st += 0.30) {
+        // compute relative angle from the car's heading
+        float relang = atan2f(1 - cos(k*st)/k, sin(k*st)/k);
+        int iang = (relang*256/M_PI) + 128;
+
+        // FIXME(a1k0n): configurable magnitudes here
+        P += cardetect[iang & 255];
+        P += conedetect[iang & 255] * 0.1;
+
         float xt = x0 + (sin(t0 + k*st) - S) / k;
         float yt = y0 + (C - cos(t0 + k*st)) / k;
         P += V_.C(xt, yt) * config.path_penalty * 0.001;
       }
       // and then the final cost-to-go
+      float relang = atan2f(1 - cos(ks) / k, sin(ks) / k);
+      int iang = (relang * 256 / M_PI) + 128;
+      V += cardetect[iang & 255];
+      V += conedetect[iang & 255] * 0.1;
       float x1 = x0 + (sin(t0 + ks) - S) / k;
       float y1 = y0 + (C - cos(t0 + ks)) / k;
       V += V_.V(x1, y1, theta1);
