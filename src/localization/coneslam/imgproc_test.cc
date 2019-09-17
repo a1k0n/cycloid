@@ -2,8 +2,6 @@
 #include <string.h>
 #include "localization/coneslam/imgproc.h"
 
-#include "drive/config.h"
-
 static const char *RECFILE =
   "../design/coneslam/home20180804/cycloid-20180804-194750.rec";
 int main() {
@@ -12,9 +10,6 @@ int main() {
     perror(RECFILE);
     return 1;
   }
-
-  DriverConfig config;
-  config.Load();
 
   int frame = 0;
   int xbuf[10];

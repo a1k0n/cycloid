@@ -1,6 +1,5 @@
 #include <stdio.h>
 #include "localization/coneslam/localize.h"
-#include "drive/config.h"
 
 using coneslam::Localizer;
 using coneslam::Particle;
@@ -22,9 +21,6 @@ int main() {
   Particle p;
   loc.GetLocationEstimate(&p);
   printf("initial location %f %f %f\n", p.x, p.y, p.theta);
-
-  DriverConfig config;
-  config.Load();
 
   float dt, ds, w;
   int nLM;
