@@ -236,8 +236,9 @@ bool Driver::OnControlFrame(CarHW *car, float dt) {
     // otherwise try to use the acceleromters/gyros to guess
     // FIXME(a1k0n): do these axes need configuration in the .ini?
     carstate_.wheel_v = 0.95 * (carstate_.wheel_v - 9.8*carstate_.accel[1]*dt);
-    if (fabsf(carstate_.gyro[2] > 0.1)) {
-      carstate_.wheel_v += 0.05 * fabsf(carstate_.accel[0] / carstate_.gyro[2]);
+    if (fabsf(carstate_.gyro[2]) > 0.1) {
+      carstate_.wheel_v +=
+          0.05 * fabsf(9.8 * carstate_.accel[0] / carstate_.gyro[2]);
     }
   }
   controller_.UpdateState(config_, carstate_.accel, carstate_.gyro,
