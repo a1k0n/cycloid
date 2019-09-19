@@ -137,7 +137,9 @@ void UIDisplay::UpdateParticleView(const coneslam::Localizer *l) {
   }
 }
 
-void UIDisplay::UpdateCeiltrackView(const float *xytheta, float xgrid, float ygrid, float sizx, float sizy) {
+void UIDisplay::UpdateCeiltrackView(const float *xytheta, float xgrid,
+                                    float ygrid, float sizx, float sizy,
+                                    const int32_t *obs1, const int32_t *obs2) {
   uint16_t *buf = screen_.GetBuffer();
   static const uint16_t green = (6 << 11) + (63 << 5) + (6);
   {
@@ -178,6 +180,27 @@ void UIDisplay::UpdateCeiltrackView(const float *xytheta, float xgrid, float ygr
     int y = y0 - S*i;
     if (x >= 0 && x < 320 && y >= 0 && y < 112) {
       buf[y*320 + x] = green;
+    }
+  }
+
+  static const uint16_t orange = (31<<11) + (40<<5) + (0);
+  static const uint16_t blue = (0<<11) + (0<<5) + (31);
+  for (int i = 0; i < 256; i++) {
+    float relang = (i - 128) *M_PI / 256.0;
+    float C = cos(relang), S = sin(relang);
+    for (int j = 10; j < 20 && j < 10+(obs1[i]>>6); j++) {
+      int x = x0 + C * j;
+      int y = y0 - S * j;
+      if (x >= 0 && x < 320 && y >= 0 && y < 112) {
+        buf[y * 320 + x] = blue;
+      }
+    }
+    for (int j = 10; j < 20 && j < 10+(obs2[i]>>6); j++) {
+      int x = x0 + C * j;
+      int y = y0 - S * j;
+      if (x >= 0 && x < 320 && y >= 0 && y < 112) {
+        buf[y * 320 + x] = orange;
+      }
     }
   }
 }

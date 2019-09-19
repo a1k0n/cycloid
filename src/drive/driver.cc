@@ -187,7 +187,8 @@ void Driver::UpdateFromCamera(uint8_t *buf, float dt) {
   // FIXME: hardcoded map size 20mx10m
   if (display_) {
     display_->UpdateCeiltrackView(xytheta, CEIL_X_GRID * CEIL_HEIGHT,
-                                  CEIL_Y_GRID * CEIL_HEIGHT, 20, 10);
+                                  CEIL_Y_GRID * CEIL_HEIGHT, 20, 10,
+                                  pcar, pcone);
   }
 }
 
