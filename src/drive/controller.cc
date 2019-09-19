@@ -80,20 +80,25 @@ void DriveController::Plan(const DriverConfig &config, const int32_t *cardetect,
       // add up the path cost every 30cm
       for (float st = 0.30; st < s; st += 0.30) {
         // compute relative angle from the car's heading
-        float relang = atan2f(1 - cos(k*st)/k, sin(k*st)/k);
+        float relang = atan2f((1 - cos(k*st))/k, sin(k*st)/k);
         int iang = (relang*256/M_PI) + 128;
 
         // FIXME(a1k0n): configurable magnitudes here
-        P += cardetect[iang & 255] * config.car_penalty * 0.01;
-        P += conedetect[iang & 255] * config.cone_penalty * 0.01;
+        int lim = 5 / st;
+        for (int d = -lim; d <= lim; d++) {
+          P += cardetect[(iang+d) & 255] * config.car_penalty * 0.01;
+          P += conedetect[(iang+d) & 255] * config.cone_penalty * 0.01;
+        }
 
         float xt = x0 + (sin(t0 + k*st) - S) / k;
         float yt = y0 + (C - cos(t0 + k*st)) / k;
         P += V_.C(xt, yt) * config.path_penalty * 0.001;
       }
       // and then the final cost-to-go
-      float relang = atan2f(1 - cos(ks) / k, sin(ks) / k);
+      float relang = atan2f((1 - cos(ks)) / k, sin(ks) / k);
       int iang = (relang * 256 / M_PI) + 128;
+      // printf("k %f relang %f iang %d i %d %f %f\n", k, relang, iang, iang &
+      // 255, sin(ks) / k, (1 - cos(ks)) / k);
       V += cardetect[iang & 255] * config.car_penalty * 0.01;
       V += conedetect[iang & 255] * config.cone_penalty * 0.01;
       float x1 = x0 + (sin(t0 + ks) - S) / k;

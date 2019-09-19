@@ -69,6 +69,7 @@ class Driver : public CameraReceiver,
   int16_t js_throttle_, js_steering_;
 
   Eigen::Vector3f gyro_last_, gyro_bias_;
+  Eigen::Vector3f accel_last_, accel_bias_;
 
   int config_item_;
   bool x_down_, y_down_;

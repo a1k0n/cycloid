@@ -75,7 +75,10 @@ Driver::Driver(const INIReader &ini, CeilingTracker *ceil, ObstacleDetector *od,
       imu_(imu),
       js_(js),
       display_(disp),
-      gyro_bias_(0, 0, 0) {
+      gyro_last_(0, 0, 0),
+      gyro_bias_(0, 0, 0),
+      accel_last_(0, 0, 0),
+      accel_bias_(0, 0, 0) {
   output_fd_ = -1;
   frame_ = 0;
   frameskip_ = 0;
@@ -223,10 +226,12 @@ bool Driver::OnControlFrame(CarHW *car, float dt) {
     js_->ReadInput(this);
   }
 
-  Eigen::Vector3f gyro;
-  imu_->ReadIMU(&carstate_.accel, &gyro);
+  Eigen::Vector3f gyro, accel;
+  imu_->ReadIMU(&accel, &gyro);
   gyro_last_ = 0.95 * gyro_last_ + 0.05 * gyro;
+  accel_last_ = 0.95 * accel_last_ + 0.05 * accel;
   carstate_.gyro = gyro - gyro_bias_;
+  carstate_.accel = accel - accel_bias_;
 
   // a = v^2 k = v w
   // v = a/w
@@ -240,6 +245,9 @@ bool Driver::OnControlFrame(CarHW *car, float dt) {
     if (fabsf(carstate_.gyro[2]) > 0.1) {
       carstate_.wheel_v +=
           0.05 * fabsf(9.8 * carstate_.accel[0] / carstate_.gyro[2]);
+    }
+    if (carstate_.wheel_v < 0) {
+      carstate_.wheel_v = 0;
     }
   }
   controller_.UpdateState(config_, carstate_.accel, carstate_.gyro,
@@ -325,8 +333,11 @@ void Driver::OnButtonPress(char button) {
     case 'H':  // home button: init to start line
       carstate_.SetHome();
       gyro_bias_ = gyro_last_;
+      accel_bias_ = accel_last_;
       printf("gyro bias %0.3f %0.3f %0.3f\n", gyro_bias_[0], gyro_bias_[1],
              gyro_bias_[2]);
+      printf("accel bias %0.3f %0.3f %0.3f\n", accel_bias_[0], accel_bias_[1],
+             accel_bias_[2]);
       if (display_) display_->UpdateStatus("starting line", 0x07e0);
       break;
     case 'L':
