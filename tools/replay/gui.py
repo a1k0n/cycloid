@@ -272,7 +272,7 @@ class ReplayGUI:
         siz = imgui.get_content_region_available()
         if siz[1] == 0:
             siz = [400, 300]
-        imgui.invisible_button("overview", siz[0], siz[1])
+        imgui.invisible_button("overview", siz[0], siz[0]*0.7)
         origin = pos
         meterwidth = max(np.max(self.track[:, 0]), np.max(self.lm[:, 0]))
         scale = siz[0] / (meterwidth * 1.1)
@@ -315,6 +315,9 @@ class ReplayGUI:
             x = self.controlstate[self.i, 0]
             y = self.controlstate[self.i, 1]
             theta = self.controlstate[self.i, 2]
+            imgui.slider_float("x", x, 0, 20)
+            imgui.slider_float("y", y, -10, 0)
+            imgui.slider_float("theta", theta % (2*np.pi), -np.pi, np.pi)
             v = 0.3*self.controlstate[self.i, 3]
             S, C = np.sin(theta), np.cos(theta)
             dl.add_rect_filled(origin[0] + x*scale - 3, origin[1] - y*scale - 3,
