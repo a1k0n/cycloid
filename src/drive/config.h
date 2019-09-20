@@ -10,6 +10,7 @@ class DriverConfig {
   int16_t speed_limit;
   int16_t traction_limit;
   int16_t lookahead_dist;
+  int16_t lookahead_time;
   int16_t lookahead_kmax;
   int16_t path_penalty;
   int16_t cone_penalty;
@@ -27,6 +28,7 @@ class DriverConfig {
     speed_limit          = 300;
     traction_limit       = 900;
     lookahead_dist       = 175;
+    lookahead_time       = 60;
     lookahead_kmax       = 100;
     path_penalty         = 9;
     cone_penalty         = 10;

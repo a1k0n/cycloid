@@ -58,7 +58,7 @@ void DriveController::Plan(const DriverConfig &config, const int32_t *cardetect,
   }
   */
 
-  const float s = config.lookahead_dist * 0.01;
+  const float s = fmaxf(config.lookahead_dist * 0.01, config.lookahead_time * 0.01 * vr_);
   const float lookaheadx = 0.090 * vr_;
   const float t0 = theta_;
   const float C = cos(t0), S = sin(t0);
@@ -68,14 +68,14 @@ void DriveController::Plan(const DriverConfig &config, const int32_t *cardetect,
   for (int a = 0; a < (1+nangles*2); a++) {
     // compute next x, y, theta
     float k = k0 - (a-nangles)*dk;
+    if (fabs(k) < 1e-2)
+      k = 1e-2;  // hack: avoid special cases for zero curvature
     float ks = k * s;
     float V = 0;
     float P = 0;
     {
       // jump ahead 30ms before we start planning
       float theta1 = t0 + ks;
-      if (fabs(k) < 1e-2)
-        k = 1e-2;  // hack: avoid special cases for zero curvature
 
       // add up the path cost every 30cm
       for (float st = 0.30; st < s; st += 0.30) {

@@ -186,7 +186,7 @@ void UIDisplay::UpdateCeiltrackView(const float *xytheta, float xgrid,
   static const uint16_t orange = (31<<11) + (40<<5) + (0);
   static const uint16_t blue = (0<<11) + (0<<5) + (31);
   for (int i = 0; i < 256; i++) {
-    float relang = (i - 128) *M_PI / 256.0;
+    float relang = (i - 128) *M_PI / 256.0 + xytheta[2];
     float C = cos(relang), S = sin(relang);
     for (int j = 10; j < 20 && j < 10+(obs1[i]>>6); j++) {
       int x = x0 + C * j;

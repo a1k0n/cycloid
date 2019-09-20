@@ -8,6 +8,7 @@ const char *DriverConfig::confignames[] = {
   "speed limit",
   "traction limit",
   "lookahead dist",
+  "lookahead time",
   "lookahead kmax",
   "path penalty",
   "cone penalty",
@@ -21,7 +22,7 @@ const char *DriverConfig::confignames[] = {
   "servo max",
 };
 
-const int DriverConfig::N_CONFIGITEMS = 14;
+const int DriverConfig::N_CONFIGITEMS = 15;
 
 bool DriverConfig::Save() {
   FILE *fp = fopen("driverconf.txt", "w");
@@ -32,6 +33,7 @@ bool DriverConfig::Save() {
   fprintf(fp, "speed_limit          %d\n", speed_limit);
   fprintf(fp, "traction_limit       %d\n", traction_limit);
   fprintf(fp, "lookahead_dist       %d\n", lookahead_dist);
+  fprintf(fp, "lookahead_time       %d\n", lookahead_time);
   fprintf(fp, "lookahead_kmax       %d\n", lookahead_kmax);
   fprintf(fp, "path_penalty         %d\n", path_penalty);
   fprintf(fp, "cone_penalty         %d\n", cone_penalty);
@@ -60,6 +62,7 @@ bool DriverConfig::Load() {
          if (!strcmp(varbuf, "speed_limit"))       { speed_limit          = valuebuf; }
     else if (!strcmp(varbuf, "traction_limit"))    { traction_limit       = valuebuf; }
     else if (!strcmp(varbuf, "lookahead_dist"))    { lookahead_dist       = valuebuf; }
+    else if (!strcmp(varbuf, "lookahead_time"))    { lookahead_time       = valuebuf; }
     else if (!strcmp(varbuf, "lookahead_kmax"))    { lookahead_kmax       = valuebuf; }
     else if (!strcmp(varbuf, "path_penalty"))      { path_penalty         = valuebuf; }
     else if (!strcmp(varbuf, "cone_penalty"))      { cone_penalty         = valuebuf; }
