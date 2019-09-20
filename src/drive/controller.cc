@@ -58,7 +58,8 @@ void DriveController::Plan(const DriverConfig &config, const int32_t *cardetect,
   }
   */
 
-  const float s = fmaxf(config.lookahead_dist * 0.01, config.lookahead_time * 0.01 * vr_);
+  const float s =
+      fmaxf(config.lookahead_dist * 0.01, config.lookahead_time * 0.01 * vr_);
   const float lookaheadx = 0.090 * vr_;
   const float t0 = theta_;
   const float C = cos(t0), S = sin(t0);
@@ -170,6 +171,14 @@ bool DriveController::GetControl(const DriverConfig &config,
   float target_v = vmax;
   if (fabs(vk) > kmin) {  // any curvature more than this will reduce speed
     target_v = sqrt(config.traction_limit * 0.01 / fabs(vk));
+  }
+
+  // dumb hacks: implement hardcoded braking zones
+  if (x_ > config.brakezone1_x && x_ > config.brakezone1_y) {
+    target_v = fminf(target_v, config.brakezone1_v);
+  }
+  if (x_ < config.brakezone2_x && x_ < config.brakezone2_y) {
+    target_v = fminf(target_v, config.brakezone2_v);
   }
 
   // sometimes the controller gives infeasible curvatures; clamp them

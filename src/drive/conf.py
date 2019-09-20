@@ -12,8 +12,14 @@ motor kI         2.00
 servo rate       1.00
 servo offset     0.00
 servo kI         0.20
-servo min       -1.0
-servo max        1.0
+servo min       -1.00
+servo max        1.00
+brakezone1 x    12.50
+brakezone1 y    -3.00
+brakezone1 v     5.00
+brakezone2 x     6.50
+brakezone2 y    -5.20
+brakezone2 v     3.00
 '''.split('\n')[:-1]
 
 
