@@ -20,15 +20,9 @@ const char *DriverConfig::confignames[] = {
   "servo kI",
   "servo min",
   "servo max",
-  "brakezone1 x",
-  "brakezone1 y",
-  "brakezone1 v",
-  "brakezone2 x",
-  "brakezone2 y",
-  "brakezone2 v",
 };
 
-const int DriverConfig::N_CONFIGITEMS = 21;
+const int DriverConfig::N_CONFIGITEMS = 15;
 
 bool DriverConfig::Save() {
   FILE *fp = fopen("driverconf.txt", "w");
@@ -51,12 +45,6 @@ bool DriverConfig::Save() {
   fprintf(fp, "servo_kI             %d\n", servo_kI);
   fprintf(fp, "servo_min            %d\n", servo_min);
   fprintf(fp, "servo_max            %d\n", servo_max);
-  fprintf(fp, "brakezone1_x         %d\n", brakezone1_x);
-  fprintf(fp, "brakezone1_y         %d\n", brakezone1_y);
-  fprintf(fp, "brakezone1_v         %d\n", brakezone1_v);
-  fprintf(fp, "brakezone2_x         %d\n", brakezone2_x);
-  fprintf(fp, "brakezone2_y         %d\n", brakezone2_y);
-  fprintf(fp, "brakezone2_v         %d\n", brakezone2_v);
 
   fclose(fp);
   return true;
@@ -86,12 +74,6 @@ bool DriverConfig::Load() {
     else if (!strcmp(varbuf, "servo_kI"))          { servo_kI             = valuebuf; }
     else if (!strcmp(varbuf, "servo_min"))         { servo_min            = valuebuf; }
     else if (!strcmp(varbuf, "servo_max"))         { servo_max            = valuebuf; }
-    else if (!strcmp(varbuf, "brakezone1_x"))      { brakezone1_x         = valuebuf; }
-    else if (!strcmp(varbuf, "brakezone1_y"))      { brakezone1_y         = valuebuf; }
-    else if (!strcmp(varbuf, "brakezone1_v"))      { brakezone1_v         = valuebuf; }
-    else if (!strcmp(varbuf, "brakezone2_x"))      { brakezone2_x         = valuebuf; }
-    else if (!strcmp(varbuf, "brakezone2_y"))      { brakezone2_y         = valuebuf; }
-    else if (!strcmp(varbuf, "brakezone2_v"))      { brakezone2_v         = valuebuf; }
     else { printf("driverconf.txt: ignoring unknown variable %s\n", varbuf); }
   }
   fclose(fp);

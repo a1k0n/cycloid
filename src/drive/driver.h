@@ -65,7 +65,7 @@ class Driver : public CameraReceiver,
   const char *name;
   int output_fd_;
   int frameskip_;
-  struct timeval last_t_;
+  struct timeval last_t_, last_lap_;
   int16_t js_throttle_, js_steering_;
 
   Eigen::Vector3f gyro_last_, gyro_bias_;

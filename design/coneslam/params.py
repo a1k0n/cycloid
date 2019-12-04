@@ -9,7 +9,8 @@ bandheight = 8  # height of vertical band of pixels to look at
 # NUM_ENCODERS = 4
 
 WHEEL_DIAMETER = 0.0666
-DRIVE_RATIO = 84./25. * 2.1
+DRIVE_RATIO = 84./27. * 2.1  # 27t pinion
+#DRIVE_RATIO = 84./25. * 2.1
 #DRIVE_RATIO = 84./25. * 1.9
 MOTOR_POLES = 3
 WHEEL_TICK_LENGTH = WHEEL_DIAMETER*3.1415 / DRIVE_RATIO / MOTOR_POLES

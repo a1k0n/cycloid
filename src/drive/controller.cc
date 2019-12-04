@@ -173,14 +173,6 @@ bool DriveController::GetControl(const DriverConfig &config,
     target_v = sqrt(config.traction_limit * 0.01 / fabs(vk));
   }
 
-  // dumb hacks: implement hardcoded braking zones
-  if (x_ > config.brakezone1_x && x_ > config.brakezone1_y) {
-    target_v = fminf(target_v, config.brakezone1_v);
-  }
-  if (x_ < config.brakezone2_x && x_ < config.brakezone2_y) {
-    target_v = fminf(target_v, config.brakezone2_v);
-  }
-
   // sometimes the controller gives infeasible curvatures; clamp them
   float target_k = clip(k, -2, 2);
   float target_w = k*vr_;

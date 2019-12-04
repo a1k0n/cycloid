@@ -21,6 +21,10 @@ const float CEIL_HEIGHT = 8.25*0.3048;
 const float CEIL_X_GRID = 0.3048*10/CEIL_HEIGHT;
 const float CEIL_Y_GRID = 0.3048*12/CEIL_HEIGHT;
 
+// finish line for built-in lap timer
+const float FINISHX = 9.5;
+const float FINISHY = 160/60.0;
+
 // const int PWMCHAN_STEERING = 14;
 // const int PWMCHAN_ESC = 15;
 
@@ -84,6 +88,7 @@ Driver::Driver(const INIReader &ini, CeilingTracker *ceil, ObstacleDetector *od,
   frameskip_ = 0;
   autodrive_ = false;
   memset(&last_t_, 0, sizeof(last_t_));
+  memset(&last_lap_, 0, sizeof(last_lap_));
   if (config_.Load()) {
     fprintf(stderr, "Loaded driver configuration\n");
   }
@@ -168,6 +173,10 @@ void Driver::QueueRecordingData(const timeval &t, uint8_t *buf, size_t length) {
 
   // Update controller and UI from camera
 void Driver::UpdateFromCamera(uint8_t *buf, float dt) {
+  float prevxy[2];
+  prevxy[0] = -carstate_.ceiltrack_pos[0] * CEIL_HEIGHT;
+  prevxy[1] = -carstate_.ceiltrack_pos[1] * CEIL_HEIGHT;
+
   ceiltrack_->Update(buf, 240, CEIL_X_GRID, CEIL_Y_GRID,
                      carstate_.ceiltrack_pos, 2, false);
   float xytheta[3];
@@ -177,6 +186,24 @@ void Driver::UpdateFromCamera(uint8_t *buf, float dt) {
   xytheta[0] = -carstate_.ceiltrack_pos[0] * CEIL_HEIGHT;
   xytheta[1] = -carstate_.ceiltrack_pos[1] * CEIL_HEIGHT;
   xytheta[2] = -carstate_.ceiltrack_pos[2];
+
+  // lap timer
+  if (prevxy[0] < FINISHX && xytheta[0] >= FINISHX && xytheta[1] < FINISHY) {
+    if (last_lap_.tv_sec != 0) {
+      float laptime = (last_t_.tv_sec - last_lap_.tv_sec) +
+                      (last_t_.tv_usec - last_lap_.tv_usec) * 1e-6;
+      printf("### lap time %0.3f ", laptime);
+      // dump configuration
+      uint16_t *dc = reinterpret_cast<uint16_t*>(&config_);
+      for (int i = 0; i < config_.N_CONFIGITEMS; i++) {
+        printf("%d ", dc[i]);
+      }
+      printf("\n");
+    } else {
+      fprintf(stderr, "Starting first lap...\n");
+    }
+    last_lap_ = last_t_;
+  }
 
   obstacledetect_->Update(buf, 40, 150);  // FIXME(a1k0n): needs config
   const int32_t *pcar = obstacledetect_->GetCarPenalties();
@@ -208,6 +235,7 @@ void Driver::OnCameraFrame(uint8_t *buf, size_t length) {
             "%fs gap between frames?!\n",
             dt);
   }
+  last_t_ = t;
 
   UpdateFromCamera(buf, dt);
 
@@ -215,8 +243,6 @@ void Driver::OnCameraFrame(uint8_t *buf, size_t length) {
     frame_ = 0;
     QueueRecordingData(t, buf, length);
   }
-
-  last_t_ = t;
 }
 
 // Called each control loop frame, 100Hz

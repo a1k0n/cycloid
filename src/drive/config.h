@@ -22,12 +22,6 @@ class DriverConfig {
   int16_t servo_kI;
   int16_t servo_min;
   int16_t servo_max;
-  int16_t brakezone1_x;
-  int16_t brakezone1_y;
-  int16_t brakezone1_v;
-  int16_t brakezone2_x;
-  int16_t brakezone2_y;
-  int16_t brakezone2_v;
 
   DriverConfig() {
     // Default values
@@ -46,12 +40,6 @@ class DriverConfig {
     servo_kI             = 20;
     servo_min            = -100;
     servo_max            = 100;
-    brakezone1_x         = 1250;
-    brakezone1_y         = -300;
-    brakezone1_v         = 500;
-    brakezone2_x         = 650;
-    brakezone2_y         = -520;
-    brakezone2_v         = 300;
   }
 
   static const char *confignames[];
