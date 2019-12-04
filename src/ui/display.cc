@@ -139,8 +139,9 @@ void UIDisplay::UpdateParticleView(const coneslam::Localizer *l) {
 
 void UIDisplay::UpdateCeiltrackView(const float *xytheta, float xgrid,
                                     float ygrid, float sizx, float sizy,
-                                    const int32_t *obs1, const int32_t *obs2) {
-  uint16_t *buf = screen_.GetBuffer();
+                                    const int32_t *obs1, const int32_t *obs2,
+                                    float wheel_v) {
+  uint16_t buf[112*320];
   static const uint16_t green = (6 << 11) + (63 << 5) + (6);
   {
     const uint8_t *yuv = backgroundyuv_;
@@ -203,6 +204,11 @@ void UIDisplay::UpdateCeiltrackView(const float *xytheta, float xgrid,
       }
     }
   }
+  char vbuf[6];
+  snprintf(vbuf, sizeof(vbuf), "%0.1f", wheel_v);
+  DrawText(vbuf, 320-30, 0, 0xffff, buf);
+  // blit buffer to screen all at once
+  memcpy(screen_.GetBuffer(), buf, sizeof(buf));
 }
 
 void UIDisplay::UpdateConfig(const char *configmenu[], int nconfigs,

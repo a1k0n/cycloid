@@ -4,12 +4,17 @@ import tqdm
 import struct
 
 # FIXME / TODO:
-#  - wrap this whole thing up with functions
-#  - add a main
 #  - input track as circles / lines, not as a bunch of points
 #    and normals from tapetrack
-#  - checkpoint V.npy more frequently
 #  - downsample V.npy when saving and interpolate when using
+
+#  - use a better motion model that includes velocity.
+#  - rewrite this whole thing in pytorch.
+
+# measurements in meters
+MAPIMG_RES = 0.02
+GRID_RES = 0.05
+TRACK_HALFWIDTH = 0.76
 
 f = open("track.txt")
 N = int(f.readline())
@@ -48,7 +53,7 @@ action_oov[1:] = np.sqrt(np.abs(action_k[1:]) / amax)
 
 
 def conepenalty(w, h):
-    xy = np.mgrid[:h, :w] * 0.02
+    xy = np.mgrid[:h, :w] * GRID_RES
     x = xy[1]
     y = -xy[0]
     # for each x, y, find closest point on track
@@ -58,7 +63,7 @@ def conepenalty(w, h):
 
 def initgrid(w, h):
     # x, y coordinates of entire track
-    xy = np.mgrid[:h, :w] * 0.02
+    xy = np.mgrid[:h, :w] * GRID_RES
     x = xy[1].reshape(-1)
     y = -xy[0].reshape(-1)
     # for each x, y, find closest point on track
@@ -78,7 +83,7 @@ def genpathcost(w, h):
     angs = np.arange(96)*2*np.pi/96.
     # yelim = 0.99 / np.max(np.abs(track[:, 4]))
     # FIXME FIXME FIXME
-    yelim = 38.0/50.0
+    yelim = TRACK_HALFWIDTH
     coneradius = conepenalty(w, h)
     pathcost = ((1 - tk*np.clip(ye, -yelim, yelim))[:, :, None] /
                 np.clip(np.cos(angs+tang[:, :, None]), 1e-2, 1))
@@ -101,8 +106,8 @@ def remaptable(w, h, dx, dy, angle):  # dx and dy in world coordinates
     map1 = np.stack([xy[1], xy[0]])
     C, S = np.cos(angle*np.pi/48), np.sin(angle*np.pi/48)
     dx, dy = np.dot([[C, -S], [S, C]], [dx, dy])
-    map1[0] += dx / .02
-    map1[1] -= dy / .02
+    map1[0] += dx / GRID_RES
+    map1[1] -= dy / GRID_RES
     map1 = map1.transpose(1, 2, 0)
     return map1
 
@@ -154,13 +159,15 @@ def main():
     except Exception:
         m = cv2.imread("../ceilslam/map.png")
         print("initializing map from map.png, %dx%d px (%f x %f m)" %
-              (m.shape[1], m.shape[0], m.shape[1]*.02, m.shape[0]*.02))
-        V = 1000.*np.ones((96, m.shape[0], m.shape[1]), np.float32)  # we're using 96 angles, stride dx 15, dy -3..+3
+              (m.shape[1], m.shape[0], m.shape[1]*MAPIMG_RES, m.shape[0]*MAPIMG_RES))
+        xsize, ysize = int(m.shape[1]*MAPIMG_RES/GRID_RES), int(m.shape[0]*MAPIMG_RES/GRID_RES)
+        print("grid quantization size %dx%d" % (xsize, ysize))
+        V = 1000.*np.ones((96, ysize, xsize), np.float32)  # we're using 96 angles, stride dx 15, dy -3..+3
     # initialize finish line
-    finishx, finishy = homex/.02, homey/.02
+    finishx, finishy = homex/GRID_RES, homey/GRID_RES
     # finish line is pointing right, but we can cover any right-facing angle, -12..+12?
-    V[:24, int(-finishy-.5/.02):int(-finishy+.5/.02), int(finishx):int(finishx+2)] = 0
-    V[-24:, int(-finishy-.5/.02):int(-finishy+.5/.02), int(finishx):int(finishx+2)] = 0
+    V[:24, int(-finishy-.5/GRID_RES):int(-finishy+.5/GRID_RES), int(finishx):int(finishx+2)] = 0
+    V[-24:, int(-finishy-.5/GRID_RES):int(-finishy+.5/GRID_RES), int(finishx):int(finishx+2)] = 0
 
     print("precomputing path costs...")
     pathcost, penalty = genpathcost(V.shape[2], V.shape[1])

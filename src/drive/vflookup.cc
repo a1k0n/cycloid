@@ -4,7 +4,7 @@
 #include "drive/vflookup.h"
 
 bool ValueFuncLookup::Init() {
-  FILE *fp = fopen("vf.bin", "rb");
+  FILE *fp = fopen("vf4.bin", "rb");
   if (!fp) {
     return false;
   }
@@ -12,22 +12,26 @@ bool ValueFuncLookup::Init() {
   if (fread(hdr, 1, 8, fp) != 8) {
     goto bad;
   }
-  if (hdr[0] != 'V' || hdr[1] != 'F' || hdr[2] != 'N' || hdr[3] != 'C')
+  if (hdr[0] != 'V' || hdr[1] != 'F' || hdr[2] != 'N' || hdr[3] != '4')
     goto bad;
-  if (hdr[4] != 0x0a) goto bad;
-  uint16_t a, h, w;
+  if (hdr[4] != 0x14) goto bad;
+  uint16_t v, a, h, w;
+  fread(&v, 2, 1, fp);
   fread(&a, 2, 1, fp);
   fread(&h, 2, 1, fp);
   fread(&w, 2, 1, fp);
   fread(&scale_, 4, 1, fp);
+  fread(&vmin_, 4, 1, fp);
+  v_ = v;
   a_ = a;
   h_ = h;
   w_ = w;
-  data_ = new uint16_t[(a+1)*h*w];
-  fread(data_, (a+1)*h*w, 2, fp);
+  data_ = new uint16_t[v_*a_*h_*w_];
+  fread(data_, v_*a_*h_*w_, 2, fp);
   fclose(fp);
   {
-    float d1 = data_[0], d2 = data_[1], d3 = data_[2], d4 = data_[3];
+    float d1 = h2f(data_[0]), d2 = h2f(data_[1]), d3 = h2f(data_[2]),
+          d4 = h2f(data_[3]);
     fprintf(stderr,
             "loaded vf.bin %dx%dx%d @ %f scale; first values are %f %f %f %f\n",
             a_, h_, w_, scale_, d1, d2, d3, d4);
