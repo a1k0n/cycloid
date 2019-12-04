@@ -6,10 +6,10 @@
 
 const char *DriverConfig::confignames[] = {
   "speed limit",
-  "traction limit",
-  "lookahead dist",
+  "Ax limit",
+  "Ay limit",
+  "reaction time",
   "lookahead time",
-  "lookahead kmax",
   "path penalty",
   "cone penalty",
   "car penalty",
@@ -31,10 +31,10 @@ bool DriverConfig::Save() {
     return false;
   }
   fprintf(fp, "speed_limit          %d\n", speed_limit);
-  fprintf(fp, "traction_limit       %d\n", traction_limit);
-  fprintf(fp, "lookahead_dist       %d\n", lookahead_dist);
+  fprintf(fp, "Ax_limit             %d\n", Ax_limit);
+  fprintf(fp, "Ay_limit             %d\n", Ay_limit);
+  fprintf(fp, "reaction_time        %d\n", reaction_time);
   fprintf(fp, "lookahead_time       %d\n", lookahead_time);
-  fprintf(fp, "lookahead_kmax       %d\n", lookahead_kmax);
   fprintf(fp, "path_penalty         %d\n", path_penalty);
   fprintf(fp, "cone_penalty         %d\n", cone_penalty);
   fprintf(fp, "car_penalty          %d\n", car_penalty);
@@ -60,10 +60,10 @@ bool DriverConfig::Load() {
   int valuebuf;
   while (fscanf(fp, "%20s %d", varbuf, &valuebuf) == 2) {
          if (!strcmp(varbuf, "speed_limit"))       { speed_limit          = valuebuf; }
-    else if (!strcmp(varbuf, "traction_limit"))    { traction_limit       = valuebuf; }
-    else if (!strcmp(varbuf, "lookahead_dist"))    { lookahead_dist       = valuebuf; }
+    else if (!strcmp(varbuf, "Ax_limit"))          { Ax_limit             = valuebuf; }
+    else if (!strcmp(varbuf, "Ay_limit"))          { Ay_limit             = valuebuf; }
+    else if (!strcmp(varbuf, "reaction_time"))     { reaction_time        = valuebuf; }
     else if (!strcmp(varbuf, "lookahead_time"))    { lookahead_time       = valuebuf; }
-    else if (!strcmp(varbuf, "lookahead_kmax"))    { lookahead_kmax       = valuebuf; }
     else if (!strcmp(varbuf, "path_penalty"))      { path_penalty         = valuebuf; }
     else if (!strcmp(varbuf, "cone_penalty"))      { cone_penalty         = valuebuf; }
     else if (!strcmp(varbuf, "car_penalty"))       { car_penalty          = valuebuf; }

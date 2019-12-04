@@ -7,7 +7,7 @@
 #include "drive/config.h"
 #include "drive/vflookup.h"
 
-static const int kLookaheadAngles = 20;
+static const int kTractionCircleAngles = 16;
 
 class DriveController {
  public:
@@ -21,10 +21,9 @@ class DriveController {
   void Plan(const DriverConfig &config, const int32_t *cardetect,
             const int32_t *conedetect);
 
-  bool GetControl(const DriverConfig &config,
-      float throttle_in, float steering_in,
-      float *throttle_out, float *steering_out, float dt,
-      bool autodrive, int frameno);
+  bool GetControl(const DriverConfig &config, float throttle_in,
+                  float steering_in, float *throttle_out, float *steering_out,
+                  float dt, bool autodrive, int frameno);
 
   void ResetState();
 
@@ -41,8 +40,9 @@ class DriveController {
   float ierr_v_;         // integrated velocity error
   float ierr_k_;         // integrated curvature error
 
-  float target_ks_[1+kLookaheadAngles*2];    // next potential control actions
-  float target_k_Vs_[1+kLookaheadAngles*2];  // total value of each action over all particles
+  float target_ks_[kTractionCircleAngles];  // next potential control actions
+  float target_vs_[kTractionCircleAngles];  // next potential control actions
+  float target_Vs_[kTractionCircleAngles];  // total value of each action
   float target_k_;
 
   float target_v_, target_w_;  // control targets

@@ -46,26 +46,43 @@ void DriveController::UpdateLocation(const DriverConfig &config,
 
 void DriveController::Plan(const DriverConfig &config, const int32_t *cardetect,
                            const int32_t *conedetect) {
-  // TODO(asloane): consider more feasible maneuvers
-  // curvature can swing about 0.3 1/m from wherever it is now in 10ms
-  const int nangles = kLookaheadAngles;
-  float k0 = 0;
-  float dk = config.lookahead_kmax * 0.01 / nangles;
-
-/*
-  if (vr_ > 0.3) {
-    k0 = clip(w_ / vr_, -kmax + 3 * dk, kmax - 3 * dk);
-  }
-  */
-
-  const float s =
-      fmaxf(config.lookahead_dist * 0.01, config.lookahead_time * 0.01 * vr_);
-  const float lookaheadx = 0.090 * vr_;
+  const float s = config.reaction_time * 0.01 * vr_;
   const float t0 = theta_;
   const float C = cos(t0), S = sin(t0);
-  const float x0 = x_ + lookaheadx * C;
-  const float y0 = y_ + lookaheadx * S;
+  const float x0 = x_ + s * C;
+  const float y0 = y_ + s * S;
+  const float v0 = clip(vr_, 2, 14);
 
+  // best action value, best accel, best curvature
+  float cbest = 10e3;
+  const float pdt = config.lookahead_time * 0.01;  // predictive delta-t
+  const float maxk = fabsf(100.0f / config.servo_rate);
+  for (int a = 0; a < kTractionCircleAngles; a++) {
+    float phi = a * (2 * M_PI / kTractionCircleAngles);
+    float accelx = config.Ax_limit * 0.01 * cos(phi);
+    float accely = config.Ay_limit * 0.01 * sin(phi);
+    float k1 = clip(accely / (v0 * v0), -maxk, maxk);
+    float theta1 = t0 + k1 * v0 * pdt;
+    // FIXME: min/max speeds hardcoded
+    float v1 = clip(v0 + accelx * pdt, 2, 14);
+    float dx = v1 * cos(theta1) * pdt;
+    float dy = v1 * sin(theta1) * pdt;
+    float cost = V_.V(x0 + dx, y0 + dy, theta1, v1);
+    // printf("  control (%d %0.3f %0.3f) %f,%f,%f,%f V=%f k=%f v=%f\n", a,
+    // accelx, accely, x0 + dx, y0 + dy, theta1, v1, cost, k1, v1);
+    // FIXME: add in obstacle detection here
+    target_ks_[a] = k1;
+    target_vs_[a] = v1;
+    target_Vs_[a] = cost;
+    if (cost < cbest) {
+      cbest = cost;
+      target_k_ = k1;
+      target_v_ = v1;  // FIXME: we may need to lookahead target v more or less
+    }
+  }
+  // printf("* best control V=%f k=%f v=%f\n", cbest, target_k_, target_v_);
+
+  /*
   for (int a = 0; a < (1+nangles*2); a++) {
     // compute next x, y, theta
     float k = k0 - (a-nangles)*dk;
@@ -121,6 +138,7 @@ void DriveController::Plan(const DriverConfig &config, const int32_t *cardetect,
       target_k_ = target_ks_[a];
     }
   }
+  */
 }
 
 bool DriveController::GetControl(const DriverConfig &config,
@@ -128,23 +146,18 @@ bool DriveController::GetControl(const DriverConfig &config,
     float *throttle_out, float *steering_out, float dt,
     bool autodrive, int frameno) {
 
-  // okay, let's control for yaw rate!
-  // throttle_in controls vmax (w.r.t. the configured value)
-  // steering_in controls desired curvature
-
-  float autok = target_k_;
   float srv_off = 0.01 * config.servo_offset;
 
-  float BW_w = 100. / config.servo_rate;
+  float srv_ratio = 100. / (config.servo_rate == 0 ? 100 : config.servo_rate);
   float srv_kI = 0.01 * config.servo_kI;
 
   // if we're braking or coasting, just control that manually
   if (!autodrive && throttle_in <= 0) {
     *throttle_out = throttle_in;
     // yaw is backwards
-    *steering_out =
-        clip(steering_in * (config.servo_rate < 0 ? 1 : -1) - srv_off * BW_w,
-             config.servo_min * 0.01, config.servo_max * 0.01);
+    *steering_out = clip(
+        steering_in * (config.servo_rate < 0 ? 1 : -1) - srv_off * srv_ratio,
+        config.servo_min * 0.01, config.servo_max * 0.01);
     prev_steer_ = *steering_out;
     prev_throttle_ = *throttle_out;
     ierr_v_ = 0;
@@ -152,30 +165,30 @@ bool DriveController::GetControl(const DriverConfig &config,
     return true;
   }
 
-  // max curvature is servo_rate
-  // use a quadratic curve to give finer control near center
-  float k = -steering_in * 2 * fabs(steering_in);  // 0.5m smallest turn radius
-  float vk = k;  // curvature to use for velocity calc
-  float vmax = throttle_in * config.speed_limit * 0.01;
-  if (autodrive) {
-    k = autok;
-    // use lookahead vk_ to slow down early
-    // vk = fmax(fabs(vk_), fabs(k));
-    // maybe just use vk_ directly here? then we speed up at corner exit
-    vk = fabs(k);
-    vmax = config.speed_limit * 0.01;
+  // pull in the values from Plan() before we mess with them further
+  // in case the controller gives infeasible curvatures, clamp them
+  // 0.5m smallest turn radius
+  float target_k = clip(target_k_, -2, 2);
+  float target_v = fmin(target_v_, config.speed_limit * 0.01);
+
+  if (!autodrive) {
+    // manual override:
+
+    // max curvature is servo_rate (unless servo can be driven past 1)
+    // use a quadratic curve to give finer control near center
+    target_k = -steering_in * 2 * fabs(steering_in);
+    target_v = throttle_in * config.speed_limit * 0.01;
   }
 
+#if 0
   float kmin = config.traction_limit * 0.01 / (vmax*vmax);
-
-  float target_v = vmax;
   if (fabs(vk) > kmin) {  // any curvature more than this will reduce speed
     target_v = sqrt(config.traction_limit * 0.01 / fabs(vk));
   }
+#endif
 
-  // sometimes the controller gives infeasible curvatures; clamp them
-  float target_k = clip(k, -2, 2);
-  float target_w = k*vr_;
+  // okay, let's control for yaw rate!
+  float target_w = target_k*vr_;
 
   if (vr_ > 0.2) {
     float kerr = target_k - w_ / vr_;
@@ -183,7 +196,7 @@ bool DriveController::GetControl(const DriverConfig &config,
   } else {
     ierr_k_ = 0;
   }
-  *steering_out = clip((target_k - srv_off + ierr_k_) * BW_w,
+  *steering_out = clip((target_k - srv_off + ierr_k_) * srv_ratio,
                        config.servo_min * 0.01, config.servo_max * 0.01);
 
   prev_steer_ = *steering_out;
@@ -210,14 +223,14 @@ bool DriveController::GetControl(const DriverConfig &config,
   // update state for datalogging
   target_v_ = target_v;
   target_w_ = target_w;
-  bw_w_ = BW_w;
+  bw_w_ = srv_ratio;
   bw_v_ = vgain;
 
   return true;
 }
 
 int DriveController::SerializedSize() const {
-  return 8 + sizeof(float) * (12 + 2 * (1+kLookaheadAngles*2));
+  return 8 + sizeof(float) * (12 + kTractionCircleAngles*3);
 }
 
 int DriveController::Serialize(uint8_t *buf, int buflen) const {
@@ -252,12 +265,16 @@ int DriveController::Serialize(uint8_t *buf, int buflen) const {
   buf += 4;
   memcpy(buf, &bw_v_, 4);
   buf += 4;
-  for (int a = 0; a < (1+kLookaheadAngles*2); a++) {
+  for (int a = 0; a < kTractionCircleAngles; a++) {
     memcpy(buf, &target_ks_[a], 4);
     buf += 4;
   }
-  for (int a = 0; a < (1+kLookaheadAngles*2); a++) {
-    memcpy(buf, &target_k_Vs_[a], 4);
+  for (int a = 0; a < kTractionCircleAngles; a++) {
+    memcpy(buf, &target_vs_[a], 4);
+    buf += 4;
+  }
+  for (int a = 0; a < kTractionCircleAngles; a++) {
+    memcpy(buf, &target_Vs_[a], 4);
     buf += 4;
   }
 

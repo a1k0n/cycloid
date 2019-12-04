@@ -1,9 +1,9 @@
 configitems = '''\
 speed limit      3.00
-traction limit   9.00
-lookahead dist   1.75
-lookahead time   0.60
-lookahead kmax   1.00
+Ax limit         8.00
+Ay limit         12.00
+reaction time    0.06
+lookahead time   0.20
 path penalty     0.09
 cone penalty     0.10
 car penalty      0.10

@@ -8,10 +8,10 @@
 class DriverConfig {
  public:
   int16_t speed_limit;
-  int16_t traction_limit;
-  int16_t lookahead_dist;
+  int16_t Ax_limit;
+  int16_t Ay_limit;
+  int16_t reaction_time;
   int16_t lookahead_time;
-  int16_t lookahead_kmax;
   int16_t path_penalty;
   int16_t cone_penalty;
   int16_t car_penalty;
@@ -26,10 +26,10 @@ class DriverConfig {
   DriverConfig() {
     // Default values
     speed_limit          = 300;
-    traction_limit       = 900;
-    lookahead_dist       = 175;
-    lookahead_time       = 60;
-    lookahead_kmax       = 100;
+    Ax_limit             = 800;
+    Ay_limit             = 1200;
+    reaction_time        = 6;
+    lookahead_time       = 20;
     path_penalty         = 9;
     cone_penalty         = 10;
     car_penalty          = 10;

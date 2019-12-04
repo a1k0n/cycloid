@@ -16,12 +16,14 @@ bool ValueFuncLookup::Init() {
     goto bad;
   if (hdr[4] != 0x14) goto bad;
   uint16_t v, a, h, w;
+  float vscale;  // expected to be 1 at this point
   fread(&v, 2, 1, fp);
   fread(&a, 2, 1, fp);
   fread(&h, 2, 1, fp);
   fread(&w, 2, 1, fp);
   fread(&scale_, 4, 1, fp);
   fread(&vmin_, 4, 1, fp);
+  fread(&vscale, 4, 1, fp);
   v_ = v;
   a_ = a;
   h_ = h;
@@ -33,8 +35,8 @@ bool ValueFuncLookup::Init() {
     float d1 = h2f(data_[0]), d2 = h2f(data_[1]), d3 = h2f(data_[2]),
           d4 = h2f(data_[3]);
     fprintf(stderr,
-            "loaded vf.bin %dx%dx%d @ %f scale; first values are %f %f %f %f\n",
-            a_, h_, w_, scale_, d1, d2, d3, d4);
+            "loaded vf.bin %dx%dx%dx%d @ %f scale; first values are %f %f %f %f\n",
+            v_, a_, h_, w_, scale_, d1, d2, d3, d4);
   }
   return true;
 bad:

@@ -201,7 +201,7 @@ class ReplayGUI:
         if self.acts is not None:
             imgui.plot_lines("activations", self.acts)
 
-        nCtrlAngles = (len(self.controlstate[self.i]) - 12) // 2
+        nCtrlAngles = (len(self.controlstate[self.i]) - 12) // 3
         cc = self.controlstate[self.i][-nCtrlAngles:]
         imgui.plot_lines(
             "control costs", np.clip(cc, 0, 100))
