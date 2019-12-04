@@ -106,7 +106,7 @@ class ReplayGUI:
         self.learn_controls = False
         self.lap_timer = False
         self.show_frontview = False
-        self.startlinexy = np.array([450/50.0, 160/60.0])
+        self.startlinexy = np.array([9.5, 160/60.0])
         for frdata in recordreader.RecordIterator(self.f):
             self.ts.append(frdata['tstamp'])
             (throttle, steering, accel, gyro, servo,
@@ -242,8 +242,14 @@ class ReplayGUI:
 
         # live variables
         maxv = int(np.ceil(np.max(self.controlstate[:, 3]) * 1.1))
-        imgui.slider_float("velocity", self.controlstate[i, 3], 0, maxv)
-        imgui.slider_float("target_v", self.controlstate[i, 8], 0, maxv)
+        imgui.slider_float("wheel v", self.controlstate[i, 3], 0, maxv)
+        imgui.slider_float("target v", self.controlstate[i, 8], 0, maxv)
+        lv = 0
+        if i > 0:
+            dx = self.controlstate[i, 0] - self.controlstate[i-1, 0]
+            dy = self.controlstate[i, 1] - self.controlstate[i-1, 1]
+            lv = np.sqrt(dx**2 + dy**2) * 30.0
+        imgui.slider_float("localized v", lv, 0, maxv)
 
         imgui.slider_float("control motor", self.controls[i, 0]/127., -1, 1)
         imgui.slider_float("control steer", self.controls[i, 1]/127., -1, 1)
