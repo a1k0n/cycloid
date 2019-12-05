@@ -5,9 +5,10 @@ import numpy as np
 from tqdm import trange
 import struct
 
+TIMESTEP = 1.0/8
+STEER_LIMIT_K = 0.66
 NANGLES = 48
 NSPEEDS = 12
-MAPIMG_RES = 0.02
 GRID_RES = 0.05
 TRACK_HALFWIDTH = 0.76
 CONE_RADIUS = 0.3  # 30cm radius keep-out zone around cones
@@ -76,7 +77,7 @@ tang = np.arctan2(tN[0], tN[1]).astype(np.float32)
 
 mod = SourceModule("""
 // just hardcode these for now, we can make them format args eventually
-const float STEER_LIMIT_K = 1.3f;
+const float STEER_LIMIT_K = %f;
 const int NANGLES = %d;
 const int NSPEEDS = %d;
 const float GRID_RES = %f;
@@ -87,17 +88,20 @@ const int VMAX = %d;
 const float TRACK_HALFWIDTH = 0.65f;  // 0.76f; artifically reduce this to leave room for the car
 const float AxMAX = 8;
 const float AyMAX = 10;
-const float dt = 1./16.;
+const float dt = %f;
 const float finishx = %f, finishy = %f;
 
 __device__ float vlookup(float *V, float x, float y, float theta, float v) {
     // check for terminal state (crossing finish line)
+    float C = cos(theta);
     if (y >= (finishy - TRACK_HALFWIDTH) && y <= (finishy + TRACK_HALFWIDTH) &&
       x < finishx && x + v*dt*cos(theta) >= finishx) {
-        return 0;
+        // solve for exact time we hit the finish line
+        // x0 + v*t*C = finishx
+        return (finishx - x) / (v*C);
     }
 
-    float ftheta = (theta * NANGLES / 6.283185307179586);
+    float ftheta = theta * NANGLES / (2*M_PI);
     if (ftheta >= NANGLES) ftheta -= NANGLES;
     if (ftheta < 0) ftheta += NANGLES;
     int itheta = ftheta;
@@ -168,7 +172,7 @@ __global__ void valueiter(float *V, float *Vprev, float *yebuf, float *tk, float
     if (itheta >= NANGLES) return;
     if (iv >= NSPEEDS) return;
 
-    float theta = itheta * 6.283185307179586 / NANGLES;
+    float theta = itheta * 2 * M_PI / NANGLES;
     float v = iv + VMIN;
     float x = ix * GRID_RES;
     float y = -iy * GRID_RES;
@@ -201,7 +205,7 @@ __global__ void valueiter(float *V, float *Vprev, float *yebuf, float *tk, float
 
     V[di] = pathcost + penalty + bestcost;
 }
-  """ % (NANGLES, NSPEEDS, GRID_RES, xsize, ysize, VMIN, VMAX, homex, homey))
+  """ % (STEER_LIMIT_K, NANGLES, NSPEEDS, GRID_RES, xsize, ysize, VMIN, VMAX, TIMESTEP, homex, homey))
 
 
 valueiter = mod.get_function("valueiter")
@@ -216,13 +220,13 @@ tang_in = cuda.In(tang)
 s = trange(100)
 v0 = np.sum(V, dtype=np.float64)
 for j in s:
-    for i in range(10):
+    for i in range(20):
         valueiter(V0_gpu, V0_gpu, ye_in, tk_in, tang_in,
                   block=(16, 8, 1), grid=(400//16, 200//8, NANGLES*NSPEEDS))
     cuda.memcpy_dtoh(V, V0_gpu)
     v1 = np.sum(V, dtype=np.float64)
     dv = v1 - v0
     v0 = v1
-    s.set_postfix_str("dv %f lap time %f" % (dv, np.min(V[:, 0, :, 155])))
+    s.set_postfix_str("dv %f lap time %f" % (dv, np.min(V[0, 0, :, 155])))
 
 savebin(V)
