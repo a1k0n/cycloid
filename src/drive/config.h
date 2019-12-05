@@ -29,7 +29,7 @@ class DriverConfig {
     Ax_limit             = 800;
     Ay_limit             = 1200;
     reaction_time        = 6;
-    lookahead_time       = 20;
+    lookahead_time       = 15;
     path_penalty         = 9;
     cone_penalty         = 10;
     car_penalty          = 10;

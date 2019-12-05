@@ -213,7 +213,7 @@ ye_in = cuda.In(ye)
 tk_in = cuda.In(tk)
 tang_in = cuda.In(tang)
 
-s = trange(50)
+s = trange(100)
 v0 = np.sum(V, dtype=np.float64)
 for j in s:
     for i in range(10):

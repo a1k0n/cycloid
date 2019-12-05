@@ -59,15 +59,24 @@ void DriveController::Plan(const DriverConfig &config, const int32_t *cardetect,
   const float maxk = fabsf(100.0f / config.servo_rate);
   for (int a = 0; a < kTractionCircleAngles; a++) {
     float phi = a * (2 * M_PI / kTractionCircleAngles);
-    float accelx = config.Ax_limit * 0.01 * cos(phi);
+    float accelx = -config.Ax_limit * 0.01 * cos(phi);
     float accely = config.Ay_limit * 0.01 * sin(phi);
     float k1 = clip(accely / (v0 * v0), -maxk, maxk);
-    float theta1 = t0 + k1 * v0 * pdt;
+    float relang = k1 * v0 * pdt;
+    float theta1 = t0 + relang;
     // FIXME: min/max speeds hardcoded
     float v1 = clip(v0 + accelx * pdt, 2, 14);
     float dx = v1 * cos(theta1) * pdt;
     float dy = v1 * sin(theta1) * pdt;
+
     float cost = V_.V(x0 + dx, y0 + dy, theta1, v1);
+
+    // check whether we hit a cone or a car at this angle
+    int iang = (relang * 256 / M_PI) + 128;
+    for (int d = -5; d <= 5; d++) {  // no idea what beam width to use here
+      cost += cardetect[(iang + d) & 255] * config.car_penalty * 0.01;
+      cost += conedetect[(iang + d) & 255] * config.cone_penalty * 0.01;
+    }
     // printf("  control (%d %0.3f %0.3f) %f,%f,%f,%f V=%f k=%f v=%f\n", a,
     // accelx, accely, x0 + dx, y0 + dy, theta1, v1, cost, k1, v1);
     // FIXME: add in obstacle detection here

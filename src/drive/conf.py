@@ -3,7 +3,7 @@ speed limit      3.00
 Ax limit         8.00
 Ay limit         12.00
 reaction time    0.06
-lookahead time   0.20
+lookahead time   0.15
 path penalty     0.09
 cone penalty     0.10
 car penalty      0.10
