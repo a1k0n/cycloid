@@ -88,7 +88,7 @@ def main(fname):
     r = np.sum((pts[:2] / pts[2])**2, axis=0)
     prelim_mask = ((pts[2] < 0) & (pts[0] > 0)) & (r > 4**2)
     im = prelim_mask[:, :, None] * view
-    im[~prelim_mask, :] = 255
+    #im[~prelim_mask, :] = 255
     cv2.imwrite("premask.png", im)
 
     # if the prelim mask is good enough, then we don't need to do anything else
