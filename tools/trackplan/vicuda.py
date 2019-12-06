@@ -1,4 +1,5 @@
 import pycuda.driver as cuda
+from pycuda import gpuarray
 import pycuda.autoinit
 from pycuda.compiler import SourceModule
 import numpy as np
@@ -16,6 +17,8 @@ XSIZE = 20  # track size, meters
 YSIZE = 10
 VMIN = 2
 VMAX = 13
+AxMAX = 8
+AyMAX = 10
 
 
 def savebin(V):
@@ -86,8 +89,8 @@ const int YSIZE = %d;
 const int VMIN = %d;
 const int VMAX = %d;
 const float TRACK_HALFWIDTH = 0.65f;  // 0.76f; artifically reduce this to leave room for the car
-const float AxMAX = 8;
-const float AyMAX = 10;
+const float AxMAX = %f;
+const float AyMAX = %f;
 const float dt = %f;
 const float finishx = %f, finishy = %f;
 
@@ -199,13 +202,13 @@ __global__ void valueiter(float *V, float *Vprev, float *yebuf, float *tk, float
         float v1 = max(min(v + AxMAX*dt*cos(fa), (float)VMAX), (float)VMIN);
         float k1 = max(min(sin(fa)*AyMAX/(v*v), STEER_LIMIT_K), -STEER_LIMIT_K);
         float t1 = theta + k1*v*dt;
-        float c = vlookup(Vprev, x+v1*cos(t1)*dt, y+v1*sin(t1)*dt, t1, v1);
+        float c = vlookup(Vprev, x+v1*cos(t1)*dt, y+v1*sin(t1)*dt, t1, v1, dt);
         bestcost = min(bestcost, c);
     }
 
     V[di] = pathcost + penalty + bestcost;
 }
-  """ % (STEER_LIMIT_K, NANGLES, NSPEEDS, GRID_RES, xsize, ysize, VMIN, VMAX, TIMESTEP, homex, homey))
+  """ % (STEER_LIMIT_K, NANGLES, NSPEEDS, GRID_RES, xsize, ysize, VMIN, VMAX, AxMAX, AyMAX, TIMESTEP, homex, homey))
 
 
 valueiter = mod.get_function("valueiter")
@@ -213,11 +216,14 @@ V0_gpu = cuda.mem_alloc(NSPEEDS*NANGLES*xsize*ysize*4)
 V = np.zeros((NSPEEDS, NANGLES, ysize, xsize), np.float32) + 1000.
 cuda.memcpy_htod(V0_gpu, V)
 
-ye_in = cuda.In(ye)
-tk_in = cuda.In(tk)
-tang_in = cuda.In(tang)
+ye_in = gpuarray.to_gpu(ye)
+tk_in = gpuarray.to_gpu(tk)
+tang_in = gpuarray.to_gpu(tang)
+del ye
+del tk
+del tang
 
-s = trange(100)
+s = trange(110)
 v0 = np.sum(V, dtype=np.float64)
 for j in s:
     for i in range(20):
@@ -230,3 +236,4 @@ for j in s:
     s.set_postfix_str("dv %f lap time %f" % (dv, np.min(V[0, 0, :, 155])))
 
 savebin(V)
+np.save("V.npy", V)
