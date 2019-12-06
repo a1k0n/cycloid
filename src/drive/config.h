@@ -17,6 +17,10 @@ class DriverConfig {
   int16_t car_penalty;
   int16_t motor_gain;
   int16_t motor_kI;
+  int16_t motor_u0;
+  int16_t motor_C1;
+  int16_t motor_C2;
+  int16_t specif_accel;
   int16_t servo_rate;
   int16_t servo_offset;
   int16_t servo_kI;
@@ -35,6 +39,10 @@ class DriverConfig {
     car_penalty          = 10;
     motor_gain           = 13;
     motor_kI             = 200;
+    motor_u0             = 10;
+    motor_C1             = 2126;
+    motor_C2             = 40;
+    specif_accel         = 100;
     servo_rate           = 100;
     servo_offset         = 0;
     servo_kI             = 20;

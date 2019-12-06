@@ -1,7 +1,7 @@
 configitems = '''\
 speed limit      3.00
 Ax limit         8.00
-Ay limit         12.00
+Ay limit        12.00
 reaction time    0.06
 lookahead time   0.15
 path penalty     0.09
@@ -9,6 +9,10 @@ cone penalty     0.10
 car penalty      0.10
 motor gain       0.13
 motor kI         2.00
+motor u0         0.10
+motor C1        21.26
+motor C2         0.40
+specif accel     1.00
 servo rate       1.00
 servo offset     0.00
 servo kI         0.20

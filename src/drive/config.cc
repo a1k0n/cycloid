@@ -15,6 +15,10 @@ const char *DriverConfig::confignames[] = {
   "car penalty",
   "motor gain",
   "motor kI",
+  "motor u0",
+  "motor C1",
+  "motor C2",
+  "specif accel",
   "servo rate",
   "servo offset",
   "servo kI",
@@ -22,7 +26,7 @@ const char *DriverConfig::confignames[] = {
   "servo max",
 };
 
-const int DriverConfig::N_CONFIGITEMS = 15;
+const int DriverConfig::N_CONFIGITEMS = 19;
 
 bool DriverConfig::Save() {
   FILE *fp = fopen("driverconf.txt", "w");
@@ -40,6 +44,10 @@ bool DriverConfig::Save() {
   fprintf(fp, "car_penalty          %d\n", car_penalty);
   fprintf(fp, "motor_gain           %d\n", motor_gain);
   fprintf(fp, "motor_kI             %d\n", motor_kI);
+  fprintf(fp, "motor_u0             %d\n", motor_u0);
+  fprintf(fp, "motor_C1             %d\n", motor_C1);
+  fprintf(fp, "motor_C2             %d\n", motor_C2);
+  fprintf(fp, "specif_accel         %d\n", specif_accel);
   fprintf(fp, "servo_rate           %d\n", servo_rate);
   fprintf(fp, "servo_offset         %d\n", servo_offset);
   fprintf(fp, "servo_kI             %d\n", servo_kI);
@@ -69,6 +77,10 @@ bool DriverConfig::Load() {
     else if (!strcmp(varbuf, "car_penalty"))       { car_penalty          = valuebuf; }
     else if (!strcmp(varbuf, "motor_gain"))        { motor_gain           = valuebuf; }
     else if (!strcmp(varbuf, "motor_kI"))          { motor_kI             = valuebuf; }
+    else if (!strcmp(varbuf, "motor_u0"))          { motor_u0             = valuebuf; }
+    else if (!strcmp(varbuf, "motor_C1"))          { motor_C1             = valuebuf; }
+    else if (!strcmp(varbuf, "motor_C2"))          { motor_C2             = valuebuf; }
+    else if (!strcmp(varbuf, "specif_accel"))      { specif_accel         = valuebuf; }
     else if (!strcmp(varbuf, "servo_rate"))        { servo_rate           = valuebuf; }
     else if (!strcmp(varbuf, "servo_offset"))      { servo_offset         = valuebuf; }
     else if (!strcmp(varbuf, "servo_kI"))          { servo_kI             = valuebuf; }
