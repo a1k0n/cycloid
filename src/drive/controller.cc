@@ -22,6 +22,10 @@ void DriveController::ResetState() {
   prev_steer_ = 0;
   ierr_v_ = 0;
   ierr_k_ = 0;
+  target_ax_ = 0;
+  target_ay_ = 0;
+  target_k_ = 0;
+  target_v_ = 0;
 }
 
 static inline float clip(float x, float min, float max) {
@@ -35,6 +39,8 @@ void DriveController::UpdateState(const DriverConfig &config,
                                   float wheel_v, float dt) {
   vr_ = vf_ = wheel_v;
   w_ = gyro[2];
+  ax_ = accel[0];
+  ay_ = accel[1];
 }
 
 void DriveController::UpdateLocation(const DriverConfig &config,
@@ -62,7 +68,8 @@ void DriveController::Plan(const DriverConfig &config, const int32_t *cardetect,
     float accelx = -config.Ax_limit * 0.01 * cos(phi);
     float accely = config.Ay_limit * 0.01 * sin(phi);
     float k1 = clip(accely / (v0 * v0), -maxk, maxk);
-    float relang = k1 * v0 * pdt;
+    float w1 = k1 * v0;
+    float relang = w1 * pdt;
     float theta1 = t0 + relang;
     // FIXME: min/max speeds hardcoded
     float v1 = clip(v0 + accelx * pdt, 2, 14);
@@ -77,8 +84,8 @@ void DriveController::Plan(const DriverConfig &config, const int32_t *cardetect,
       cost += cardetect[(iang + d) & 255] * config.car_penalty * 0.01;
       cost += conedetect[(iang + d) & 255] * config.cone_penalty * 0.01;
     }
-    // printf("  control (%d %0.3f %0.3f) %f,%f,%f,%f V=%f k=%f v=%f\n", a,
-    // accelx, accely, x0 + dx, y0 + dy, theta1, v1, cost, k1, v1);
+    //printf("  control (%d %0.3f %0.3f) %f,%f,%f,%f V=%f k=%f v=%f\n", a, accelx,
+    //       accely, x0 + dx, y0 + dy, theta1, v1, cost, k1, v1);
     // FIXME: add in obstacle detection here
     target_ks_[a] = k1;
     target_vs_[a] = v1;
@@ -86,7 +93,12 @@ void DriveController::Plan(const DriverConfig &config, const int32_t *cardetect,
     if (cost < cbest) {
       cbest = cost;
       target_k_ = k1;
-      target_v_ = v1;  // FIXME: we may need to lookahead target v more or less
+      target_v_ = v0 + accelx * config.motor_C2 * 0.01f;
+      if (accelx < 0) {
+        target_v_ = v0 + accelx * config.motor_C1 * 0.01f;
+      }
+      target_ax_ = accelx;
+      target_ay_ = accely;
     }
   }
   // printf("* best control V=%f k=%f v=%f\n", cbest, target_k_, target_v_);
@@ -178,8 +190,12 @@ bool DriveController::GetControl(const DriverConfig &config,
   // in case the controller gives infeasible curvatures, clamp them
   // 0.5m smallest turn radius
   float target_k = clip(target_k_, -2, 2);
-  float target_v = fmin(target_v_, config.speed_limit * 0.01);
+  float target_a = target_ax_;
+  if (vr_ >= config.speed_limit && target_a > 0) {
+    target_a = 0;
+  }
 
+  float target_v = target_v_;
   if (!autodrive) {
     // manual override:
 
@@ -187,7 +203,9 @@ bool DriveController::GetControl(const DriverConfig &config,
     // use a quadratic curve to give finer control near center
     target_k = -steering_in * 2 * fabs(steering_in);
     target_v = throttle_in * config.speed_limit * 0.01;
+    // target_a = (target_v - vr_) * config.motor_gain * 0.01;
   }
+
 
 #if 0
   float kmin = config.traction_limit * 0.01 / (vmax*vmax);
@@ -205,11 +223,13 @@ bool DriveController::GetControl(const DriverConfig &config,
   } else {
     ierr_k_ = 0;
   }
+  float accelerr =  target_ay_ - ay_;
   *steering_out = clip((target_k - srv_off + ierr_k_) * srv_ratio,
                        config.servo_min * 0.01, config.servo_max * 0.01);
 
   prev_steer_ = *steering_out;
 
+#if 1
   float vgain = 0.01 * config.motor_gain;
   float kI = 0.01 * config.motor_kI;
   // boost control gain at high velocities
@@ -220,6 +240,18 @@ bool DriveController::GetControl(const DriverConfig &config,
   if (u > -1 && u < 1) {
     ierr_v_ += verr * dt;
   }
+#else
+  float u = config.motor_u0 * 0.01f +
+            config.motor_kI * 0.01f *
+                (target_a + (config.motor_C2 * 0.01f * vr_)) /
+                (config.motor_C1 * 0.01f - vr_);
+  printf("target_a %f vr_ %f u %f\n", target_a, vr_, u);
+  if (target_a < 0 && vr_ > 0) {
+    u = -config.motor_u0 * 0.01f +
+        config.motor_kI * 0.01f * (target_a - config.motor_C2 * 0.01f * vr_) /
+            vr_;
+  }
+#endif
   *throttle_out = clip(u, -1, 1);
   prev_throttle_ = *throttle_out;
 
@@ -230,16 +262,17 @@ bool DriveController::GetControl(const DriverConfig &config,
 #endif
 
   // update state for datalogging
+  target_ax_ = target_a;
   target_v_ = target_v;
   target_w_ = target_w;
   bw_w_ = srv_ratio;
-  bw_v_ = vgain;
+  bw_v_ = config.motor_gain*0.01f;
 
   return true;
 }
 
 int DriveController::SerializedSize() const {
-  return 8 + sizeof(float) * (12 + kTractionCircleAngles*3);
+  return 8 + sizeof(float) * (14 + kTractionCircleAngles*3);
 }
 
 int DriveController::Serialize(uint8_t *buf, int buflen) const {
@@ -264,7 +297,7 @@ int DriveController::Serialize(uint8_t *buf, int buflen) const {
   buf += 4;
   memcpy(buf, &prev_throttle_, 4);
   buf += 4;
-  memcpy(buf, &ierr_k_, 4);
+  memcpy(buf, &target_k_, 4);
   buf += 4;
   memcpy(buf, &target_v_, 4);
   buf += 4;
@@ -273,6 +306,10 @@ int DriveController::Serialize(uint8_t *buf, int buflen) const {
   memcpy(buf, &bw_w_, 4);
   buf += 4;
   memcpy(buf, &bw_v_, 4);
+  buf += 4;
+  memcpy(buf, &target_ax_, 4);
+  buf += 4;
+  memcpy(buf, &target_ay_, 4);
   buf += 4;
   for (int a = 0; a < kTractionCircleAngles; a++) {
     memcpy(buf, &target_ks_[a], 4);

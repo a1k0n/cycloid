@@ -34,7 +34,8 @@ class DriveController {
   // car state
   float x_, y_, theta_;
   float vf_, vr_;        // front and rear wheel velocity
-  float w_;              // yaw rate
+  float w_;              // gyro reading: yaw rate
+  float ax_, ay_;        // accelerometer readings
   float prev_throttle_;  // previous throttle control
   float prev_steer_;     // previous steer control
   float ierr_v_;         // integrated velocity error
@@ -44,6 +45,7 @@ class DriveController {
   float target_vs_[kTractionCircleAngles];  // next potential control actions
   float target_Vs_[kTractionCircleAngles];  // total value of each action
   float target_k_;
+  float target_ax_, target_ay_;
 
   float target_v_, target_w_;  // control targets
   float bw_w_, bw_v_;          // control bandwidth for yaw and speed

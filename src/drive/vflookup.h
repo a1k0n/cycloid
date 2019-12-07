@@ -32,9 +32,7 @@ class ValueFuncLookup {
   }
 
   float V(float x, float y, float theta, float v) {
-    float ftheta = theta * a_ * 1.0/(2*M_PI);
-    if (ftheta >= a_)
-      ftheta -= a_;
+    float ftheta = fmodf(theta * a_ * 1.0/(2*M_PI), a_);
     if (ftheta < 0)
       ftheta += a_;
     int itheta = std::floor(ftheta);

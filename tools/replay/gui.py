@@ -201,7 +201,7 @@ class ReplayGUI:
         if self.acts is not None:
             imgui.plot_lines("activations", self.acts)
 
-        nCtrlAngles = (len(self.controlstate[self.i]) - 12) // 3
+        nCtrlAngles = (len(self.controlstate[self.i]) - 14) // 3
         cc = self.controlstate[self.i][-nCtrlAngles:]
         imgui.plot_lines(
             "control costs", np.clip(cc, 0, 100))
@@ -335,6 +335,7 @@ class ReplayGUI:
                         origin[1] - scale*(y + v*S),
                         imgui.get_color_u32_rgba(0, 1, 0, 1), 1)
 
+        targetaccel = self.controlstate[self.i][12:14] / 9.8
         accel = self.carstate[self.i][2]
         ox, oy = origin[0] + scale*3, origin[1] + scale*9
         for i in range(100):
@@ -350,6 +351,10 @@ class ReplayGUI:
                 imgui.get_color_u32_rgba(0.7, 0.7, 0.7, 1), 1)
         dl.add_line(ox, oy, ox + scale*accel[1], oy - scale*accel[0],
                     imgui.get_color_u32_rgba(0.3, 1, 0.5, 1), 3)
+        dl.add_rect(
+            ox - scale*targetaccel[1] - 2, oy + scale*targetaccel[0] - 2,
+            ox - scale*targetaccel[1] + 2, oy + scale*targetaccel[0] + 2,
+            imgui.get_color_u32_rgba(0.0, 1, 1, 1), 1)
 
         imgui.end()
 

@@ -43,13 +43,13 @@ class AccelTest : public ControlCallback {
     float ds, v;
     car->GetWheelMotion(&ds, &v);
     imu_->ReadIMU(&accel, &gyro);
-    printf("%f %f %f %f %f\n", frameno / 100.0f, u, accel[0], accel[1],
+    printf("%f %f %f %f %f %f\n", frameno / 100.0f, u, v, accel[0], accel[1],
            accel[2]);
 
     frameno++;
     if (frameno > 100) {
       u = -0.25;
-    } else {
+    } else if (frameno > 10) {
       u = 0.25;
     }
     if (frameno == maxframes) {
