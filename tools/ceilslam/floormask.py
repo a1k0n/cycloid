@@ -76,8 +76,8 @@ def writefloorlut(pts, frontfloormask):
 
 def writefrontlut(K, dist):
     Knew = np.array([
-        [-125., 0, 160],
-        [0, 125., 85],
+        [-120., 0, 160],
+        [0, 120., 71],
         [0, 0, 1.0]
     ])
     R = cv2.Rodrigues(np.array([0, CAM_TILT[1] - np.pi/2, 0]))[0]
@@ -88,9 +88,10 @@ def writefrontlut(K, dist):
     f = open(fname, "wb")
     hlen = 2 + 2
     f.write(struct.pack("=4sIHH", b'10.6', hlen, 320, 120))
-    print("xy shapes:", xmap.shape, ymap.shape)
     imap = np.stack([xmap, ymap]).transpose((1, 2, 0))
-    f.write((64*imap).astype(np.int16).tobytes())
+    print("shape:", imap.shape)
+    print(np.max(imap[-1, :, 0]))
+    f.write((64*imap).astype(np.uint16).tobytes())
     f.close()
     print("wrote frontlut.bin")
 

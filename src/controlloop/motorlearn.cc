@@ -28,7 +28,7 @@ class ControlRamp : public ControlCallback {
 class AccelTest : public ControlCallback {
   int frameno;
   IMU *imu_;
-  const int maxframes = 200;
+  const int maxframes = 300;
   float u;
 
  public:
@@ -47,9 +47,11 @@ class AccelTest : public ControlCallback {
            accel[2]);
 
     frameno++;
-    if (frameno > 100) {
-      u = -0.25;
-    } else if (frameno > 10) {
+    if (frameno > 150) {
+      u = -0.5;
+    } else if (frameno > 100) {
+      u = 0;
+    } else if (frameno > 2) {
       u = 0.25;
     }
     if (frameno == maxframes) {

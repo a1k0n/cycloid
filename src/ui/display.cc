@@ -33,11 +33,11 @@ bool UIDisplay::Init() {
     perror("no front lookup table (frontlut.bin)");
     frontremap_ = NULL;
   } else {
-    uint8_t hdr[10];
-    fread(hdr, 1, 10, fp);
+    uint8_t hdr[12];
+    fread(hdr, 1, 12, fp);
     // yeah error checking would be great
-    frontremap_ = new uint16_t[320 * 120];
-    fread(frontremap_, 2, 320 * 120, fp);
+    frontremap_ = new uint16_t[2 * 320 * 120];
+    fread(frontremap_, 4, 320 * 120, fp);
     fclose(fp);
   }
 
