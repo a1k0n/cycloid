@@ -53,8 +53,9 @@ void DriveController::UpdateLocation(const DriverConfig &config,
 void DriveController::Plan(const DriverConfig &config, const int32_t *cardetect,
                            const int32_t *conedetect) {
   const float s = config.reaction_time * 0.01 * vr_;
-  const float t0 = theta_;
-  const float C = cos(t0), S = sin(t0);
+  const float t0 = theta_ + config.reaction_time * 0.01 * w_;
+  const float t0h = (theta_ + t0) / 2;
+  const float C = cos(t0h), S = sin(t0h);
   const float x0 = x_ + s * C;
   const float y0 = y_ + s * S;
   const float v0 = clip(vr_, 2, 14);
@@ -97,6 +98,7 @@ void DriveController::Plan(const DriverConfig &config, const int32_t *cardetect,
       if (accelx < 0) {
         target_v_ = v0 + accelx * config.motor_C1 * 0.01f;
       }
+      target_v_ = clip(target_v_, 2, 20);
       target_ax_ = accelx;
       target_ay_ = accely;
     }
@@ -241,15 +243,13 @@ bool DriveController::GetControl(const DriverConfig &config,
     ierr_v_ += verr * dt;
   }
 #else
-  float u = config.motor_u0 * 0.01f +
-            config.motor_kI * 0.01f *
-                (target_a + (config.motor_C2 * 0.01f * vr_)) /
-                (config.motor_C1 * 0.01f - vr_);
+  float u0 = config.motor_u0 * 0.01f;
+  float u = u0 + (config.motor_kI * 0.01f * target_a +
+                  config.motor_C2 * 0.01f * vr_) /
+                     (config.motor_C1 * 0.01f - vr_);
   printf("target_a %f vr_ %f u %f\n", target_a, vr_, u);
   if (target_a < 0 && vr_ > 0) {
-    u = -config.motor_u0 * 0.01f +
-        config.motor_kI * 0.01f * (target_a - config.motor_C2 * 0.01f * vr_) /
-            vr_;
+    u = -u0 + (config.motor_kI * 0.01f * target_a) / vr_ + config.motor_C2 * 0.01f;
   }
 #endif
   *throttle_out = clip(u, -1, 1);

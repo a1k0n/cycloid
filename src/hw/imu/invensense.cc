@@ -47,8 +47,12 @@ bool InvensenseIMU::Init() {
   // accel_fs_sel +/- 16g (11)
   i2c_.Write(i2caddr_, 28, ACCEL_SHIFT << 3);
 
-  // a_dlpfcfg = 6, low-pass filter as much as possible
-  i2c_.Write(i2caddr_, 29, 0x06);
+  // a_dlpfcfg = 6, low-pass filter as much as possible (5Hz!)
+  // i2c_.Write(i2caddr_, 29, 0x06);
+  // no way, that sucks
+
+  // 44.8Hz accel bandwidth, which should be good for our 100Hz samplerate
+  i2c_.Write(i2caddr_, 29, 0x03);
 
   uint8_t id;
   if (!i2c_.Read(i2caddr_, 117, 1, &id)) {  // whoami

@@ -74,6 +74,27 @@ def writefloorlut(pts, frontfloormask):
     print("wrote", fname, 'mask', len(rlemask)*2, 'bytes; pts x', len(yangle), ' angle bytes')
 
 
+def writefrontlut(K, dist):
+    Knew = np.array([
+        [-125., 0, 160],
+        [0, 125., 85],
+        [0, 0, 1.0]
+    ])
+    R = cv2.Rodrigues(np.array([0, CAM_TILT[1] - np.pi/2, 0]))[0]
+    R = np.dot(np.array([[0, 1, 0], [1, 0, 0], [0, 0, 1]]), R)
+    xmap, ymap = cv2.fisheye.initUndistortRectifyMap(
+        K, dist, R, Knew, (320, 120), cv2.CV_32FC1)
+    fname = "frontlut.bin"
+    f = open(fname, "wb")
+    hlen = 2 + 2
+    f.write(struct.pack("=4sIHH", b'10.6', hlen, 320, 120))
+    print("xy shapes:", xmap.shape, ymap.shape)
+    imap = np.stack([xmap, ymap]).transpose((1, 2, 0))
+    f.write((64*imap).astype(np.int16).tobytes())
+    f.close()
+    print("wrote frontlut.bin")
+
+
 def main(fname):
     view = cv2.imread(fname)
 
@@ -82,6 +103,8 @@ def main(fname):
     K[:2] /= 4.05
     fx, fy = np.diag(K)[:2]
     cx, cy = K[:2, 2]
+
+    writefrontlut(K, dist)
 
     pts = undistort(fx, fy, cx, cy, dist[0], CAM_TILT[1], 0)
 

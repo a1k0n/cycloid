@@ -216,6 +216,7 @@ void Driver::UpdateFromCamera(uint8_t *buf, float dt) {
   // display_->UpdateEncoders(carstate_.wheel_pos);
   // FIXME: hardcoded map size 20mx10m
   if (display_) {
+    display_->UpdateCameraView(buf);
     display_->UpdateCeiltrackView(xytheta, CEIL_X_GRID * CEIL_HEIGHT,
                                   CEIL_Y_GRID * CEIL_HEIGHT, 20, 10,
                                   pcar, pcone, carstate_.wheel_v);
@@ -370,6 +371,11 @@ void Driver::OnButtonPress(char button) {
       if (!autodrive_) {
         fprintf(stderr, "%ld.%06ld autodrive ON\n", tv.tv_sec, tv.tv_usec);
         autodrive_ = true;
+      }
+      break;
+    case 'R':
+      if (display_) {
+        display_->NextMode();
       }
       break;
     case 'B':
