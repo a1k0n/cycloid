@@ -6,7 +6,7 @@ find_package(PkgConfig)
 set(CMAKE_CXX_STANDARD 11)
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall")
 
-add_definitions("-ftree-vectorize -ffast-math")
+add_definitions("-ftree-vectorize -ffast-math -mf16c")
 
 add_subdirectory(userland)
 
@@ -31,5 +31,6 @@ add_subdirectory(hw/gpio)
 add_subdirectory(hw/imu)
 add_subdirectory(hw/input)
 add_subdirectory(hw/lcd)
+add_subdirectory(lens)
 add_subdirectory(localization)
 add_subdirectory(ui)

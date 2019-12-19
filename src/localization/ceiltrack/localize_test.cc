@@ -10,14 +10,7 @@ const float CEIL_HEIGHT = 8.25;
 const float X_GRID = 10/CEIL_HEIGHT;
 const float Y_GRID = 12/CEIL_HEIGHT;
 
-int main() {
-  CeilingTracker ctrack;
-
-  if (!ctrack.Open(TESTDATA_PATH "/lut.bin")) {
-    fprintf(stderr, "ceiltrack localizer init fail\n");
-    return 1;
-  }
-
+int TestTracking(CeilingTracker &ctrack) {
   uint8_t y[480*640];
   gzFile zf = gzopen(TESTDATA_PATH "/data.raw.gz", "rb");
   if (zf == NULL) {
@@ -65,5 +58,26 @@ int main() {
 
   printf("validated %d frames\n", frame);
   printf("%f usec/frame\n", trackusec / trackiters);
+  return 0;
+}
+
+int main() {
+  FisheyeLens lens;
+  lens.SetCalibration(752.693074/4.05, 756.310610/4.05, 1285.653532/4.05, 980.329484/4.05, 0.013570);
+  CeilingTracker ctrack2;
+  ctrack2.Open(lens, 22 * M_PI / 180.0);
+
+#if 0
+  CeilingTracker ctrack;
+  if (!ctrack.Open(TESTDATA_PATH "/lut.bin")) {
+    fprintf(stderr, "ceiltrack localizer init fail\n");
+    return 1;
+  }
+#endif
+
+  if (TestTracking(ctrack2)) {
+    return 1;
+  }
+
   return 0;
 }

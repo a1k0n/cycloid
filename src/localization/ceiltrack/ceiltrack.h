@@ -3,11 +3,14 @@
 
 #include <stdint.h>
 
+#include "lens/fisheye.h"
+
 class CeilingTracker {
  public:
   CeilingTracker() {}
 
   bool Open(const char *lut_fname);
+  void Open(const FisheyeLens &lens, float camtilt);
 
   // Update x, y, theta estimate from greyscale image, returning cost
   // any pixels >thresh are assumed to be ceiling light pixels
