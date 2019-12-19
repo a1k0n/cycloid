@@ -219,9 +219,11 @@ float CeilingTracker::Update(const uint8_t *img, uint8_t thresh, float xgrid,
     int M = bufptr & (~3);
     for (int i = 0; i < M; i += 4) {
       // load four interleaved coordinates, cvt to 32-bit floats
-      float16x4x2_t xxxxyyyy = vld2_f16((const __fp16*)&xybuf[i]);
-      float32x4_t xxxx = vcvt_f32_f16(xxxxyyyy.val[0]);
-      float32x4_t yyyy = vcvt_f32_f16(xxxxyyyy.val[1]);
+      int16x4x2_t xxxxyyyy = vld2_s16((const int16_t*)&xybuf[i]);
+      int32x4_t ixxxx = vmovl_s16(xxxxyyyy.val[0]);
+      int32x4_t iyyyy = vmovl_s16(xxxxyyyy.val[1]);
+      float32x4_t xxxx = vmulq_n_f32(vcvtq_f32_s32(ixxxx), 1.0/FIXPT_SCALE);
+      float32x4_t yyyy = vmulq_n_f32(vcvtq_f32_s32(iyyyy), 1.0/FIXPT_SCALE);
 
       Rvec = vaddq_f32(Rvec,
                        vaddq_f32(vmulq_f32(xxxx, xxxx), vmulq_f32(yyyy, yyyy)));
