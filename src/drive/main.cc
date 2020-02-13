@@ -98,21 +98,12 @@ int main(int argc, char *argv[]) {
     has_display = false;
   }
 
-  // FIXME(a1k0n): INI
-  if (!ceiltrack.Open("ceillut.bin")) {
-    fprintf(stderr,
-            "can't open ceillut.bin, camera calibration lookup table\n");
+  driver_ = new Driver(&flush_thread, imu, has_joystick ? &js : NULL,
+                       has_display ? &display : NULL);
+
+  if (!driver_->Init(ini)) {
     return 1;
   }
-
-  if (!obstacledetector.Open("floorlut.bin")) {
-    fprintf(stderr, "can't open floorlut.bin, obstacle detection lookup table");
-    return 1;
-  }
-
-  driver_ =
-      new Driver(ini, &ceiltrack, &obstacledetector, &flush_thread, imu,
-                 has_joystick ? &js : NULL, has_display ? &display : NULL);
 
   if (!Camera::StartRecord(driver_)) {
     return 1;

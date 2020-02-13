@@ -90,6 +90,10 @@ def mkgrid(xspc, yspc, N, u, v, theta):
 
 
 def cost(xy, u, v, theta):
+    return costxyg(X_GRID, Y_GRID, xy, u, v, theta)
+
+
+def costxyg(xg, yg, xy, u, v, theta):
     N = xy.shape[1]
     x = xy[0]
     y = xy[1]
@@ -97,8 +101,8 @@ def cost(xy, u, v, theta):
     C = np.cos(theta)
     dRx = x*S - C*y
     dRy = x*C + S*y
-    dx = moddist(x*C + y*S - u, X_GRID)
-    dy = moddist(-x*S + y*C - v, Y_GRID)
+    dx = moddist(x*C + y*S - u, xg)
+    dy = moddist(-x*S + y*C - v, yg)
     S2 = np.sum(dRx)
     S3 = np.sum(dRy)
     JTJ = np.array([[N, 0, S2], [0, N, S3], [S2, S3, np.sum(x**2 + y**2)]])

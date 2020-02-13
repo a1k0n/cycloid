@@ -48,7 +48,7 @@ def main():
     f.write(struct.pack("=4sIHHII", b'cmLU', hlen, h, w,
                         np.sum(ceilmask), len(rlemask)))
     f.write(rlemask.tobytes())
-    f.write(pts.T.astype(np.float16).tobytes())
+    f.write((pts*8192).T.astype(np.int16).tobytes())
     f.close()
     print("wrote", fname, 'mask', len(rlemask)*2, 'bytes; pts x', pts.T.shape, '=',
           pts.shape[1]*4, 'bytes', np.sum(ceilmask))

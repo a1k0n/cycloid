@@ -154,10 +154,12 @@ void UIDisplay::UpdateParticleView(const coneslam::Localizer *l) {
 }
 #endif
 
-void UIDisplay::UpdateCameraView(const uint8_t *yuv) {
+void UIDisplay::UpdateCameraView(
+    const uint8_t *yuv, const std::vector<std::pair<float, float>> &gridpts) {
   switch (mode_) {
     case CAMERAVIEW: {
-      uint16_t *scr = screen_.GetBuffer();
+      uint16_t buf[320*240];
+      uint16_t *scr = buf;
       for (int j = 0; j < 240; j++) {
         const uint8_t *y = yuv + j * 640 * 2;
         const uint8_t *u = yuv + 640 * 480 + j * 320;
@@ -166,6 +168,20 @@ void UIDisplay::UpdateCameraView(const uint8_t *yuv) {
           *scr++ = YUVtoRGB565(y[i * 2], u[i], v[i]);
         }
       }
+      uint16_t c = 0x001f;
+      for (size_t i = 0; i < gridpts.size(); i++) {
+        int x = gridpts[i].first;
+        int y = gridpts[i].second;
+        if (x < 1 || x >= 319 || y < 1 || y > 239) {
+          buf[x + y*320 - 320] = c;
+          buf[x + y*320 - 1] = c;
+          buf[x + y*320] = c;
+          buf[x + y*320 + 1] = c;
+          buf[x + y*320 + 320] = c;
+        }
+      }
+      scr = screen_.GetBuffer();
+      memcpy(scr, buf, 320*240*2);
       // no room to show config or status, but that's ok
       break;
     }

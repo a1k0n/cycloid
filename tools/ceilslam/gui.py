@@ -75,6 +75,7 @@ class SLAMGUI:
         self.ts = []
         self.camdata = ceiltrack.ceillut()
         self.f.seek(0, 0)
+        self.ceilheight = ceiltrack.CEIL_HEIGHT
 
         # do a full tracking here on load
         B = np.float32([HOME[0], HOME[1], 0])
@@ -150,8 +151,16 @@ class SLAMGUI:
         # optional: front view and annotated ceiling view?
         im = cv2.cvtColor(yuv420, cv2.COLOR_YUV2BGR_I420)
 
-        for gp in ceiltrack.mkgrid(ceiltrack.X_GRID, ceiltrack.Y_GRID, 31,
-                                   *-self.origtrack[i])[0]:
+        xg = ceiltrack.X_GRID * self.ceilheight / ceiltrack.CEIL_HEIGHT
+        yg = ceiltrack.Y_GRID * self.ceilheight / ceiltrack.CEIL_HEIGHT
+        gray = yuv420[:480]
+        xy = ceiltrack.match(gray, *self.camdata)
+        B = self.origtrack[self.i]
+        for i in range(6):
+            cost, dB = ceiltrack.costxyg(xg, yg, xy, *B)
+            B += dB
+
+        for gp in ceiltrack.mkgrid(xg, yg, 31, *-B)[0]:
             cv2.circle(im, (int(gp[0]), int(gp[1])), 3, (255, 0, 0), 1)
 
         self.frametexid = load_texture(im)
@@ -198,11 +207,15 @@ class SLAMGUI:
 
     def render_map(self):
         imgui.begin("map")
-        imgui.slider_float("x (m)", self.track[self.i, 0] * ceiltrack.CEIL_HEIGHT * 0.3048, -80, 80)
-        imgui.slider_float("y (m)", self.track[self.i, 1] * ceiltrack.CEIL_HEIGHT * 0.3048, -80, 80)
+        imgui.slider_float("x (m)", self.track[self.i, 0] * ceiltrack.CEIL_HEIGHT, -80, 80)
+        imgui.slider_float("y (m)", self.track[self.i, 1] * ceiltrack.CEIL_HEIGHT, -80, 80)
         imgui.slider_float("theta", self.track[self.i, 2] % (np.pi*2), -7, 7)
         imgui.slider_float("x (grid)", self.track[self.i, 0] / ceiltrack.X_GRID, -10, 10)
         imgui.slider_float("y (grid)", self.track[self.i, 1] / ceiltrack.X_GRID, -10, 10)
+
+        changed, self.ceilheight = imgui.slider_float("ceiling height (m)", self.ceilheight, 2, 4)
+        if changed:
+            self.loadframe(self.i)
 
         dl = imgui.get_window_draw_list()
         pos = imgui.get_cursor_screen_pos()

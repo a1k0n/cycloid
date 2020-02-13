@@ -15,7 +15,7 @@ add_executable(drive
     vflookup.h
 )
 
-target_link_libraries(drive car cam mmal input gpio imu ui lcd coneslam ceiltrack pigpio inih pthread)
+target_link_libraries(drive car cam mmal input gpio imu ui lcd coneslam ceiltrack lens pigpio inih pthread)
 install(TARGETS drive DESTINATION bin)
 
 # add_executable(localize_test localize_test.cc localize.cc)

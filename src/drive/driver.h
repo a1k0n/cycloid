@@ -8,8 +8,9 @@
 #include "hw/cam/cam.h"
 #include "hw/car/car.h"
 #include "hw/input/input.h"
+#include "lens/fisheye.h"
+#include "localization/ceiltrack/ceiltrack.h"
 
-class CeilingTracker;
 class DriveController;
 class DriverConfig;
 class FlushThread;
@@ -22,9 +23,10 @@ class Driver : public CameraReceiver,
                public InputReceiver {
  public:
   // FIXME(a1k0n): CeilingTracker -> Localizer
-  Driver(const INIReader &ini, CeilingTracker *ceil, ObstacleDetector *od,
-         FlushThread *ft, IMU *imu, JoystickInput *js, UIDisplay *disp);
+  Driver(FlushThread *ft, IMU *imu, JoystickInput *js, UIDisplay *disp);
   ~Driver();
+
+  bool Init(const INIReader &ini);
 
   virtual void OnCameraFrame(uint8_t *buf, size_t length);
   virtual bool OnControlFrame(CarHW *car, float dt);
@@ -49,8 +51,9 @@ class Driver : public CameraReceiver,
 
   void QueueRecordingData(const timeval &t, uint8_t *buf, size_t length);
 
-  CeilingTracker *ceiltrack_;
-  ObstacleDetector *obstacledetect_;
+  FisheyeLens lens_;
+  CeilingTracker ceiltrack_;
+  ObstacleDetector obstacledetect_;
   DriveController controller_;
   DriverConfig config_;
   FlushThread *flush_thread_;

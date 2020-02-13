@@ -48,11 +48,11 @@ class AccelTest : public ControlCallback {
 
     frameno++;
     if (frameno > 150) {
-      u = -0.5;
-    } else if (frameno > 100) {
+      u = -1.0;
+    } else if (frameno > 70) {
       u = 0;
     } else if (frameno > 2) {
-      u = 0.25;
+      u = 1.0;
     }
     if (frameno == maxframes) {
       car->SetControls(0, 0, 0);

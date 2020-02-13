@@ -4,6 +4,8 @@
 #include "hw/lcd/fbdev.h"
 #include "localization/coneslam/localize.h"
 
+#include <vector>
+
 class UIDisplay {
  public:
   enum DisplayMode { TRACKMAP = 0, CAMERAVIEW, FRONTVIEW, NUM_MODES };
@@ -18,7 +20,8 @@ class UIDisplay {
   void UpdateParticleView(const coneslam::Localizer *l);
 #endif
 
-  void UpdateCameraView(const uint8_t *yuv);
+  void UpdateCameraView(const uint8_t *yuv,
+                        const std::vector<std::pair<float, float>> &gridpts);
 
   void UpdateCeiltrackView(const float *xytheta, float xgrid, float ygrid,
                            float sixz, float sizy, const int32_t *obs1,

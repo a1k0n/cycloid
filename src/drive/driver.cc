@@ -1,12 +1,15 @@
+#include "drive/driver.h"
+
 #include <fcntl.h>
 #include <stdio.h>
 #include <string.h>
 #include <sys/time.h>
+
 #include <Eigen/Dense>
+#include <vector>
 
 #include "drive/config.h"
 #include "drive/controller.h"
-#include "drive/driver.h"
 #include "drive/flushthread.h"
 #include "hw/cam/cam.h"
 #include "hw/car/car.h"
@@ -71,11 +74,8 @@ struct CarState {
   }
 } carstate_;
 
-Driver::Driver(const INIReader &ini, CeilingTracker *ceil, ObstacleDetector *od,
-               FlushThread *ft, IMU *imu, JoystickInput *js, UIDisplay *disp)
-    : ceiltrack_(ceil),
-      obstacledetect_(od),
-      flush_thread_(ft),
+Driver::Driver(FlushThread *ft, IMU *imu, JoystickInput *js, UIDisplay *disp)
+    : flush_thread_(ft),
       imu_(imu),
       js_(js),
       display_(disp),
@@ -89,15 +89,42 @@ Driver::Driver(const INIReader &ini, CeilingTracker *ceil, ObstacleDetector *od,
   autodrive_ = false;
   memset(&last_t_, 0, sizeof(last_t_));
   memset(&last_lap_, 0, sizeof(last_lap_));
-  if (config_.Load()) {
-    fprintf(stderr, "Loaded driver configuration\n");
-  }
   js_throttle_ = 0;
   js_steering_ = 0;
 
   config_item_ = 0;
   x_down_ = y_down_ = false;
   done_ = false;
+}
+
+bool Driver::Init(const INIReader &ini) {
+  float fx, fy, cx, cy, k1;
+  std::string camcal = ini.GetString("camera", "calibration", "");
+  if (camcal == "" || sscanf(camcal.c_str(), "%f %f %f %f %f", &fx, &fy, &cx, &cy, &k1) != 5) {
+    fprintf(stderr, "missing or invalid [camera].calibration in .ini file!");
+    fprintf(stderr, "syntax:\n[camera]\ncalibration=fx fy cx cy k1\n");
+    return false;
+  }
+  lens_.SetCalibration(fx, fy, cx, cy, k1);
+  float camrot = ini.GetReal("camera", "rotation", 22) * M_PI / 180.0;
+
+  if (!ceiltrack_.Init(lens_, camrot)) {
+    fprintf(stderr, "ceiltrack init failure");
+    return false;
+  }
+
+  if (config_.Load()) {
+    fprintf(stderr, "Loaded driver configuration\n");
+  }
+
+  // FIXME(a1k0n): use lens calibration, not floorlut.bin
+  // but we still need the mask defined somehow
+  if (!obstacledetect_.Open("floorlut.bin")) {
+    fprintf(stderr, "can't open floorlut.bin, obstacle detection lookup table");
+    return false;
+  }
+
+  return true;
 }
 
 bool Driver::StartRecording(const char *fname, int frameskip) {
@@ -177,8 +204,8 @@ void Driver::UpdateFromCamera(uint8_t *buf, float dt) {
   prevxy[0] = -carstate_.ceiltrack_pos[0] * CEIL_HEIGHT;
   prevxy[1] = -carstate_.ceiltrack_pos[1] * CEIL_HEIGHT;
 
-  ceiltrack_->Update(buf, 240, CEIL_X_GRID, CEIL_Y_GRID,
-                     carstate_.ceiltrack_pos, 2, false);
+  ceiltrack_.Update(buf, 240, CEIL_X_GRID, CEIL_Y_GRID, carstate_.ceiltrack_pos,
+                    2, false);
   float xytheta[3];
   // convert ceiling homogeneous coordinates to actual meters on the ground
   // also we need to convert from bottom-up to top-down coordinates so we negate
@@ -205,9 +232,9 @@ void Driver::UpdateFromCamera(uint8_t *buf, float dt) {
     last_lap_ = last_t_;
   }
 
-  obstacledetect_->Update(buf, 40, 150);  // FIXME(a1k0n): needs config
-  const int32_t *pcar = obstacledetect_->GetCarPenalties();
-  const int32_t *pcone = obstacledetect_->GetConePenalties();
+  obstacledetect_.Update(buf, 40, 150);  // FIXME(a1k0n): needs config
+  const int32_t *pcar = obstacledetect_.GetCarPenalties();
+  const int32_t *pcone = obstacledetect_.GetConePenalties();
 
   controller_.UpdateLocation(config_, xytheta);
   controller_.Plan(config_, pcar, pcone);
@@ -216,7 +243,10 @@ void Driver::UpdateFromCamera(uint8_t *buf, float dt) {
   // display_->UpdateEncoders(carstate_.wheel_pos);
   // FIXME: hardcoded map size 20mx10m
   if (display_) {
-    display_->UpdateCameraView(buf);
+    static std::vector<std::pair<float, float>> gridpts;
+    gridpts.clear();
+    ceiltrack_.GetMatchedGrid(lens_, carstate_.ceiltrack_pos, CEIL_X_GRID, CEIL_Y_GRID, &gridpts);
+    display_->UpdateCameraView(buf, gridpts);
     display_->UpdateCeiltrackView(xytheta, CEIL_X_GRID * CEIL_HEIGHT,
                                   CEIL_Y_GRID * CEIL_HEIGHT, 20, 10,
                                   pcar, pcone, carstate_.wheel_v);

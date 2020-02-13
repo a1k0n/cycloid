@@ -17,69 +17,6 @@
 #include <xmmintrin.h>
 #endif
 
-static const float FIXPT_SCALE = 8192;
-
-bool CeilingTracker::Open(const char *fname) {
-  uint8_t header[20];
-  FILE *fp = fopen(fname, "rb");
-  if (!fp) {
-    perror(fname);
-    return false;
-  }
-
-  if (fread(header, 1, sizeof(header), fp) != sizeof(header)) {
-    fprintf(stderr, "CeilingTracker::Open: short read\n");
-    goto err;
-  }
-
-  if (header[0] != 'c' || header[1] != 'm' || header[2] != 'L' ||
-      header[3] != 'U') {
-    fprintf(stderr, "CeilingTracker::Open: bad magic\n");
-    goto err;
-  }
-
-  uint16_t h, w;
-  uint32_t uvsiz, rlesiz;
-  memcpy(&h, header + 8, 2);
-  memcpy(&w, header + 10, 2);
-  memcpy(&uvsiz, header + 12, 4);
-  memcpy(&rlesiz, header + 16, 4);
-  fprintf(stderr,
-          "CeilingTracker::Open: %dx%d imgsiz, %d uv table entries, %d rle "
-          "entries\n",
-          w, h, uvsiz, rlesiz);
-
-  mask_rle_ = new uint16_t[rlesiz];
-  mask_rlelen_ = rlesiz;
-  uvmap_ = new uint32_t[uvsiz];
-  uvmaplen_ = uvsiz;
-  if (fread(mask_rle_, 2, rlesiz, fp) != rlesiz) {
-    fprintf(stderr, "CeilingTracker::Open: short read on rle table\n");
-    goto err;
-  }
-
-  if (fread(uvmap_, 4, uvsiz, fp) != uvsiz) {
-    fprintf(stderr, "CeilingTracker::Open: short read on uv table\n");
-    goto err;
-  }
-
-#if 0
-  for (float f = -10; f < 10; f += 0.125f) {
-    printf("moddist(%f, 3.0) = %f\n", f, moddist(f, 3.0, 1.0/3.0));
-  }
-#endif
-  printf("mask starts %d %d %d %d %d\n", mask_rle_[0], mask_rle_[1],
-         mask_rle_[2], mask_rle_[3], mask_rle_[4]);
-  printf("pts starts %08x %08x %08x %08x\n", uvmap_[0], uvmap_[1], uvmap_[2], uvmap_[3]);
-
-  fclose(fp);
-  return true;
-
-err:
-  fclose(fp);
-  return false;
-}
-
 class RLEMask {
  public:
   RLEMask() {
@@ -115,20 +52,15 @@ class RLEMask {
   std::vector<uint16_t> out_;
 };
 
-static uint32_t scaleinto(float x, float y) {
-  int32_t a = x * FIXPT_SCALE;
-  int32_t b = y * FIXPT_SCALE;
-  return (uint32_t)((a&0xffff) + (b << 16));
-}
-
-void CeilingTracker::Open(const FisheyeLens &lens, float camtilt) {
+bool CeilingTracker::Init(const FisheyeLens &lens, float camtilt) {
   // Use the provided fisheye model to build an RLE-compressed lookup table
+  camtilt_ = camtilt;
   float *pts = lens.GenUndistortedPts(640, 480);
   float S = sin(camtilt), C = cos(camtilt);
   float centerlimit = 8 * 8;  // radius of pixels in the image to consider
   float ceillimit = 3 * 3;    // radius of pixels pointing up
   RLEMask mask;
-  std::vector<uint32_t> uvpts;
+  std::vector<float> uvpts;
   int ptsidx = 0;
   for (int j = 0; j < 480; j++) {
     for (int i = 0; i < 640; i++) {
@@ -150,11 +82,12 @@ void CeilingTracker::Open(const FisheyeLens &lens, float camtilt) {
         continue;
       }
       mask.AddOne();
-      uvpts.push_back(scaleinto(Rx, Ry));
+      uvpts.push_back(Rx);
+      uvpts.push_back(Ry);
     }
   }
   uvmaplen_ = uvpts.size();
-  uvmap_ = new uint32_t[uvmaplen_];
+  uvmap_ = new float[uvmaplen_];
   memcpy(uvmap_, &uvpts[0], uvmaplen_ * sizeof(uint32_t));
   mask_rlelen_ = mask.Size();
   mask_rle_ = new uint16_t[mask_rlelen_];
@@ -162,18 +95,19 @@ void CeilingTracker::Open(const FisheyeLens &lens, float camtilt) {
   printf("mask size %d pts %d\n", mask_rlelen_, uvmaplen_);
   printf("mask starts %d %d %d %d %d\n", mask_rle_[0], mask_rle_[1],
          mask_rle_[2], mask_rle_[3], mask_rle_[4]);
-  printf("pts starts %08x %08x %08x %08x\n", uvmap_[0], uvmap_[1], uvmap_[2], uvmap_[3]);
+  printf("pts starts %f,%f %f,%f\n", uvmap_[0], uvmap_[1], uvmap_[2], uvmap_[3]);
   delete[] pts;
+
+  return true;
 }
 
 #if (defined __ARM_NEON) || (defined __ARM_NEON__)
 
-float hsum_f32_neon(float32x4_t x) {
+static float hsum_f32_neon(float32x4_t x) {
   float32x2_t r2 = vpadd_f32(vget_high_f32(x), vget_low_f32(x));
   return vget_lane_f32(vpadd_f32(r2, r2), 0);
 }
 
-// vectorize w/ fp16x8!
 float CeilingTracker::Update(const uint8_t *img, uint8_t thresh, float xgrid,
                              float ygrid, float *xytheta, int niter,
                              bool verbose) {
@@ -183,12 +117,12 @@ float CeilingTracker::Update(const uint8_t *img, uint8_t thresh, float xgrid,
   float ooxg = 1.0 / xgrid, ooyg = 1.0 / ygrid;
 
   // first step: lookup all the camera ray vectors of white pixels looking up
-  static uint32_t *xybuf = NULL;
+  static float *xybuf = NULL;
   int bufptr = 0;
   if (xybuf == NULL) {
     // needs to have 16-byte alignment, which it should, being a relatively
     // large allocation
-    xybuf = new uint32_t[uvmaplen_];
+    xybuf = new float[uvmaplen_];
   }
   while (rleptr < mask_rlelen_) {
     // read zero-len
@@ -197,8 +131,9 @@ float CeilingTracker::Update(const uint8_t *img, uint8_t thresh, float xgrid,
     while (n--) {
       if ((*img++) > thresh) {
         xybuf[bufptr++] = uvmap_[uvptr];
+        xybuf[bufptr++] = uvmap_[uvptr + 1];
       }
-      uvptr++;
+      uvptr += 2;
     }
   }
 
@@ -216,14 +151,12 @@ float CeilingTracker::Update(const uint8_t *img, uint8_t thresh, float xgrid,
     float32x4_t Cvec = vld1q_dup_f32(&C);
     float32x4_t Svec = vld1q_dup_f32(&S);
 
-    int M = bufptr & (~3);
-    for (int i = 0; i < M; i += 4) {
-      // load four interleaved coordinates, cvt to 32-bit floats
-      int16x4x2_t xxxxyyyy = vld2_s16((const int16_t*)&xybuf[i]);
-      int32x4_t ixxxx = vmovl_s16(xxxxyyyy.val[0]);
-      int32x4_t iyyyy = vmovl_s16(xxxxyyyy.val[1]);
-      float32x4_t xxxx = vmulq_n_f32(vcvtq_f32_s32(ixxxx), 1.0/FIXPT_SCALE);
-      float32x4_t yyyy = vmulq_n_f32(vcvtq_f32_s32(iyyyy), 1.0/FIXPT_SCALE);
+    int M = bufptr & (~7);
+    for (int i = 0; i < M; i += 8) {
+      // load four interleaved coordinates
+      float32x4x2_t xxxxyyyy = vld2q_f32(&xybuf[i]);
+      float32x4_t xxxx = xxxxyyyy.val[0];
+      float32x4_t yyyy = xxxxyyyy.val[1];
 
       Rvec = vaddq_f32(Rvec,
                        vaddq_f32(vmulq_f32(xxxx, xxxx), vmulq_f32(yyyy, yyyy)));
@@ -290,7 +223,7 @@ float CeilingTracker::Update(const uint8_t *img, uint8_t thresh, float xgrid,
                                                vmulq_f32(Ryyyy, dxxxx)));
     }
 
-    float N = M;
+    float N = M/2;
     float R = hsum_f32_neon(Rvec);
     cost = hsum_f32_neon(costvec);
     float S2 = hsum_f32_neon(S2vec);
@@ -349,12 +282,12 @@ float CeilingTracker::Update(const uint8_t *img, uint8_t thresh, float xgrid,
   float ooxg = 1.0 / xgrid, ooyg = 1.0 / ygrid;
 
   // first step: lookup all the camera ray vectors of white pixels looking up
-  static uint32_t *xybuf = NULL;
+  static float *xybuf = NULL;
   int bufptr = 0;
   if (xybuf == NULL) {
     // needs to have 16-byte alignment, which it should, being a relatively
     // large allocation
-    xybuf = new uint32_t[uvmaplen_];
+    xybuf = new float[uvmaplen_];
   }
   while (rleptr < mask_rlelen_) {
     // read zero-len
@@ -363,8 +296,9 @@ float CeilingTracker::Update(const uint8_t *img, uint8_t thresh, float xgrid,
     while (n--) {
       if ((*img++) > thresh) {
         xybuf[bufptr++] = uvmap_[uvptr];
+        xybuf[bufptr++] = uvmap_[uvptr + 1];
       }
-      uvptr++;
+      uvptr += 2;
     }
   }
 
@@ -379,7 +313,6 @@ float CeilingTracker::Update(const uint8_t *img, uint8_t thresh, float xgrid,
     _MM_SET_ROUNDING_MODE(_MM_ROUND_NEAREST);
     __m128 Cvec = _mm_set1_ps(C);
     __m128 Svec = _mm_set1_ps(S);
-    __m128 scale = _mm_set1_ps(1.0 / FIXPT_SCALE);
     __m128 Rvec = _mm_setzero_ps();
     __m128 S2vec = _mm_setzero_ps();
     __m128 S3vec = _mm_setzero_ps();
@@ -387,13 +320,10 @@ float CeilingTracker::Update(const uint8_t *img, uint8_t thresh, float xgrid,
     __m128 Sdxvec = _mm_setzero_ps();
     __m128 Sdyvec = _mm_setzero_ps();
     __m128 costvec = _mm_setzero_ps();
-    int M = bufptr & (~3);
-    for (int i = 0; i < M; i += 4) {
-      // convert from fp16 to fp32
-      __m128 xyxy1 = _mm_cvtpi16_ps(*(__m64 const*) (xybuf+i));
-      __m128 xyxy2 = _mm_cvtpi16_ps(*(__m64 const*) (xybuf+i+2));
-      xyxy1 = _mm_mul_ps(xyxy1, scale);
-      xyxy2 = _mm_mul_ps(xyxy2, scale);
+    int M = bufptr & (~7);
+    for (int i = 0; i < M; i += 8) {
+      __m128 xyxy1 = _mm_load_ps(xybuf + i);
+      __m128 xyxy2 = _mm_load_ps(xybuf + i + 4);
       __m128 xxxx = _mm_shuffle_ps(xyxy1, xyxy2, _MM_SHUFFLE(2, 0, 2, 0));
       __m128 yyyy = _mm_shuffle_ps(xyxy1, xyxy2, _MM_SHUFFLE(3, 1, 3, 1));
       #if 0
@@ -433,7 +363,7 @@ float CeilingTracker::Update(const uint8_t *img, uint8_t thresh, float xgrid,
 
     // Levenberg-Marquardt damping factor (if no detections, prevents blowups)
     const float lambda = 1;
-    float N = M;
+    float N = M/2;
     float R = hsum_ps_sse3(Rvec);
     cost = hsum_ps_sse3(costvec);
     float S2 = hsum_ps_sse3(S2vec);
@@ -492,7 +422,7 @@ float CeilingTracker::Update(const uint8_t *img, uint8_t thresh, float xgrid,
 
     if (verbose) {
       printf("CeilTrack::Update iter %d: cost %f xyt %f %f %f (%d pixels)\n",
-             iter, cost * 0.5, xytheta[0], xytheta[1], xytheta[2], M);
+             iter, cost * 0.5, xytheta[0], xytheta[1], xytheta[2], M / 2);
     }
   }
 
@@ -530,12 +460,12 @@ float CeilingTracker::Update(const uint8_t *img, uint8_t thresh, float xgrid,
   float ooxg = 1.0 / xgrid, ooyg = 1.0 / ygrid;
 
   // first step: lookup all the camera ray vectors of white pixels looking up
-  static uint32_t *xybuf = NULL;
+  static float *xybuf = NULL;
   int bufptr = 0;
   if (xybuf == NULL) {
     // needs to have 16-byte alignment, which it should, being a relatively
     // large allocation
-    xybuf = new uint32_t[uvmaplen_];
+    xybuf = new float[uvmaplen_];
   }
   while (rleptr < mask_rlelen_) {
     // read zero-len
@@ -544,8 +474,9 @@ float CeilingTracker::Update(const uint8_t *img, uint8_t thresh, float xgrid,
     while (n--) {
       if ((*img++) > thresh) {
         xybuf[bufptr++] = uvmap_[uvptr];
+        xybuf[bufptr++] = uvmap_[uvptr + 1];
       }
-      uvptr++;
+      uvptr += 2;
     }
   }
 
@@ -565,11 +496,11 @@ float CeilingTracker::Update(const uint8_t *img, uint8_t thresh, float xgrid,
     float SdRxy = 0;
 
     // unvectorized remainder
-    for (int i = 0; i < bufptr; i++) {
+    for (int i = 0; i < bufptr; i += 2) {
       //float x = half_to_float_fast5(*((uint16_t *)(xybuf + i)));
       //float y = half_to_float_fast5(*((uint16_t *)(xybuf + i) + 1));
-      float x = (1.0 / FIXPT_SCALE) * (*((int16_t *)(xybuf + i)));
-      float y = (1.0 / FIXPT_SCALE) * (*((int16_t *)(xybuf + i) + 1));
+      float x = xybuf[i];
+      float y = xybuf[i+1];
       float Rx = x * C + y * S, Ry = -x * S + y * C;
       R += x * x + y * y;
       S2 -= Ry;
@@ -583,7 +514,7 @@ float CeilingTracker::Update(const uint8_t *img, uint8_t thresh, float xgrid,
     }
 
     const float lambda = 1;
-    float N = bufptr;
+    float N = bufptr/2;
 #if 0
     if (verbose) {
       printf("JTJ | %f %f %f\n", N + lambda, 0.0f, S2);
@@ -609,7 +540,7 @@ float CeilingTracker::Update(const uint8_t *img, uint8_t thresh, float xgrid,
 
     if (verbose) {
       printf("CeilTrack::Update iter %d: cost %f xyt %f %f %f (%d pixels)\n",
-             iter, cost * 0.5, xytheta[0], xytheta[1], xytheta[2], bufptr);
+             iter, cost * 0.5, xytheta[0], xytheta[1], xytheta[2], bufptr / 2);
     }
   }
 
@@ -617,3 +548,25 @@ float CeilingTracker::Update(const uint8_t *img, uint8_t thresh, float xgrid,
 }
 
 #endif
+
+void CeilingTracker::GetMatchedGrid(
+    const FisheyeLens &lens, const float *xytheta, float xgrid, float ygrid,
+    std::vector<std::pair<float, float>> *out) const {
+  float S = sin(-xytheta[2]), C = cos(-xytheta[2]);
+  float St = sin(-camtilt_), Ct = cos(-camtilt_);
+  for (int i = -15; i <= 15; i++) {
+    float u = i * xgrid + xytheta[0];
+    for (int j = -15; j <= 15; j++) {
+      float v = j * ygrid + xytheta[1];
+      // rotate in 2D by theta[2]
+      float Ru = u*C + v*S;
+      float Rv = -u*S + v*C;
+      // now rotate in 3D about y axis
+      float z = -St * Ru + Ct;
+      float x = (Ct * Ru + St) / z;
+      float y = Rv / z;
+      lens.DistortPoint(x, y, 1, &Ru, &Rv);
+      out->push_back(std::make_pair(Ru, Rv));
+    }
+  }
+}

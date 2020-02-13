@@ -205,7 +205,9 @@ bool DriveController::GetControl(const DriverConfig &config,
     // use a quadratic curve to give finer control near center
     target_k = -steering_in * 2 * fabs(steering_in);
     target_v = throttle_in * config.speed_limit * 0.01;
-    // target_a = (target_v - vr_) * config.motor_gain * 0.01;
+    target_a = (target_v - vr_) * config.motor_gain * 0.01;
+  } else {
+    target_v = clip(target_v_, 0, config.speed_limit * 0.01);
   }
 
 
@@ -247,10 +249,10 @@ bool DriveController::GetControl(const DriverConfig &config,
   float u = u0 + (config.motor_kI * 0.01f * target_a +
                   config.motor_C2 * 0.01f * vr_) /
                      (config.motor_C1 * 0.01f - vr_);
-  printf("target_a %f vr_ %f u %f\n", target_a, vr_, u);
   if (target_a < 0 && vr_ > 0) {
     u = -u0 + (config.motor_kI * 0.01f * target_a) / vr_ + config.motor_C2 * 0.01f;
   }
+  printf("target_a %f vr_ %f u %f\n", target_a, vr_, u);
 #endif
   *throttle_out = clip(u, -1, 1);
   prev_throttle_ = *throttle_out;
