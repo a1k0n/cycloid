@@ -158,6 +158,8 @@ class ReplayGUI:
         else:
             self.acts = None
         im = cv2.cvtColor(yuv420, cv2.COLOR_YUV2BGR_I420)
+        cv2.line(im, (229-5, 243), (229+5, 243), (0, 255, 0), 2)
+        cv2.line(im, (229, 243-5), (229, 243+5), (0, 255, 0), 2)
         self.frametexid = load_texture(im)
         frontim = renderfront(im)
         self.fronttexid = load_texture(frontim)
@@ -266,12 +268,8 @@ class ReplayGUI:
             k = 0
         imgui.slider_float("curvature", k, 2, -2)
 
-        nCtrlAngles = (len(self.controlstate[self.i]) - 12) // 2
-        cc = self.controlstate[self.i][-nCtrlAngles:]
-        targetK = self.controlstate[self.i][12 + np.argmin(cc)]
+        targetK = self.controlstate[self.i, 7]
         imgui.slider_float("target k", targetK, 2, -2)
-
-        imgui.slider_float("windup k", self.controlstate[i, 7], -1, 1)
 
         # render overview
         pos = imgui.get_cursor_screen_pos()

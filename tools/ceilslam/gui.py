@@ -86,6 +86,8 @@ class SLAMGUI:
         floordata = []
         floormask = None
         for frdata in recordreader.RecordIterator(self.f):
+            if 'yuv420' not in frdata:
+                continue
             self.ts.append(frdata['tstamp'])
             yuv420 = frdata['yuv420']
             gray = yuv420[:480]
@@ -98,13 +100,13 @@ class SLAMGUI:
                 for i in range(6):
                     cost, dB = ceiltrack.cost(xy, *B)
                     B += dB
-                B_straight, cost_straight = B, cost
-                B = np.float32([HOME[0], HOME[1], np.pi/2])
-                for i in range(6):
-                    cost, dB = ceiltrack.cost(xy, *B)
-                    B += dB
-                if cost_straight < cost:
-                    B = B_straight
+                #B_straight, cost_straight = B, cost
+                #B = np.float32([HOME[0], HOME[1], np.pi/2])
+                #for i in range(6):
+                #    cost, dB = ceiltrack.cost(xy, *B)
+                #    B += dB
+                #if cost_straight < cost:
+                #    B = B_straight
                 # we need an example frame to initialize the floor lookup table
                 # to filter out the visible body posts
                 self.floorlut = ceiltrack.floorlut(gray)
@@ -147,6 +149,8 @@ class SLAMGUI:
             self.unloadlist.append(self.frametexid)
         self.i = i
         self.frame = self.scanner.frame(i)
+        if 'yuv420' not in self.frame:
+            return
         yuv420 = self.frame['yuv420']
         # optional: front view and annotated ceiling view?
         im = cv2.cvtColor(yuv420, cv2.COLOR_YUV2BGR_I420)

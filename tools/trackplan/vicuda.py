@@ -18,7 +18,7 @@ YSIZE = 10
 VMIN = 2
 VMAX = 13
 AxMAX = 8
-AyMAX = 10
+AyMAX = 12
 
 
 def savebin(V):
@@ -75,8 +75,8 @@ def initgrid(w, h):
     tN = tdata[2:4].reshape((2, h, w)).astype(np.float32).copy()
     return ye, tk, tN
 
-ye, tk, tN = initgrid(400, 200)
-tang = np.arctan2(tN[0], tN[1]).astype(np.float32)
+
+ye, _, _ = initgrid(400, 200)
 
 mod = SourceModule("""
 // just hardcode these for now, we can make them format args eventually
@@ -94,32 +94,51 @@ const float AyMAX = %f;
 const float dt = %f;
 const float finishx = %f, finishy = %f;
 
+__device__ bool viability(float *yebuf, float x, float y) {
+    float fx = x * (1.0/GRID_RES);
+    float fy = -y * (1.0/GRID_RES);
+    int ix = floor(fx);
+    int iy = floor(fy);
+    if (ix < 0 || ix >= XSIZE-1 || iy < 0 || iy >= YSIZE-1) return false;
+
+    int idx_xy = ix + iy*XSIZE;
+
+    float ye = yebuf[idx_xy];
+    //if (x < 7.5) {
+    //    return ye < TRACK_HALFWIDTH*1.5 && ye > -TRACK_HALFWIDTH;
+    //}
+    return ye < TRACK_HALFWIDTH && ye > -TRACK_HALFWIDTH;
+}
+
 __device__ float vlookup(float *V, float x, float y, float theta, float v) {
     // check for terminal state (crossing finish line)
     float C = cos(theta);
     if (y >= (finishy - TRACK_HALFWIDTH) && y <= (finishy + TRACK_HALFWIDTH) &&
-      x < finishx && x + v*dt*cos(theta) >= finishx) {
+      x < finishx && x + v*dt*C >= finishx) {
         // solve for exact time we hit the finish line
         // x0 + v*t*C = finishx
         return (finishx - x) / (v*C);
     }
 
-    float ftheta = theta * NANGLES / (2*M_PI);
+    float ftheta = (theta * NANGLES / (2*M_PI));
     if (ftheta >= NANGLES) ftheta -= NANGLES;
     if (ftheta < 0) ftheta += NANGLES;
-    int itheta = ftheta;
+    int itheta = floor(ftheta);
     ftheta -= itheta;
     // due to fp precision issues, we might still be rounded to NANGLES here
     if (itheta >= NANGLES) itheta -= NANGLES;
-    float fv = min(max((int)(v - VMIN), 0), NSPEEDS-1);
-    int iv = fv;
+    float fv = min(max((float)(v - VMIN), 0.0f), NSPEEDS-1.0f);
+    int iv = floor(fv);
     fv -= iv;
+
     float fx = x * (1.0/GRID_RES);
-    int ix = fx;
+    int ix = floor(fx);
     fx -= ix;
+
     float fy = -y * (1.0/GRID_RES);
-    int iy = fy;
+    int iy = floor(fy);
     fy -= iy;
+
     if (ix < 0 || ix >= XSIZE-1 || iy < 0 || iy >= YSIZE-1) return 1000.0f;
 
     int idx_xy = ix + iy*XSIZE;
@@ -155,7 +174,7 @@ __device__ float vlookup(float *V, float x, float y, float theta, float v) {
         V1111 = V[di+XSIZE*YSIZE*NANGLES+nexttheta+XSIZE+1];
     }
     // lerp
-    return
+    return dt+
     (1-fv)*((1-ftheta)*((1-fy)*((1-fx)*V0000 + fx*V0001) + fy*((1-fx)*V0010 + fx*V0011)) +
                 ftheta*((1-fy)*((1-fx)*V0100 + fx*V0101) + fy*((1-fx)*V0110 + fx*V0111))) +
         fv*((1-ftheta)*((1-fy)*((1-fx)*V1000 + fx*V1001) + fy*((1-fx)*V1010 + fx*V1011)) +
@@ -163,7 +182,7 @@ __device__ float vlookup(float *V, float x, float y, float theta, float v) {
 
 }
 
-__global__ void valueiter(float *V, float *Vprev, float *yebuf, float *tk, float *tang) {
+__global__ void valueiter(float *V, float *Vprev, float *yebuf) {
     int ix = threadIdx.x + blockIdx.x * blockDim.x;
     int iy = threadIdx.y + blockIdx.y * blockDim.y;
     int ithetav = threadIdx.z + blockIdx.z * blockDim.z;
@@ -183,33 +202,34 @@ __global__ void valueiter(float *V, float *Vprev, float *yebuf, float *tk, float
     int idx_xy = ix + iy*XSIZE;
     int di = idx_xy + itheta*XSIZE*YSIZE + iv*XSIZE*YSIZE*NANGLES;
 
-    float ye = yebuf[idx_xy];
-    //float ye_clamp = min(max(ye, -TRACK_HALFWIDTH), TRACK_HALFWIDTH);
-    //float cphi = max(cos(tang[idx_xy]+theta), 1e-2);
-    float pathcost = dt;  //*(1 - tk[idx_xy]*ye_clamp)/(cphi);
-    float penalty = ye > TRACK_HALFWIDTH ? 100 :
-        ye < -TRACK_HALFWIDTH ? 1000 : 0;
-
     // TODO: more realistic acceleration/braking bias
-    //static const float dv[4] = {-AxMAX*dt, AxMAX*dt, 0, 0};
-    //float kmax = min(AyMAX/(v*v), STEER_LIMIT_K);
-    //float kappa[4] = {0, 0, -kmax, kmax};
 
-    float bestcost = 1000;
+    float bestcost = 1e5;
+    bool viable = false;
     for (int a = 0; a < 16; a++) {
         float fa = a*M_PI/8.0;
         // go around traction circle and try different moves
         float v1 = max(min(v + AxMAX*dt*cos(fa), (float)VMAX), (float)VMIN);
         float k1 = max(min(sin(fa)*AyMAX/(v*v), STEER_LIMIT_K), -STEER_LIMIT_K);
         float t1 = theta + k1*v*dt;
-        float c = vlookup(Vprev, x+v1*cos(t1)*dt, y+v1*sin(t1)*dt, t1, v1, dt);
-        bestcost = min(bestcost, c);
+        float dx = v1*cos(t1)*dt;
+        float dy = v1*sin(t1)*dt;
+        bool via1 = viability(yebuf, x+dx, y+dy);
+        if (viable && !via1) {  // if we already have a viable move, anything better must be viable
+            continue;
+        }
+        float c = vlookup(Vprev, x+dx, y+dy, t1, v1);
+        if (!via1) c += 10;
+        if (c < bestcost || (via1 && !viable)) {
+            bestcost = c;
+            viable = via1;
+        }
     }
 
-    V[di] = pathcost + penalty + bestcost;
+    V[di] = bestcost;
 }
-  """ % (STEER_LIMIT_K, NANGLES, NSPEEDS, GRID_RES, xsize, ysize, VMIN, VMAX, AxMAX, AyMAX, TIMESTEP, homex, homey))
-
+""" % (STEER_LIMIT_K, NANGLES, NSPEEDS, GRID_RES, xsize, ysize, VMIN, VMAX,
+       AxMAX, AyMAX, TIMESTEP, homex, homey))
 
 valueiter = mod.get_function("valueiter")
 V0_gpu = cuda.mem_alloc(NSPEEDS*NANGLES*xsize*ysize*4)
@@ -217,22 +237,21 @@ V = np.zeros((NSPEEDS, NANGLES, ysize, xsize), np.float32) + 1000.
 cuda.memcpy_htod(V0_gpu, V)
 
 ye_in = gpuarray.to_gpu(ye)
-tk_in = gpuarray.to_gpu(tk)
-tang_in = gpuarray.to_gpu(tang)
 del ye
-del tk
-del tang
 
-s = trange(110)
+s = trange(20)
 v0 = np.sum(V, dtype=np.float64)
 for j in s:
     for i in range(20):
-        valueiter(V0_gpu, V0_gpu, ye_in, tk_in, tang_in,
-                  block=(16, 8, 1), grid=(400//16, 200//8, NANGLES*NSPEEDS))
+        valueiter(V0_gpu, V0_gpu, ye_in, block=(16, 8, 1),
+                  grid=(400//16, 200//8, NANGLES*NSPEEDS))
     cuda.memcpy_dtoh(V, V0_gpu)
     v1 = np.sum(V, dtype=np.float64)
     dv = v1 - v0
     v0 = v1
+    if dv == 0:
+        s.set_postfix_str("converged, lap time %f" % np.min(V[0, 0, :, 155]))
+        break
     s.set_postfix_str("dv %f lap time %f" % (dv, np.min(V[0, 0, :, 155])))
 
 savebin(V)
