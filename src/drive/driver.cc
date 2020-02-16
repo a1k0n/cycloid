@@ -10,11 +10,11 @@
 
 #include "drive/config.h"
 #include "drive/controller.h"
-#include "drive/flushthread.h"
 #include "hw/cam/cam.h"
 #include "hw/car/car.h"
 #include "hw/imu/imu.h"
 #include "hw/input/js.h"
+#include "io/flushthread.h"
 #include "localization/ceiltrack/ceiltrack.h"
 #include "ui/display.h"
 

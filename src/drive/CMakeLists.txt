@@ -5,7 +5,6 @@ add_executable(drive
     controller.h
     driver.cc
     driver.h
-    flushthread.h
     main.cc
     obstacle.cc
     obstacle.h

@@ -5,18 +5,17 @@
 #include <string.h>
 #include <sys/time.h>
 
-#include "drive/driver.h"
-#include "hw/cam/cam.h"
+#include "gpsdrive/gpsdrive.h"
 #include "hw/car/car.h"
 #include "hw/gpio/i2c.h"
 #include "hw/imu/imu.h"
 #include "hw/input/js.h"
 #include "inih/cpp/INIReader.h"
+#include "inih/ini.h"
 #include "io/flushthread.h"
-#include "localization/ceiltrack/ceiltrack.h"
 #include "ui/display.h"
 
-Driver *driver_ = NULL;
+GPSDrive *driver_ = NULL;
 void handle_sigint(int signo) {
   if (driver_) driver_->Quit();
 }
@@ -27,8 +26,6 @@ int main(int argc, char *argv[]) {
   IMU *imu;
   UIDisplay display;
   FlushThread flush_thread;
-  CeilingTracker ceiltrack;
-  ObstacleDetector obstacledetector;
 
   signal(SIGINT, handle_sigint);
 
@@ -47,13 +44,9 @@ int main(int argc, char *argv[]) {
     }
   }
 
-  int fps = ini.GetInteger("camera", "fps", 30);
-
   if (!flush_thread.Init()) {
     return 1;
   }
-
-  if (!Camera::Init(640, 480, fps)) return 1;
 
   JoystickInput js;
 
@@ -75,12 +68,7 @@ int main(int argc, char *argv[]) {
     return 1;
   }
 
-  struct timeval tv;
-  gettimeofday(&tv, NULL);
-  fprintf(stderr, "%ld.%06ld camera on @%d fps\n", tv.tv_sec, tv.tv_usec, fps);
-
-  gettimeofday(&tv, NULL);
-  fprintf(stderr, "%ld.%06ld started camera\n", tv.tv_sec, tv.tv_usec);
+  // TODO: init magnetometer here
 
   carhw = CarHW::GetCar(&i2c, ini);
   if (!carhw || !carhw->Init()) {
@@ -98,18 +86,12 @@ int main(int argc, char *argv[]) {
     has_display = false;
   }
 
-  driver_ = new Driver(&flush_thread, imu, has_joystick ? &js : NULL,
-                       has_display ? &display : NULL);
+  driver_ = new GPSDrive(&flush_thread, imu, has_joystick ? &js : NULL,
+                         has_display ? &display : NULL);
 
   if (!driver_->Init(ini)) {
     return 1;
   }
 
-  if (!Camera::StartRecord(driver_)) {
-    return 1;
-  }
-
   carhw->RunMainLoop(driver_);
-
-  Camera::StopRecord();
 }

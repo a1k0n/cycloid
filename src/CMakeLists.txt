@@ -25,6 +25,7 @@ include_directories(userland/host_applications/linux/libs/bcm_host/include)
 
 add_subdirectory(controlloop)
 add_subdirectory(drive)
+add_subdirectory(gpsdrive)
 add_subdirectory(hw/cam)
 add_subdirectory(hw/car)
 add_subdirectory(hw/gpio)
