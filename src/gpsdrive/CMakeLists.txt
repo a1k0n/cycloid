@@ -6,6 +6,6 @@ add_executable(gpsdrive
   gpsdrive.h
 )
 
-target_link_libraries(gpsdrive car input gpio gps imu ui lcd inih pthread pigpio)
+target_link_libraries(gpsdrive car input gpio gps imu mag ui lcd inih pthread pigpio)
 install(TARGETS gpsdrive DESTINATION bin)
 

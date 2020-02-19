@@ -1,3 +1,4 @@
+#include "hw/gpio/i2c.h"
 #include "hw/imu/mag.h"
 #include "hw/imu/hmc5883l.h"
 

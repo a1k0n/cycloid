@@ -11,6 +11,7 @@
 #include "hw/input/input.h"
 
 class FlushThread;
+class Magnetometer;
 class IMU;
 class INIReader;
 class JoystickInput;
@@ -20,7 +21,8 @@ class GPSDrive : public ControlListener,
                  public JoystickListener,
                  public NavListener {
  public:
-  GPSDrive(FlushThread *ft, IMU *imu, JoystickInput *js, UIDisplay *disp);
+  GPSDrive(FlushThread *ft, IMU *imu, Magnetometer *mag, JoystickInput *js,
+           UIDisplay *disp);
   ~GPSDrive();
 
   bool Init(const INIReader &ini);
@@ -46,6 +48,7 @@ class GPSDrive : public ControlListener,
   DriverConfig config_;
   FlushThread *flush_thread_;
   IMU *imu_;
+  Magnetometer *mag_;
   JoystickInput *js_;
   UIDisplay *display_;
   int ubx_fd_;

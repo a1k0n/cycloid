@@ -6,14 +6,15 @@
 
 #include "hw/car/car.h"
 #include "hw/gps/ubx.h"
+#include "hw/imu/mag.h"
 #include "hw/imu/imu.h"
 #include "hw/input/js.h"
 #include "inih/ini.h"
 #include "ui/display.h"
 
-GPSDrive::GPSDrive(FlushThread *ft, IMU *imu, JoystickInput *js,
-                   UIDisplay *disp)
-    : flush_thread_(ft), imu_(imu), js_(js), display_(disp) {
+GPSDrive::GPSDrive(FlushThread *ft, IMU *imu, Magnetometer *mag,
+                   JoystickInput *js, UIDisplay *disp)
+    : flush_thread_(ft), imu_(imu), mag_(mag), js_(js), display_(disp) {
   done_ = false;
   record_fp_ = NULL;
   js_throttle_ = 0;
@@ -56,11 +57,15 @@ bool GPSDrive::OnControlFrame(CarHW *car, float dt) {
     js_->ReadInput(this);
   }
 
-  Eigen::Vector3f accel, gyro;
+  Eigen::Vector3f accel, gyro, mag;
   if (!imu_->ReadIMU(&accel, &gyro)) {
     fprintf(stderr, "imu read failure\n");
     accel = accel.Zero();
     gyro = gyro.Zero();
+  }
+  if (!mag_->ReadMag(&mag)) {
+    fprintf(stderr, "magnetometer read failure\n");
+    mag = mag.Zero();
   }
 
   car->SetControls(2, js_throttle_ / 32768.0, js_steering_ / 32768.0);
@@ -73,9 +78,11 @@ bool GPSDrive::OnControlFrame(CarHW *car, float dt) {
     gettimeofday(&tv, NULL);
     pthread_mutex_lock(&record_mut_);
     fprintf(record_fp_,
-            "%ld.%06ld control %d %d wheel %f %f imu %f %f %f %f %f %f\n",
+            "%ld.%06ld control %d %d wheel %f %f imu %f %f %f %f %f %f mag %f "
+            "%f %f\n",
             tv.tv_sec, tv.tv_usec, js_throttle_, js_steering_, ds, v, accel[0],
-            accel[1], accel[2], gyro[0], gyro[1], gyro[2]);
+            accel[1], accel[2], gyro[0], gyro[1], gyro[2], mag[0], mag[1],
+            mag[2]);
     pthread_mutex_unlock(&record_mut_);
   }
 

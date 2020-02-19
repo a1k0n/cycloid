@@ -9,6 +9,7 @@
 #include "hw/car/car.h"
 #include "hw/gpio/i2c.h"
 #include "hw/imu/imu.h"
+#include "hw/imu/mag.h"
 #include "hw/input/js.h"
 #include "inih/cpp/INIReader.h"
 #include "inih/ini.h"
@@ -22,8 +23,6 @@ void handle_sigint(int signo) {
 
 int main(int argc, char *argv[]) {
   I2C i2c;
-  CarHW *carhw;
-  IMU *imu;
   UIDisplay display;
   FlushThread flush_thread;
 
@@ -62,15 +61,19 @@ int main(int argc, char *argv[]) {
     fprintf(stderr, "joystick not detected, but continuing anyway!\n");
   }
 
-  imu = IMU::GetI2CIMU(i2c, ini);
+  IMU *imu = IMU::GetI2CIMU(i2c, ini);
   if (!imu || !imu->Init()) {
     fprintf(stderr, "unable to connect to IMU; aborting\n");
     return 1;
   }
 
-  // TODO: init magnetometer here
+  Magnetometer *mag = Magnetometer::GetI2CMag(&i2c, ini);
+  if (!mag || !mag->Init()) {
+    fprintf(stderr, "unable to init magnetometer; aborting\n");
+    return 1;
+  }
 
-  carhw = CarHW::GetCar(&i2c, ini);
+  CarHW *carhw = CarHW::GetCar(&i2c, ini);
   if (!carhw || !carhw->Init()) {
     fprintf(stderr, "failed to init car hardware\n");
     return 1;
@@ -86,7 +89,7 @@ int main(int argc, char *argv[]) {
     has_display = false;
   }
 
-  driver_ = new GPSDrive(&flush_thread, imu, has_joystick ? &js : NULL,
+  driver_ = new GPSDrive(&flush_thread, imu, mag, has_joystick ? &js : NULL,
                          has_display ? &display : NULL);
 
   if (!driver_->Init(ini)) {
