@@ -19,6 +19,9 @@ bool GPSDrive::Init(const INIReader &ini) {
     fprintf(stderr, "Loaded driver configuration\n");
   }
 
+  // draw UI screen
+  display_->UpdateStatus("GPSDrive started.");
+
   return true;
 }
 
