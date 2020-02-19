@@ -1,4 +1,6 @@
 #include "hw/car/stm32i2c.h"
+#include "hw/car/car.h"
+#include "inih/cpp/INIReader.h"
 
 static const int STM32HAT_ADDRESS = 0x75;
 
@@ -18,18 +20,44 @@ static const int ADDR_ENCODER_PERIOD = 0x05;
 // 08 - motor tick period (high)
 static const int NUM_ADDRS = 0x07;
 
-STM32Hat::STM32Hat(const I2C &i2cbus) : i2c_(i2cbus) {}
+STM32Hat::STM32Hat(const I2C &i2cbus, const INIReader &ini) : i2c_(i2cbus) {
+  if (!ini.HasValue("car", "meters_per_wheeltick")) {
+    fprintf(stderr,
+            "STM32HatSerial: please specify [car] meters_per_wheeltick\n"
+            " -- cannot use wheel encoder without it\n");
+  }
+  meters_per_tick_ = ini.GetReal("car", "meters_per_wheeltick", 0);
+  ds_ = v_ = 0;
+}
 
 bool STM32Hat::Init() {
   return i2c_.Write(STM32HAT_ADDRESS, 0x00, 0);
 }
 
-bool STM32Hat::SetControls(uint8_t led, int8_t esc, int8_t servo) {
+bool STM32Hat::SetControls(unsigned led, float throttle, float steering) {
+  if (throttle < -1) throttle = -1;
+  else if (throttle > 1) throttle = 1;
+  if (steering < -1) steering = -1;
+  else if (steering > 1) steering = 1;
+
+  int8_t esc = 127.0*throttle;
+  int8_t servo = 127.0*steering;
   uint8_t buf[3] = {led, (uint8_t)esc, (uint8_t)servo};
   return i2c_.Write(STM32HAT_ADDRESS, 0, 3, buf);
 }
 
-bool STM32Hat::GetFeedback(uint16_t *encoder_pos, uint16_t *encoder_dt) {
+bool STM32Hat::GetWheelMotion(float *ds, float *v) {
+  if (meters_per_tick_ == 0) {
+    return false;
+  }
+  *ds = ds_;
+  *v = v_;
+  ds_ = 0;
+  return true;
+}
+
+
+void STM32Hat::RunMainLoop(ControlCallback *cb) {
   const int N = NUM_ADDRS - ADDR_ENCODER_COUNT;
   uint8_t buf[N];
   if (!i2c_.Read(STM32HAT_ADDRESS, ADDR_ENCODER_COUNT, N, buf)) {

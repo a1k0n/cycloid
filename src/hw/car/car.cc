@@ -2,6 +2,7 @@
 
 #include "hw/car/car.h"
 #include "hw/car/pigpio.h"
+#include "hw/car/stm32i2c.h"
 #include "hw/car/stm32rs232.h"
 #include "hw/gpio/i2c.h"
 #include "inih/cpp/INIReader.h"
@@ -10,6 +11,8 @@ CarHW *CarHW::GetCar(I2C *i2c, const INIReader &ini) {
   std::string carif = ini.GetString("car", "interface", "");
   if (carif == "stm32rs232") {
     return new STM32HatSerial(ini);
+  if (carif == "stm32i2c  ") {
+    return new STM32Hat(i2c, ini);
   } else if (carif == "pigpio") {
     return new PiGPIOCar(ini);
   } else {
