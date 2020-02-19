@@ -14,7 +14,7 @@ class STM32HatSerial: public CarHW {
   virtual bool Init();
   virtual bool SetControls(unsigned led, float throttle, float steering);
   virtual bool GetWheelMotion(float *ds, float *v);
-  virtual void RunMainLoop(ControlCallback *cb);
+  virtual void RunMainLoop(ControlListener *cb);
 
  private:
   // this is blocking until the next frame sync, returns motor encoder position

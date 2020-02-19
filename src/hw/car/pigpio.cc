@@ -52,7 +52,7 @@ bool PiGPIOCar::GetWheelMotion(float *, float *) {
   return false;
 }
 
-void PiGPIOCar::RunMainLoop(ControlCallback *cb) {
+void PiGPIOCar::RunMainLoop(ControlListener *cb) {
   timeval t0;
   gettimeofday(&t0, NULL);
   unsigned pwmusec = 1000000 / pwmfreq_;

@@ -4,7 +4,7 @@
 #include "hw/input/js.h"
 #include "inih/cpp/INIReader.h"
 
-class TestInputReceiver : public InputReceiver {
+class TestInputReceiver : public JoystickListener {
   void OnDPadPress(char direction) {
     printf("DPadPress   %c\n", direction);
   }

@@ -109,7 +109,7 @@ static int read_fully(int fd, uint8_t *buf, int ntoread) {
   return 0;
 }
 
-void STM32HatSerial::RunMainLoop(ControlCallback *cb) {
+void STM32HatSerial::RunMainLoop(ControlListener *cb) {
   uint16_t last_wpos, wheeldt;
   timeval last_t;
 

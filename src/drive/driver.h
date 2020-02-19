@@ -19,8 +19,8 @@ class JoystickInput;
 class UIDisplay;
 
 class Driver : public CameraReceiver,
-               public ControlCallback,
-               public InputReceiver {
+               public ControlListener,
+               public JoystickListener {
  public:
   // FIXME(a1k0n): CeilingTracker -> Localizer
   Driver(FlushThread *ft, IMU *imu, JoystickInput *js, UIDisplay *disp);

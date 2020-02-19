@@ -71,7 +71,7 @@ bool JoystickInput::Open(const INIReader &ini) {
   return true;
 }
 
-bool JoystickInput::ReadInput(InputReceiver *receiver) {
+bool JoystickInput::ReadInput(JoystickListener *receiver) {
   bool newvalue = false;
 
   while (fd_ != -1) {

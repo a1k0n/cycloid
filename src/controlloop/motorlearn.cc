@@ -4,7 +4,7 @@
 #include "hw/gpio/i2c.h"
 #include "inih/cpp/INIReader.h"
 
-class ControlRamp : public ControlCallback {
+class ControlRamp : public ControlListener {
   int frameno;
   const int maxframes = 100 * 10;  // ramp over 10 seconds
 
@@ -25,7 +25,7 @@ class ControlRamp : public ControlCallback {
   }
 };
 
-class AccelTest : public ControlCallback {
+class AccelTest : public ControlListener {
   int frameno;
   IMU *imu_;
   const int maxframes = 300;

@@ -64,10 +64,13 @@ bool GPSDrive::OnControlFrame(CarHW *car, float dt) {
 
   car->SetControls(2, js_throttle_ / 32768.0, js_steering_ / 32768.0);
 
+  float ds, v;
+  car->GetWheelMotion(&ds, &v);
+
   timeval tv;
   gettimeofday(&tv, NULL);
-  printf("%ld.%06ld control %d %d imu %f %f %f %f %f %f\n", tv.tv_sec,
-         tv.tv_usec, js_throttle_, js_steering_, accel[0], accel[1], accel[2],
+  printf("%ld.%06ld control %d %d wheel %f %f imu %f %f %f %f %f %f\n", tv.tv_sec,
+         tv.tv_usec, js_throttle_, js_steering_, ds, v, accel[0], accel[1], accel[2],
          gyro[0], gyro[1], gyro[2]);
 
   return !done_;
@@ -91,7 +94,20 @@ void GPSDrive::OnNav(const nav_pvt &msg) {
 }
 
 void GPSDrive::OnDPadPress(char direction) {}
-void GPSDrive::OnButtonPress(char button) {}
+void GPSDrive::OnButtonPress(char button) {
+  timeval tv;
+  gettimeofday(&tv, NULL);
+
+  switch (button) {
+    case '+':  // start button
+      printf("%ld.%06ld start\n", tv.tv_sec, tv.tv_usec);
+      break;
+    case '-':  // stop button
+      printf("%ld.%06ld stop\n", tv.tv_sec, tv.tv_usec);
+      break;
+  }
+}
+
 void GPSDrive::OnButtonRelease(char button) {}
 
 void GPSDrive::OnAxisMove(int axis, int16_t value) {

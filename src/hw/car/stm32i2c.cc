@@ -60,7 +60,7 @@ bool STM32Hat::GetWheelMotion(float *ds, float *v) {
 }
 
 
-void STM32Hat::RunMainLoop(ControlCallback *cb) {
+void STM32Hat::RunMainLoop(ControlListener *cb) {
   const int N = NUM_ADDRS - ADDR_ENCODER_COUNT;
   uint8_t buf[N];
   uint16_t last_wpos;

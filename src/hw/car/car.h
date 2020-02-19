@@ -5,7 +5,7 @@ class CarHW;
 class INIReader;
 class I2C;
 
-class ControlCallback {
+class ControlListener {
  public:
   // Callback returns false to exit main loop
   virtual bool OnControlFrame(CarHW *car, float dt) = 0;
@@ -25,7 +25,7 @@ class CarHW {
 
   // Run control loop at configured frequency (usually 100Hz) until callback
   // returns false.
-  virtual void RunMainLoop(ControlCallback *cb) = 0;
+  virtual void RunMainLoop(ControlListener *cb) = 0;
 
   // Get the car hardware specified by the configuration, optionally accessed over i2c
   static CarHW *GetCar(I2C *i2c, const INIReader &ini);

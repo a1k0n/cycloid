@@ -15,7 +15,7 @@ class STM32Hat: public CarHW {
   virtual bool Init();
   virtual bool SetControls(unsigned led, float throttle, float steering);
   virtual bool GetWheelMotion(float *ds, float *v);
-  virtual void RunMainLoop(ControlCallback *cb);
+  virtual void RunMainLoop(ControlListener *cb);
 
   bool SetControls(uint8_t led, int8_t esc, int8_t servo);
   bool GetFeedback(uint16_t *encoder_pos, uint16_t *encoder_dt);

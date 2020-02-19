@@ -18,7 +18,7 @@ class JoystickInput {
   bool Open(const INIReader &ini);
 
   // Read latest car input from joystick
-  bool ReadInput(InputReceiver *receiver);
+  bool ReadInput(JoystickListener *receiver);
 
   int GetFileDescriptor() { return fd_; }
 

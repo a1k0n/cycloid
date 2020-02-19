@@ -1,7 +1,7 @@
 #ifndef INPUT_H_
 #define INPUT_H_
 
-class InputReceiver {
+class JoystickListener {
  public:
   virtual void OnDPadPress(char direction) {}
   virtual void OnDPadRelease(char direction) {}

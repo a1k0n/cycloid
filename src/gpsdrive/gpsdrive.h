@@ -15,7 +15,7 @@ class INIReader;
 class JoystickInput;
 class UIDisplay;
 
-class GPSDrive : public ControlCallback, public InputReceiver, public NavListener {
+class GPSDrive : public ControlListener, public JoystickListener, public NavListener {
  public:
   GPSDrive(FlushThread *ft, IMU *imu, JoystickInput *js, UIDisplay *disp);
   ~GPSDrive();
@@ -24,14 +24,16 @@ class GPSDrive : public ControlCallback, public InputReceiver, public NavListene
 
   void Quit() { done_ = true; }
 
+  // ControlListener
   virtual bool OnControlFrame(CarHW *car, float dt);
+
+  // NavListener
   virtual void OnNav(const nav_pvt &nav);
 
+  // JoystickListener
   virtual void OnDPadPress(char direction);
-
   virtual void OnButtonPress(char button);
   virtual void OnButtonRelease(char button);
-
   virtual void OnAxisMove(int axis, int16_t value);
 
  private:
@@ -46,7 +48,6 @@ class GPSDrive : public ControlCallback, public InputReceiver, public NavListene
   int16_t js_throttle_, js_steering_;
 
   static void* gpsThread(void*);
-
   pthread_t gps_thread_;
 };
 

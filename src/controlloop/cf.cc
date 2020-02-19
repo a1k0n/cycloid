@@ -24,7 +24,7 @@ const float V_SCALE = WHEEL_DIAMETER*M_PI / DRIVE_RATIO / MOTOR_POLES;
 using Eigen::Vector3f;
 using Eigen::Matrix3f;
 
-class CFIR : public InputReceiver, public ControlCallback {
+class CFIR : public JoystickListener, public ControlListener {
  public:
   CFIR(IMU *imu, JoystickInput *js) {
     imu_ = imu;
