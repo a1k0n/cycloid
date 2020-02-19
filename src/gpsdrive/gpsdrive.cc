@@ -66,8 +66,9 @@ bool GPSDrive::OnControlFrame(CarHW *car, float dt) {
 
   timeval tv;
   gettimeofday(&tv, NULL);
-  printf("%ld.%06ld imu %f %f %f %f %f %f\n", tv.tv_sec, tv.tv_usec, accel[0],
-         accel[1], accel[2], gyro[0], gyro[1], gyro[2]);
+  printf("%ld.%06ld control %d %d imu %f %f %f %f %f %f\n", tv.tv_sec,
+         tv.tv_usec, js_throttle_, js_steering_, accel[0], accel[1], accel[2],
+         gyro[0], gyro[1], gyro[2]);
 
   return !done_;
 }
