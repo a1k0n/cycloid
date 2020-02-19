@@ -79,7 +79,7 @@ void ubx_enable_periodic(int fd, uint8_t msgclass, uint8_t msgid, uint8_t enable
 }
 
 void process_msg(int fd, int msg_class, int msg_id, uint8_t *msgbuf,
-                 int msg_length, void (*on_pvt)(const nav_pvt &)) {
+                 int msg_length, NavListener *listener) {
   int i;
   switch ((msg_class << 8) + msg_id) {
     case 0x0101:  // NAV-POSECEF
@@ -92,7 +92,7 @@ void process_msg(int fd, int msg_class, int msg_id, uint8_t *msgbuf,
     case 0x0107:  // NAV-PVT
     {
       const struct nav_pvt *navmsg = (struct nav_pvt *)msgbuf;
-      on_pvt(*navmsg);
+      listener->OnNav(*navmsg);
       break;
     }
     case 0x0501:  // ACK
@@ -165,7 +165,7 @@ int ubx_open() {
   return fd;
 }
 
-void ubx_read_loop(int fd, void (*on_pvt)(const nav_pvt &)) {
+void ubx_read_loop(int fd, NavListener *listener) {
   uint8_t buf[512];
   static uint8_t msgbuf[512];
   static int read_state = 0;
@@ -249,7 +249,7 @@ void ubx_read_loop(int fd, void (*on_pvt)(const nav_pvt &)) {
                     "cka mismatch (got %02x calc'd %02x)\n",
                     msg_cls, msg_id, buf[i], msg_cka);
           } else {
-            process_msg(fd, msg_cls, msg_id, msgbuf, msg_length, on_pvt);
+            process_msg(fd, msg_cls, msg_id, msgbuf, msg_length, listener);
           }
           read_state = 0;
           break;

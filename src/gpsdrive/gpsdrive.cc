@@ -1,8 +1,11 @@
 #include "gpsdrive/gpsdrive.h"
 
+#include <sys/time.h>
+
 #include <Eigen/Dense>
 
 #include "hw/car/car.h"
+#include "hw/gps/ubx.h"
 #include "hw/imu/imu.h"
 #include "hw/input/js.h"
 #include "inih/ini.h"
@@ -14,9 +17,26 @@ GPSDrive::GPSDrive(FlushThread *ft, IMU *imu, JoystickInput *js,
   done_ = false;
 }
 
+void* GPSDrive::gpsThread(void* arg) {
+  GPSDrive *drive = (GPSDrive*)arg;
+  fprintf(stderr, "GPS receive thread started\n");
+  ubx_read_loop(drive->ubx_fd_, drive);
+  return NULL;
+}
+
 bool GPSDrive::Init(const INIReader &ini) {
   if (config_.Load()) {
     fprintf(stderr, "Loaded driver configuration\n");
+  }
+
+  ubx_fd_ = ubx_open();
+  if (ubx_fd_ == -1) {
+    return false;
+  }
+
+  if (pthread_create(&gps_thread_, NULL, GPSDrive::gpsThread, (void*) this)) {
+    perror("pthread_create");
+    return false;
   }
 
   // draw UI screen
@@ -44,7 +64,29 @@ bool GPSDrive::OnControlFrame(CarHW *car, float dt) {
 
   car->SetControls(2, js_throttle_ / 32768.0, js_steering_ / 32768.0);
 
+  timeval tv;
+  gettimeofday(&tv, NULL);
+  printf("%ld.%06ld imu %f %f %f %f %f %f\n", tv.tv_sec, tv.tv_usec, accel[0],
+         accel[1], accel[2], gyro[0], gyro[1], gyro[2]);
+
   return !done_;
+}
+
+void GPSDrive::OnNav(const nav_pvt &msg) {
+  timeval tv;
+  gettimeofday(&tv, NULL);
+  printf("%ld.%06ld gps ", tv.tv_sec, tv.tv_usec);
+  printf("%04d-%02d-%02dT%02d:%02d:%02d.%09d ", msg.year, msg.month, msg.day,
+         msg.hour, msg.min, msg.sec, msg.nano);
+  printf(
+      "fix:%d numSV:%d %d.%07d +-%dmm %d.%07d +-%dmm height %dmm "
+      "vel %d %d %d +-%d mm/s "
+      "heading motion %d.%05d vehicle %d +- %d.%05d\n",
+      msg.fixType, msg.numSV, msg.lon / 10000000, std::abs(msg.lon) % 10000000,
+      msg.hAcc, msg.lat / 10000000, std::abs(msg.lat) % 10000000, msg.vAcc,
+      msg.height, msg.velN, msg.velE, msg.velD, msg.sAcc, msg.headMot / 100000,
+      std::abs(msg.headMot) % 100000, msg.headVeh, msg.headAcc / 100000,
+      msg.headAcc % 100000);
 }
 
 void GPSDrive::OnDPadPress(char direction) {}

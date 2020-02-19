@@ -53,7 +53,12 @@ struct nav_pvt {
   uint16_t magAcc;  // 1e-2 deg magnetic declination accuracy
 };
 
+class NavListener {
+ public:
+  virtual void OnNav(const nav_pvt &nav)=0;
+};
+
 int ubx_open();
-void ubx_read_loop(int fd, void (*on_pvt)(const nav_pvt&));
+void ubx_read_loop(int fd, NavListener *reader);
 
 #endif  // GPS_UBX_H_
