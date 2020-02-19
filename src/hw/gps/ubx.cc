@@ -9,7 +9,7 @@
 #include <termios.h>
 #include <unistd.h>
 
-#include "gps/ubx.h"
+#include "hw/gps/ubx.h"
 
 const char ubx_port[] = "/dev/serial0";
 #define startup_ioctl_baud B9600
@@ -84,7 +84,7 @@ void process_msg(int fd, int msg_class, int msg_id, uint8_t *msgbuf,
   switch ((msg_class << 8) + msg_id) {
     case 0x0101:  // NAV-POSECEF
     {
-      struct nav_posecef *navmsg = (struct nav_posecef *)msgbuf;
+      // struct nav_posecef *navmsg = (struct nav_posecef *)msgbuf;
       // on_ecef(navmsg);
     } break;
     case 0x0102:  // NAV-POSLLH (ignored)
