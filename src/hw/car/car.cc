@@ -11,7 +11,7 @@ CarHW *CarHW::GetCar(I2C *i2c, const INIReader &ini) {
   std::string carif = ini.GetString("car", "interface", "");
   if (carif == "stm32rs232") {
     return new STM32HatSerial(ini);
-  if (carif == "stm32i2c  ") {
+  } else if (carif == "stm32i2c") {
     return new STM32Hat(i2c, ini);
   } else if (carif == "pigpio") {
     return new PiGPIOCar(ini);

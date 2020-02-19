@@ -10,7 +10,7 @@
 // deprecated, doesn't conform to CarHW spec and no plans to add it now
 class STM32Hat: public CarHW {
  public:
-  STM32Hat(const I2C &i2cbus, const INIReader &ini);
+  STM32Hat(I2C *i2cbus, const INIReader &ini);
 
   virtual bool Init();
   virtual bool SetControls(unsigned led, float throttle, float steering);
@@ -21,7 +21,7 @@ class STM32Hat: public CarHW {
   bool GetFeedback(uint16_t *encoder_pos, uint16_t *encoder_dt);
 
  private:
-  const I2C &i2c_;
+  I2C *i2c_;
   float meters_per_tick_;
   float ds_, v_;
 };

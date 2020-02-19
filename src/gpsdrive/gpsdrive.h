@@ -38,6 +38,8 @@ class GPSDrive : public ControlCallback, public InputReceiver {
   JoystickInput *js_;
   UIDisplay *display_;
   bool done_;
+
+  int16_t js_throttle_, js_steering_;
 };
 
 #endif  // GPSDRIVE_GPSDRIVE_H_

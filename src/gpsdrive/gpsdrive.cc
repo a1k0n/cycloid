@@ -22,6 +22,9 @@ bool GPSDrive::Init(const INIReader &ini) {
   // draw UI screen
   display_->UpdateStatus("GPSDrive started.");
 
+  js_throttle_ = 0;
+  js_steering_ = 0;
+
   return true;
 }
 
@@ -39,11 +42,22 @@ bool GPSDrive::OnControlFrame(CarHW *car, float dt) {
     gyro = gyro.Zero();
   }
 
-  
+  car->SetControls(2, js_throttle_ / 32768.0, js_steering_ / 32768.0);
+
+  return !done_;
 }
 
 void GPSDrive::OnDPadPress(char direction) {}
-
 void GPSDrive::OnButtonPress(char button) {}
 void GPSDrive::OnButtonRelease(char button) {}
-void GPSDrive::OnAxisMove(int axis, int16_t value) {}
+
+void GPSDrive::OnAxisMove(int axis, int16_t value) {
+  switch (axis) {
+    case 1:  // left stick y axis
+      js_throttle_ = -value;
+      break;
+    case 2:  // right stick x axis
+      js_steering_ = value;
+      break;
+  }
+}
