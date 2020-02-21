@@ -6,7 +6,7 @@
 
 
 Magnetometer *Magnetometer::GetI2CMag(I2C *i2c, const INIReader &ini) {
-  std::string magtype = ini.GetString("magnetomter", "device", "");
+  std::string magtype = ini.GetString("magnetometer", "device", "");
   if (magtype.empty()) {
     fprintf(stderr, "please specify [magnetometer] device=xyz in config\n");
     return NULL;

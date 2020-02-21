@@ -13,6 +13,13 @@
 #include "inih/ini.h"
 #include "ui/display.h"
 
+template <typename T>
+T clamp(T x, T min, T max) {
+  if (x < min) x = min;
+  if (x > max) x = max;
+  return x;
+}
+
 GPSDrive::GPSDrive(FlushThread *ft, IMU *imu, Magnetometer *mag,
                    JoystickInput *js, UIDisplay *disp)
     : flush_thread_(ft), imu_(imu), mag_(mag), js_(js), display_(disp) {
@@ -72,7 +79,10 @@ bool GPSDrive::OnControlFrame(CarHW *car, float dt) {
     mag = mag.Zero();
   }
 
-  car->SetControls(2, js_throttle_ / 32768.0, js_steering_ / 32768.0);
+  float u_s = js_steering_ / 32768.0;
+  u_s = clamp(u_s + config_.servo_offset * 0.01f, config_.servo_min * 0.01f,
+              config_.servo_max * 0.01f);
+  car->SetControls(2, js_throttle_ / 32768.0, u_s);
 
   float ds, v;
   car->GetWheelMotion(&ds, &v);
@@ -154,8 +164,10 @@ void GPSDrive::OnButtonPress(char button) {
   switch (button) {
     case '+':  // start button
       StartRecording();
+      break;
     case '-':  // stop button
       StopRecording();
+      break;
     case 'B':
       if (config_.Load()) {
         fprintf(stderr, "config loaded\n");
@@ -235,16 +247,16 @@ void GPSDrive::StartRecording() {
 }
 
 void GPSDrive::StopRecording() {
-  timeval tv;
-  gettimeofday(&tv, NULL);
-
   if (record_fp_ == NULL) {
     return;
   }
 
+  timeval tv;
+  gettimeofday(&tv, NULL);
+
   pthread_mutex_lock(&record_mut_);
-  record_fp_ = NULL;
   fclose(record_fp_);
+  record_fp_ = NULL;
   pthread_mutex_unlock(&record_mut_);
 
   printf("%ld.%06ld stop recording\n", tv.tv_sec, tv.tv_usec);

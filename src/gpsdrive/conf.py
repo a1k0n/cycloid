@@ -58,7 +58,7 @@ class DriverConfig {
 
 #include <stdio.h>
 #include <string.h>
-#include "drive/config.h"
+#include "gpsdrive/config.h"
 
 const char *DriverConfig::confignames[] = {
 ''')

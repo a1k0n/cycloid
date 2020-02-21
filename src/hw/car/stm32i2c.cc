@@ -71,8 +71,9 @@ void STM32Hat::RunMainLoop(ControlListener *cb) {
     // sync to next 100Hz frame
     timeval t;
     gettimeofday(&t, NULL);
-    useconds_t udt = (t.tv_sec - last_t.tv_sec)*1000000 + (t.tv_usec - last_t.tv_usec);
-    usleep(10000 - udt);
+    useconds_t udt =
+        (t.tv_sec - last_t.tv_sec) * 1000000 + (t.tv_usec - last_t.tv_usec);
+    if (udt < 10000) usleep(10000 - udt);
 
     if (!i2c_->Read(STM32HAT_ADDRESS, ADDR_ENCODER_COUNT, N, buf)) {
       return;
@@ -85,9 +86,9 @@ void STM32Hat::RunMainLoop(ControlListener *cb) {
     uint16_t wheel_delta = wpos - last_wpos;
     last_wpos = wpos;
     ds_ += meters_per_tick_ * wheel_delta;
-    if (wheeldt > meters_per_tick_ * 1e6 / 30.0) {
+    if (wheeldt > meters_per_tick_ * 1e6 / 50.0) {
       // occasionally the firmware outputs a ridiculously small but nonzero
-      // wheel period, so restrict to reasonable values (< 30m/s max)
+      // wheel period, so restrict to reasonable values (< 50m/s max)
       v_ = meters_per_tick_ * 1e6 / wheeldt;
     } else if (wheeldt == 0) {
       v_ = 0;
