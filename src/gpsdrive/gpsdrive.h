@@ -44,6 +44,7 @@ class GPSDrive : public ControlListener,
  private:
   void StartRecording();
   void StopRecording();
+  void UpdateDisplay();
 
   DriverConfig config_;
   FlushThread *flush_thread_;
@@ -55,6 +56,9 @@ class GPSDrive : public ControlListener,
   bool done_;
 
   int16_t js_throttle_, js_steering_;
+
+  int config_item_;
+  bool x_down_, y_down_;
 
   static void *gpsThread(void *);
   pthread_t gps_thread_;

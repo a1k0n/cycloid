@@ -4,10 +4,11 @@
 
 #include <Eigen/Dense>
 
+#include "gpsdrive/config.h"
 #include "hw/car/car.h"
 #include "hw/gps/ubx.h"
-#include "hw/imu/mag.h"
 #include "hw/imu/imu.h"
+#include "hw/imu/mag.h"
 #include "hw/input/js.h"
 #include "inih/ini.h"
 #include "ui/display.h"
@@ -19,6 +20,8 @@ GPSDrive::GPSDrive(FlushThread *ft, IMU *imu, Magnetometer *mag,
   record_fp_ = NULL;
   js_throttle_ = 0;
   js_steering_ = 0;
+  config_item_ = 0;
+  x_down_ = y_down_ = false;
   pthread_mutex_init(&record_mut_, NULL);
 }
 
@@ -45,6 +48,7 @@ bool GPSDrive::Init(const INIReader &ini) {
   }
 
   // draw UI screen
+  UpdateDisplay();
   display_->UpdateStatus("GPSDrive started.");
 
   return true;
@@ -111,17 +115,90 @@ void GPSDrive::OnNav(const nav_pvt &msg) {
   }
 }
 
-void GPSDrive::OnDPadPress(char direction) {}
+void GPSDrive::OnDPadPress(char direction) {
+  int16_t *value = ((int16_t *)&config_) + config_item_;
+  switch (direction) {
+    case 'U':
+      --config_item_;
+      if (config_item_ < 0) config_item_ = DriverConfig::N_CONFIGITEMS - 1;
+      fprintf(stderr, "\n");
+      break;
+    case 'D':
+      ++config_item_;
+      if (config_item_ >= DriverConfig::N_CONFIGITEMS) config_item_ = 0;
+      fprintf(stderr, "\n");
+      break;
+    case 'L':
+      if (y_down_) {
+        *value -= 100;
+      } else if (x_down_) {
+        *value -= 10;
+      } else {
+        --*value;
+      }
+      break;
+    case 'R':
+      if (y_down_) {
+        *value += 100;
+      } else if (x_down_) {
+        *value += 10;
+      } else {
+        ++*value;
+      }
+      break;
+  }
+  UpdateDisplay();
+}
+
 void GPSDrive::OnButtonPress(char button) {
   switch (button) {
     case '+':  // start button
       StartRecording();
     case '-':  // stop button
       StopRecording();
+    case 'B':
+      if (config_.Load()) {
+        fprintf(stderr, "config loaded\n");
+        int16_t *values = ((int16_t *)&config_);
+        if (display_) {
+          display_->UpdateConfig(DriverConfig::confignames,
+                                 DriverConfig::N_CONFIGITEMS, config_item_,
+                                 values);
+          display_->UpdateStatus("config loaded", 0xffff);
+        }
+      }
+      fprintf(stderr, "reset kalman filter\n");
+      break;
+    case 'A':
+      if (config_.Save()) {
+        fprintf(stderr, "config saved\n");
+        if (display_) display_->UpdateStatus("config saved", 0xffff);
+      }
+      break;
+    case 'R':
+      if (display_) {
+        display_->NextMode();
+      }
+      break;
+    case 'X':
+      x_down_ = true;
+      break;
+    case 'Y':
+      y_down_ = true;
+      break;
   }
 }
 
-void GPSDrive::OnButtonRelease(char button) {}
+void GPSDrive::OnButtonRelease(char button) {
+  switch(button) {
+    case 'X':
+      x_down_ = false;
+      break;
+    case 'Y':
+      y_down_ = false;
+      break;
+  }
+}
 
 void GPSDrive::OnAxisMove(int axis, int16_t value) {
   switch (axis) {
@@ -172,6 +249,19 @@ void GPSDrive::StopRecording() {
 
   printf("%ld.%06ld stop recording\n", tv.tv_sec, tv.tv_usec);
   display_->UpdateStatus("stop recording");
+}
+
+void GPSDrive::UpdateDisplay() {
+  // hack because all config values are int16_t's in 1/100th steps
+  int16_t *values = ((int16_t *)&config_);
+  int16_t value = values[config_item_];
+  // FIXME: does this work for negative values?
+  fprintf(stderr, "%s %d.%02d\r", DriverConfig::confignames[config_item_], value / 100,
+          value % 100);
+
+  if (display_)
+    display_->UpdateConfig(DriverConfig::confignames,
+                           DriverConfig::N_CONFIGITEMS, config_item_, values);
 }
 
 void GPSDrive::Quit() {
