@@ -19,9 +19,11 @@ static const int ADDR_ENCODER_COUNT = 0x03;
 static const int ADDR_ENCODER_PERIOD = 0x05;
 // 05 - motor tick period (low)
 // 06 - motor tick period (high)
-// 07 - motor tick period (high)
-// 08 - motor tick period (high)
-static const int NUM_ADDRS = 0x07;
+// 07 - radio ch1 period (low)
+// 08 - radio ch1 period (high)
+// 09 - radio ch2 period (low)
+// 0a - radio ch2 period (high)
+static const int NUM_ADDRS = 0x0b;
 
 STM32Hat::STM32Hat(I2C *i2cbus, const INIReader &ini) : i2c_(i2cbus) {
   if (!ini.HasValue("car", "meters_per_wheeltick")) {
@@ -31,6 +33,8 @@ STM32Hat::STM32Hat(I2C *i2cbus, const INIReader &ini) : i2c_(i2cbus) {
   }
   meters_per_tick_ = ini.GetReal("car", "meters_per_wheeltick", 0);
   ds_ = v_ = 0;
+  radio_in_[0] = 0;
+  radio_in_[1] = 0;
 }
 
 bool STM32Hat::Init() {
@@ -83,6 +87,9 @@ void STM32Hat::RunMainLoop(ControlListener *cb) {
     uint16_t wpos = buf[0] + (buf[1] << 8);
     uint16_t wheeldt = buf[2] + (buf[3] << 8);
 
+    radio_in_[0] = buf[4] + (buf[5] << 8);
+    radio_in_[1] = buf[6] + (buf[7] << 8);
+
     uint16_t wheel_delta = wpos - last_wpos;
     last_wpos = wpos;
     ds_ += meters_per_tick_ * wheel_delta;
@@ -99,4 +106,16 @@ void STM32Hat::RunMainLoop(ControlListener *cb) {
     }
     last_t = t;
   }
+}
+
+int STM32Hat::GetRadioInput(float *channelbuf, int maxch) {
+  if (maxch < 2) {
+    return 0;
+  }
+  if (radio_in_[0] < 800 || radio_in_[1] < 800) {
+    return 0;
+  }
+  channelbuf[0] = (radio_in_[0] - 1500) / 500.0f;
+  channelbuf[1] = (radio_in_[1] - 1500) / 500.0f;
+  return 2;
 }

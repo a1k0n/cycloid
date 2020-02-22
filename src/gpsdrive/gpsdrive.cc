@@ -79,10 +79,25 @@ bool GPSDrive::OnControlFrame(CarHW *car, float dt) {
     mag = mag.Zero();
   }
 
-  float u_s = js_steering_ / 32768.0;
-  u_s = clamp(u_s + config_.servo_offset * 0.01f, config_.servo_min * 0.01f,
-              config_.servo_max * 0.01f);
-  car->SetControls(2, js_throttle_ / 32768.0, u_s);
+  bool radio_safe = false;  // runaway protection
+
+  float controls[2] = {0, 0};
+  float u_throttle = 0;
+  float u_steering = 0;
+  if (car->GetRadioInput(controls, 2)) {
+    u_throttle = controls[0];
+    u_steering = controls[1];
+    if (u_throttle > 0.5) {
+      radio_safe = true;
+    }
+  } else {
+    u_throttle = js_throttle_ / 32768.0;
+    u_steering = js_steering_ / 32760.0;
+  }
+
+  float u_s = clamp(u_steering + config_.servo_offset * 0.01f,
+                    config_.servo_min * 0.01f, config_.servo_max * 0.01f);
+  car->SetControls(2, u_throttle, u_s);
 
   float ds, v;
   car->GetWheelMotion(&ds, &v);
@@ -92,9 +107,9 @@ bool GPSDrive::OnControlFrame(CarHW *car, float dt) {
     gettimeofday(&tv, NULL);
     pthread_mutex_lock(&record_mut_);
     fprintf(record_fp_,
-            "%ld.%06ld control %d %d wheel %f %f imu %f %f %f %f %f %f mag %f "
+            "%ld.%06ld control %f %f wheel %f %f imu %f %f %f %f %f %f mag %f "
             "%f %f\n",
-            tv.tv_sec, tv.tv_usec, js_throttle_, js_steering_, ds, v, accel[0],
+            tv.tv_sec, tv.tv_usec, u_throttle, u_steering, ds, v, accel[0],
             accel[1], accel[2], gyro[0], gyro[1], gyro[2], mag[0], mag[1],
             mag[2]);
     pthread_mutex_unlock(&record_mut_);

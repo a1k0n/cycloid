@@ -72,3 +72,8 @@ void PiGPIOCar::RunMainLoop(ControlListener *cb) {
     }
   }
 }
+
+int PiGPIOCar::GetRadioInput(float *channelbuf, int maxch) {
+  // not supported
+  return 0;
+}

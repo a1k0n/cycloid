@@ -23,6 +23,9 @@ class CarHW {
   // since last frame and v to wheel velocity
   virtual bool GetWheelMotion(float *ds, float *v) = 0;
 
+  // returns number of radio input channels received and filled in channelbuf
+  virtual int GetRadioInput(float *channelbuf, int maxch) = 0;
+
   // Run control loop at configured frequency (usually 100Hz) until callback
   // returns false.
   virtual void RunMainLoop(ControlListener *cb) = 0;

@@ -194,3 +194,8 @@ bool STM32HatSerial::AwaitSync(uint16_t *encoder_pos, uint16_t *encoder_dt) {
 
   return true;
 }
+
+int STM32HatSerial::GetRadioInput(float *channelbuf, int maxch) {
+  // not supported
+  return 0;
+}

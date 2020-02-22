@@ -14,6 +14,7 @@ class STM32HatSerial: public CarHW {
   virtual bool Init();
   virtual bool SetControls(unsigned led, float throttle, float steering);
   virtual bool GetWheelMotion(float *ds, float *v);
+  virtual int GetRadioInput(float *channelbuf, int maxch);
   virtual void RunMainLoop(ControlListener *cb);
 
  private:

@@ -15,6 +15,7 @@ class STM32Hat: public CarHW {
   virtual bool Init();
   virtual bool SetControls(unsigned led, float throttle, float steering);
   virtual bool GetWheelMotion(float *ds, float *v);
+  virtual int GetRadioInput(float *channelbuf, int maxch);
   virtual void RunMainLoop(ControlListener *cb);
 
   bool SetControls(uint8_t led, int8_t esc, int8_t servo);
@@ -24,6 +25,7 @@ class STM32Hat: public CarHW {
   I2C *i2c_;
   float meters_per_tick_;
   float ds_, v_;
+  uint16_t radio_in_[2];
 };
 
 #endif  // HW_CAR_STM32I2C_H_
