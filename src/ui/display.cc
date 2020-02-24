@@ -331,20 +331,23 @@ void UIDisplay::UpdateStatus(const char *status, uint16_t color) {
 
 void UIDisplay::UpdateDashboard(float v, float w, int32_t lon, int32_t lat,
                                 int numSV, float gpsv, float mlon, float mlat,
-                                float mag_north, float mag_east) {
+                                float mag_north, float mag_east, float ye,
+                                float psie, float autok, float autov) {
   char numbuf[32];
   uint16_t buf[120 * 320];
   memset(buf, 0, sizeof(buf));
-  snprintf(numbuf, sizeof(numbuf) - 1, "v: %0.2f", v);
+  snprintf(numbuf, sizeof(numbuf) - 1, "v: %0.2f w %+0.3f", v, w);
   DrawTextBig(numbuf, 0, 0, 0xffff, buf);
-  snprintf(numbuf, sizeof(numbuf) - 1, "w: %+0.3f", w);
-  DrawTextBig(numbuf, 0, 20, 0xffff, buf);
   snprintf(numbuf, sizeof(numbuf) - 1, "%+011d %+0.1fm", lon, mlon);
-  DrawTextBig(numbuf, 0, 40, 0xffff, buf);
+  DrawTextBig(numbuf, 0, 20, 0xffff, buf);
   snprintf(numbuf, sizeof(numbuf) - 1, "%+011d %+0.1fm", lat, mlat);
-  DrawTextBig(numbuf, 0, 60, 0xffff, buf);
+  DrawTextBig(numbuf, 0, 40, 0xffff, buf);
   snprintf(numbuf, sizeof(numbuf) - 1, "numSV:%d gpsV %0.1f", numSV, gpsv);
+  DrawTextBig(numbuf, 0, 60, 0xffff, buf);
+  snprintf(numbuf, sizeof(numbuf) - 1, "y %0.1fm psi %+0.1f", ye, psie);
   DrawTextBig(numbuf, 0, 80, 0xffff, buf);
+  snprintf(numbuf, sizeof(numbuf) - 1, "k %0.3f v %0.1f", autok, autov);
+  DrawTextBig(numbuf, 0, 100, 0xffff, buf);
 
   for (int i = 0; i < 20; i++) {
     float x = 318 + i * mag_east;

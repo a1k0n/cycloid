@@ -188,7 +188,8 @@ bool GPSDrive::OnControlFrame(CarHW *car, float dt) {
   if (display_) {
     display_->UpdateDashboard(v, w, lon_, lat_, numSV_, gps_v_.norm(),
                               (lon_ - ref_lon_) * mscale_lon_,
-                              (lat_ - ref_lat_) * mscale_lat_, MagN, MagE);
+                              (lat_ - ref_lat_) * mscale_lat_, MagN, MagE, ye_,
+                              psie_, autodrive_k_, autodrive_v_);
   }
 
   if (!autodrive_ && u_throttle <= 0.05) {
@@ -300,6 +301,8 @@ void GPSDrive::OnNav(const nav_pvt &msg) {
   float vmax = config_.speed_limit * 0.01;
   float kmin = alimit / (vmax*vmax);
   autodrive_v_ = sqrtf(alimit / std::max(kmin, fabsf(kl)));
+  printf("closest track point %f %f\n", cx / mscale_lon_ + ref_lon_,
+         cy / mscale_lat_ + ref_lat_);
 }
 
 void GPSDrive::OnDPadPress(char direction) {
