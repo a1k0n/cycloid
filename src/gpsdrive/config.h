@@ -17,6 +17,9 @@ class DriverConfig {
   int16_t servo_kI;
   int16_t servo_min;
   int16_t servo_max;
+  int16_t steering_kpy;
+  int16_t steering_kvy;
+  int16_t lookahead;
 
   DriverConfig() {
     // Default values
@@ -30,6 +33,9 @@ class DriverConfig {
     servo_kI             = 20;
     servo_min            = -100;
     servo_max            = 100;
+    steering_kpy         = 50;
+    steering_kvy         = 100;
+    lookahead            = 0;
   }
 
   static const char *confignames[];

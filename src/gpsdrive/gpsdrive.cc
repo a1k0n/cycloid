@@ -3,6 +3,8 @@
 #include <sys/time.h>
 
 #include <Eigen/Dense>
+#include <algorithm>
+#include <string>
 
 #include "gpsdrive/config.h"
 #include "hw/car/car.h"
@@ -48,6 +50,10 @@ GPSDrive::GPSDrive(FlushThread *ft, IMU *imu, Magnetometer *mag,
   lat_ = lon_ = 0;
   numSV_ = 0;
 
+  ye_ = psie_ = k_ = 0;
+  autodrive_k_ = 0;
+  autodrive_v_ = 0;
+
   autodrive_ = false;
   x_down_ = y_down_ = false;
   pthread_mutex_init(&record_mut_, NULL);
@@ -82,6 +88,12 @@ bool GPSDrive::Init(const INIReader &ini) {
     fprintf(stderr, "note: they are integers, w/ 7 decimal places\n");
     return false;
   }
+
+  std::string trackfile = ini.GetString("nav", "track", "track.txt");
+  if (!raceline_.LoadTrack(trackfile.c_str())) {
+    return false;
+  }
+
   // compute meters / 1e-7 degree on WGS84 ellipsoid
   // this is an approximation that assumes 0 altitude
   double invf = 298.257223563;                  // WGS84 inverse flattening
@@ -247,9 +259,47 @@ void GPSDrive::OnNav(const nav_pvt &msg) {
   numSV_ = msg.numSV;
   gps_v_ = Eigen::Vector3f(msg.velN, msg.velE, msg.velD) * 0.001f;
 
-  // TODO:
-  //  - lookup closest point on target trajectory
+  // lookup closest point on target trajectory
+  // get east/north meters w.r.t. reference lat/lon
+  float E = (lon_ - ref_lon_) * mscale_lon_;
+  float N = (lat_ - ref_lat_) * mscale_lat_;
+  float cx, cy, Nx, Ny, kl;
+  raceline_.GetTarget(E, N, config_.lookahead, &cx, &cy, &Nx, &Ny, &k_, &kl);
   //  - compute track_ye, track_psie, track_k
+  ye_ = (E - cx)*Nx + (N - cy)*Ny;
+
+  // compute heading angle from GPS velocity
+  // this is fraught with peril if we aren't moving very much; so if we're
+  // stationary, assume we're pointing the right way
+  float C = msg.velE;
+  float S = msg.velN;
+  float mag = sqrtf(C*C + S*S);
+  psie_ = 0;
+  float Cp = 1;  // cos(psi)
+  float Sp = 0;  // sin(psi)
+  if (mag > 2000) {
+    // if we're moving more than 2 m/s, then compute a proper psie
+    C /= mag;
+    S /= mag;
+    Cp = -S * Nx + C * Ny;
+    Sp = S * Ny + C * Nx;
+    psie_ = atan2(Sp, Cp);
+  }
+
+  float omkye = 1 - k_ * ye_;
+  if (fabsf(omkye) < 0.1) {
+    omkye = 0.1 * (std::signbit(omkye) ? -1 : 1);
+  }
+
+  float Kpy = config_.steering_kpy * 0.01;
+  float Kvy = config_.steering_kvy * 0.01;
+  float Cpy = Cp / omkye;
+  autodrive_k_ = Cpy*(ye_*Cpy*(-Kpy*Cp) + Sp*(k_*Sp - Kvy*Cp) + k_);
+
+  float alimit = config_.Ay_limit * 0.01;
+  float vmax = config_.speed_limit * 0.01;
+  float kmin = alimit / (vmax*vmax);
+  autodrive_v_ = sqrtf(alimit / std::max(kmin, fabsf(kl)));
 }
 
 void GPSDrive::OnDPadPress(char direction) {
@@ -314,11 +364,6 @@ void GPSDrive::OnButtonPress(char button) {
         if (display_) display_->UpdateStatus("config saved", 0xffff);
       }
       break;
-    case 'R':
-      if (display_) {
-        display_->NextMode();
-      }
-      break;
     case 'X':
       x_down_ = true;
       break;
@@ -327,6 +372,18 @@ void GPSDrive::OnButtonPress(char button) {
       break;
     case 'H':  // home button: init to start line
       gyro_bias_ = gyro_last_;
+      break;
+    case 'L':
+      if (autodrive_) {
+        fprintf(stderr, "autodrive OFF\n");
+      }
+      autodrive_ = false;
+      break;
+    case 'R':
+      if (!autodrive_) {
+        fprintf(stderr, "autodrive ON\n");
+      }
+      autodrive_ = true;
       break;
   }
 }

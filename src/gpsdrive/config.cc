@@ -15,9 +15,12 @@ const char *DriverConfig::confignames[] = {
   "servo kI",
   "servo min",
   "servo max",
+  "steering kpy",
+  "steering kvy",
+  "lookahead",
 };
 
-const int DriverConfig::N_CONFIGITEMS = 10;
+const int DriverConfig::N_CONFIGITEMS = 13;
 
 bool DriverConfig::Save() {
   FILE *fp = fopen("driverconf.txt", "w");
@@ -35,6 +38,9 @@ bool DriverConfig::Save() {
   fprintf(fp, "servo_kI             %d\n", servo_kI);
   fprintf(fp, "servo_min            %d\n", servo_min);
   fprintf(fp, "servo_max            %d\n", servo_max);
+  fprintf(fp, "steering_kpy         %d\n", steering_kpy);
+  fprintf(fp, "steering_kvy         %d\n", steering_kvy);
+  fprintf(fp, "lookahead            %d\n", lookahead);
 
   fclose(fp);
   return true;
@@ -59,6 +65,9 @@ bool DriverConfig::Load() {
     else if (!strcmp(varbuf, "servo_kI"))          { servo_kI             = valuebuf; }
     else if (!strcmp(varbuf, "servo_min"))         { servo_min            = valuebuf; }
     else if (!strcmp(varbuf, "servo_max"))         { servo_max            = valuebuf; }
+    else if (!strcmp(varbuf, "steering_kpy"))      { steering_kpy         = valuebuf; }
+    else if (!strcmp(varbuf, "steering_kvy"))      { steering_kvy         = valuebuf; }
+    else if (!strcmp(varbuf, "lookahead"))         { lookahead            = valuebuf; }
     else { printf("driverconf.txt: ignoring unknown variable %s\n", varbuf); }
   }
   fclose(fp);

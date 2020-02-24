@@ -8,6 +8,7 @@
 #include <Eigen/Dense>
 
 #include "gpsdrive/config.h"
+#include "gpsdrive/trajtrack.h"
 #include "hw/car/car.h"
 #include "hw/gps/ubx.h"
 #include "hw/input/input.h"
@@ -49,6 +50,7 @@ class GPSDrive : public ControlListener,
   void UpdateDisplay();
 
   DriverConfig config_;
+  TrajectoryTracker raceline_;
   FlushThread *flush_thread_;
   IMU *imu_;
   Magnetometer *mag_;
@@ -73,6 +75,8 @@ class GPSDrive : public ControlListener,
   Eigen::Vector3f gps_v_;
   int numSV_;
   float mscale_lat_, mscale_lon_;
+  float ye_, psie_, k_;
+  float autodrive_k_, autodrive_v_;
 
   int config_item_;
   bool x_down_, y_down_;

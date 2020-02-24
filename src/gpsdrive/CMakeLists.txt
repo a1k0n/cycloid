@@ -4,6 +4,8 @@ add_executable(gpsdrive
   config.cc
   gpsdrive.cc
   gpsdrive.h
+  trajtrack.cc
+  trajtrack.h
 )
 
 target_link_libraries(gpsdrive car input gpio gps imu mag ui lcd inih pthread pigpio)

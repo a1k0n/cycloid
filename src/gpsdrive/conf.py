@@ -9,6 +9,9 @@ servo offset     0.00
 servo kI         0.20
 servo min       -1.00
 servo max        1.00
+steering kpy     0.50
+steering kvy     1.00
+lookahead        0.00
 '''.split('\n')[:-1]
 
 
