@@ -30,6 +30,10 @@ class UIDisplay {
   void UpdateConfig(const char *configmenu[], int nconfigs, int config_item,
                     const int16_t *config_values);
 
+  void UpdateDashboard(float v, float w, int32_t lon, int32_t lat, int numSV,
+                       float gpsv, float mlon, float mlat, float mag_north,
+                       float mag_east);
+
   void UpdateEncoders(uint16_t *wheel_pos);
   void UpdateStatus(const char *status, uint16_t color = 0xffff);
 

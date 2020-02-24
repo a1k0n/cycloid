@@ -10,6 +10,8 @@ class DriverConfig {
   int16_t speed_limit;
   int16_t Ax_limit;
   int16_t Ay_limit;
+  int16_t motor_gain;
+  int16_t motor_kI;
   int16_t servo_rate;
   int16_t servo_offset;
   int16_t servo_kI;
@@ -21,6 +23,8 @@ class DriverConfig {
     speed_limit          = 300;
     Ax_limit             = 800;
     Ay_limit             = 1200;
+    motor_gain           = 13;
+    motor_kI             = 200;
     servo_rate           = 100;
     servo_offset         = 0;
     servo_kI             = 20;

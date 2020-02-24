@@ -329,6 +329,34 @@ void UIDisplay::UpdateStatus(const char *status, uint16_t color) {
   memcpy(scr + 220 * 320, statusbuf_, sizeof(statusbuf_));
 }
 
+void UIDisplay::UpdateDashboard(float v, float w, int32_t lon, int32_t lat,
+                                int numSV, float gpsv, float mlon, float mlat,
+                                float mag_north, float mag_east) {
+  char numbuf[32];
+  uint16_t buf[120 * 320];
+  memset(buf, 0, sizeof(buf));
+  snprintf(numbuf, sizeof(numbuf) - 1, "v: %0.2f", v);
+  DrawTextBig(numbuf, 0, 0, 0xffff, buf);
+  snprintf(numbuf, sizeof(numbuf) - 1, "w: %+0.3f", w);
+  DrawTextBig(numbuf, 0, 20, 0xffff, buf);
+  snprintf(numbuf, sizeof(numbuf) - 1, "%+011d %+0.1fm", lon, mlon);
+  DrawTextBig(numbuf, 0, 40, 0xffff, buf);
+  snprintf(numbuf, sizeof(numbuf) - 1, "%+011d %+0.1fm", lat, mlat);
+  DrawTextBig(numbuf, 0, 60, 0xffff, buf);
+  snprintf(numbuf, sizeof(numbuf) - 1, "numSV:%d gpsV %0.1f", numSV, gpsv);
+  DrawTextBig(numbuf, 0, 80, 0xffff, buf);
+
+  for (int i = 0; i < 20; i++) {
+    float x = 318 + i * mag_east;
+    float y = 20 - i * mag_north;
+    buf[(int)x + ((int)y) * 320] = 0xffe0;
+    buf[(int)x + 1 + ((int)y) * 320] = 0xffe0;
+    buf[(int)x + ((int)y + 1) * 320] = 0xffe0;
+  }
+
+  memcpy(screen_.GetBuffer(), buf, sizeof(buf));
+}
+
 void UIDisplay::NextMode() {
   mode_ = (DisplayMode)(((int)mode_) + 1);
   if (mode_ == NUM_MODES) {

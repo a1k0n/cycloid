@@ -5,6 +5,8 @@
 #include <stdint.h>
 #include <stdio.h>
 
+#include <Eigen/Dense>
+
 #include "gpsdrive/config.h"
 #include "hw/car/car.h"
 #include "hw/gps/ubx.h"
@@ -56,6 +58,21 @@ class GPSDrive : public ControlListener,
   bool done_;
 
   int16_t js_throttle_, js_steering_;
+
+  bool autodrive_;
+  float ierr_k_;
+  float ierr_v_;
+  float last_v_, last_w_;
+  float last_u_esc_;
+  int brake_count_;
+
+  Eigen::Vector3f gyro_last_, gyro_bias_;
+
+  int32_t lat_, lon_;
+  int32_t ref_lat_, ref_lon_;
+  Eigen::Vector3f gps_v_;
+  int numSV_;
+  float mscale_lat_, mscale_lon_;
 
   int config_item_;
   bool x_down_, y_down_;

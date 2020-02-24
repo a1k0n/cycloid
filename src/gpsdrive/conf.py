@@ -2,6 +2,8 @@ configitems = '''\
 speed limit      3.00
 Ax limit         8.00
 Ay limit        12.00
+motor gain       0.13
+motor kI         2.00
 servo rate       1.00
 servo offset     0.00
 servo kI         0.20
