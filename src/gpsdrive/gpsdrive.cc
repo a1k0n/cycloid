@@ -19,8 +19,7 @@
 const Eigen::Vector3f MAGCALN(3.202, -0.3750, 0.8825);
 const Eigen::Vector3f MAGCALE(1.091, 2.869, -0.6832);
 
-template <typename T>
-T clamp(T x, T min, T max) {
+float clamp(float x, float min, float max) {
   if (x < min) x = min;
   if (x > max) x = max;
   return x;
@@ -139,6 +138,11 @@ bool GPSDrive::OnControlFrame(CarHW *car, float dt) {
   MagN /= renorm;
   MagE /= renorm;
 
+  const float srv_off = 0.01f * config_.servo_offset;
+  const float srv_ratio =
+      100.f / (config_.servo_rate == 0 ? 100 : config_.servo_rate);
+  const float srv_kI = 0.01f * config_.servo_kI;
+
   bool radio_safe = false;  // runaway protection
 
   float controls[2] = {0, 0};
@@ -155,8 +159,8 @@ bool GPSDrive::OnControlFrame(CarHW *car, float dt) {
     u_steering = js_steering_ / 32760.0;
   }
 
-  float u_s = clamp(u_steering + config_.servo_offset * 0.01f,
-                    config_.servo_min * 0.01f, config_.servo_max * 0.01f);
+  float u_s = clamp(u_steering + srv_off, config_.servo_min * 0.01f,
+                    config_.servo_max * 0.01f);
 
   float ds = 0, v = 0;
   float w = gyro[2];
@@ -168,8 +172,10 @@ bool GPSDrive::OnControlFrame(CarHW *car, float dt) {
     // so that we "pump" the brakes so we can see how fast we're going
     // v = last_v_ * 0.95;
     // this isn't going to work
-    v = last_v_ * 0.95;
+    // v = last_v_ * 0.95;
     // we need to use GPS velocity here
+
+    v = gps_v_.norm();
   }
 
   if (record_fp_ != NULL) {
@@ -211,6 +217,24 @@ bool GPSDrive::OnControlFrame(CarHW *car, float dt) {
   }
 
   float target_v = config_.speed_limit * 0.01 * clamp(u_throttle, 0.f, 1.f);
+  float target_k = u_steering;
+
+  // if autodriving, override target velocity and steering
+  if (autodrive_) {
+    target_v = autodrive_v_;
+    target_k = autodrive_k_;
+
+    if (v > 1.0) {
+      float kerr = target_k - w / v;
+      ierr_k_ = clamp(ierr_k_ + dt * srv_kI * kerr, -2.f, 2.f);
+    } else {
+      ierr_k_ = 0;
+    }
+
+    u_s = clamp((target_k + ierr_k_) * srv_ratio + srv_off,
+                config_.servo_min * 0.01f, config_.servo_max * 0.01f);
+  }
+
   float vgain = 0.01 * config_.motor_gain;
   float kI = 0.01 * config_.motor_kI;
   float verr = target_v - v;
@@ -301,8 +325,11 @@ void GPSDrive::OnNav(const nav_pvt &msg) {
   float vmax = config_.speed_limit * 0.01;
   float kmin = alimit / (vmax*vmax);
   autodrive_v_ = sqrtf(alimit / std::max(kmin, fabsf(kl)));
+
+#if 0
   printf("closest track point %f %f\n", cx / mscale_lon_ + ref_lon_,
          cy / mscale_lat_ + ref_lat_);
+#endif
 }
 
 void GPSDrive::OnDPadPress(char direction) {
