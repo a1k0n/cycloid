@@ -344,7 +344,7 @@ void UIDisplay::UpdateDashboard(float v, float w, int32_t lon, int32_t lat,
   DrawTextBig(numbuf, 0, 40, 0xffff, buf);
   snprintf(numbuf, sizeof(numbuf) - 1, "numSV:%d gpsV %0.1f", numSV, gpsv);
   DrawTextBig(numbuf, 0, 60, 0xffff, buf);
-  snprintf(numbuf, sizeof(numbuf) - 1, "y %0.1fm psi %+0.1f", ye, psie);
+  snprintf(numbuf, sizeof(numbuf) - 1, "y %0.1fm psi %+0.3f", ye, psie);
   DrawTextBig(numbuf, 0, 80, 0xffff, buf);
   snprintf(numbuf, sizeof(numbuf) - 1, "k %0.3f v %0.1f", autok, autov);
   DrawTextBig(numbuf, 0, 100, 0xffff, buf);

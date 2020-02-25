@@ -151,7 +151,7 @@ bool GPSDrive::OnControlFrame(CarHW *car, float dt) {
   if (car->GetRadioInput(controls, 2)) {
     u_throttle = controls[0];
     u_steering = controls[1];
-    if (u_throttle > 0.5) {
+    if (u_throttle > 0.15) {
       radio_safe = true;
     }
   } else {
@@ -162,10 +162,11 @@ bool GPSDrive::OnControlFrame(CarHW *car, float dt) {
   float u_s = clamp(u_steering + srv_off, config_.servo_min * 0.01f,
                     config_.servo_max * 0.01f);
 
-  float ds = 0, v = 0;
+  float ds = 0, wheelv = 0;
   float w = gyro[2];
-  car->GetWheelMotion(&ds, &v);
+  car->GetWheelMotion(&ds, &wheelv);
 
+  float v = wheelv;
   if (brake_count_ > 0) {
     brake_count_--;
     // dumb assumption: we rapidly decay speed estimate when we hit the brake
@@ -212,28 +213,34 @@ bool GPSDrive::OnControlFrame(CarHW *car, float dt) {
   }
 
   if (autodrive_ && !radio_safe) {
-    car->SetControls(2, 0, 0);
+    if (u_throttle < -0.5) {
+      autodrive_ = false;
+    }
+    car->SetControls(2, -1, 0);
     return !done_;
   }
 
+  float max_throttle = 1.0;
   float target_v = config_.speed_limit * 0.01 * clamp(u_throttle, 0.f, 1.f);
-  float target_k = u_steering;
+  // float target_k = u_steering;
+  float target_k = -u_steering * 2;
 
   // if autodriving, override target velocity and steering
   if (autodrive_) {
-    target_v = autodrive_v_;
+    max_throttle = u_throttle;
+    target_v = clamp(autodrive_v_, 0, config_.speed_limit * 0.01f);
     target_k = autodrive_k_;
-
-    if (v > 1.0) {
-      float kerr = target_k - w / v;
-      ierr_k_ = clamp(ierr_k_ + dt * srv_kI * kerr, -2.f, 2.f);
-    } else {
-      ierr_k_ = 0;
-    }
-
-    u_s = clamp((target_k + ierr_k_) * srv_ratio + srv_off,
-                config_.servo_min * 0.01f, config_.servo_max * 0.01f);
   }
+
+  if (v > 1.0) {
+    float kerr = target_k - w / v;
+    ierr_k_ = clamp(ierr_k_ + dt * srv_kI * kerr, -2.f, 2.f);
+  } else {
+    ierr_k_ = 0;
+  }
+
+  u_s = clamp((target_k + ierr_k_) * srv_ratio + srv_off,
+              config_.servo_min * 0.01f, config_.servo_max * 0.01f);
 
   float vgain = 0.01 * config_.motor_gain;
   float kI = 0.01 * config_.motor_kI;
@@ -243,9 +250,9 @@ bool GPSDrive::OnControlFrame(CarHW *car, float dt) {
     ierr_v_ += verr * dt;
   }
   if (target_v < v * 0.9) {
-    u = clamp(u, -1.f, 1.f);
+    u = clamp(u, -1.f, max_throttle);
   } else {
-    u = clamp(u, 0.f, 1.f);
+    u = clamp(u, 0.f, max_throttle);
   }
   car->SetControls(1, u, u_s);
 
@@ -259,26 +266,6 @@ bool GPSDrive::OnControlFrame(CarHW *car, float dt) {
 }
 
 void GPSDrive::OnNav(const nav_pvt &msg) {
-  if (record_fp_ != NULL) {
-    timeval tv;
-    gettimeofday(&tv, NULL);
-    pthread_mutex_lock(&record_mut_);
-    fprintf(record_fp_, "%ld.%06ld gps ", tv.tv_sec, tv.tv_usec);
-    fprintf(record_fp_, "%04d-%02d-%02dT%02d:%02d:%02d.%09d ", msg.year,
-            msg.month, msg.day, msg.hour, msg.min, msg.sec, msg.nano);
-    fprintf(record_fp_,
-        "fix:%d numSV:%d %d.%07d +-%dmm %d.%07d +-%dmm height %dmm "
-        "vel %d %d %d +-%d mm/s "
-        "heading motion %d.%05d vehicle %d +- %d.%05d\n",
-        msg.fixType, msg.numSV, msg.lon / 10000000,
-        std::abs(msg.lon) % 10000000, msg.hAcc, msg.lat / 10000000,
-        std::abs(msg.lat) % 10000000, msg.vAcc, msg.height, msg.velN, msg.velE,
-        msg.velD, msg.sAcc, msg.headMot / 100000,
-        std::abs(msg.headMot) % 100000, msg.headVeh, msg.headAcc / 100000,
-        msg.headAcc % 100000);
-    pthread_mutex_unlock(&record_mut_);
-  }
-
   lat_ = msg.lat;
   lon_ = msg.lon;
   numSV_ = msg.numSV;
@@ -302,8 +289,8 @@ void GPSDrive::OnNav(const nav_pvt &msg) {
   psie_ = 0;
   float Cp = 1;  // cos(psi)
   float Sp = 0;  // sin(psi)
-  if (mag > 2000) {
-    // if we're moving more than 2 m/s, then compute a proper psie
+  if (mag > 300) {
+    // if we're moving more than 0.3 m/s, then compute a proper psie
     C /= mag;
     S /= mag;
     Cp = -S * Nx + C * Ny;
@@ -327,9 +314,31 @@ void GPSDrive::OnNav(const nav_pvt &msg) {
   autodrive_v_ = sqrtf(alimit / std::max(kmin, fabsf(kl)));
 
 #if 0
-  printf("closest track point %f %f\n", cx / mscale_lon_ + ref_lon_,
-         cy / mscale_lat_ + ref_lat_);
+  printf("closest track point %f %f -> %f %f (%f %f)\n", cx, cy, cx / mscale_lon_ + ref_lon_,
+         cy / mscale_lat_ + ref_lat_, mscale_lon_, mscale_lat_);
 #endif
+
+  if (record_fp_ != NULL) {
+    timeval tv;
+    gettimeofday(&tv, NULL);
+    pthread_mutex_lock(&record_mut_);
+    fprintf(record_fp_, "%ld.%06ld gps ", tv.tv_sec, tv.tv_usec);
+    fprintf(record_fp_, "%04d-%02d-%02dT%02d:%02d:%02d.%09d ", msg.year,
+            msg.month, msg.day, msg.hour, msg.min, msg.sec, msg.nano);
+    fprintf(record_fp_,
+        "fix:%d numSV:%d %d.%07d +-%dmm %d.%07d +-%dmm height %dmm "
+        "vel %d %d %d +-%d mm/s "
+        "heading motion %d.%05d vehicle %d +- %d.%05d\n",
+        msg.fixType, msg.numSV, msg.lon / 10000000,
+        std::abs(msg.lon) % 10000000, msg.hAcc, msg.lat / 10000000,
+        std::abs(msg.lat) % 10000000, msg.vAcc, msg.height, msg.velN, msg.velE,
+        msg.velD, msg.sAcc, msg.headMot / 100000,
+        std::abs(msg.headMot) % 100000, msg.headVeh, msg.headAcc / 100000,
+        msg.headAcc % 100000);
+    fprintf(record_fp_, "%ld.%06ld nav %0.3f %0.3f %f kv %0.2f %0.2f",
+            tv.tv_sec, tv.tv_usec, ye_, psie_, k_, autodrive_k_, autodrive_v_);
+    pthread_mutex_unlock(&record_mut_);
+  }
 }
 
 void GPSDrive::OnDPadPress(char direction) {
@@ -406,12 +415,14 @@ void GPSDrive::OnButtonPress(char button) {
     case 'L':
       if (autodrive_) {
         fprintf(stderr, "autodrive OFF\n");
+        if (display_) display_->UpdateStatus("autodrive OFF", 0xffff);
       }
       autodrive_ = false;
       break;
     case 'R':
       if (!autodrive_) {
         fprintf(stderr, "autodrive ON\n");
+        if (display_) display_->UpdateStatus("autodrive ON", 0xffff);
       }
       autodrive_ = true;
       break;
