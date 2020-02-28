@@ -16,9 +16,6 @@
 #include "inih/ini.h"
 #include "ui/display.h"
 
-const Eigen::Vector3f MAGCALN(3.202, -0.3750, 0.8825);
-const Eigen::Vector3f MAGCALE(1.091, 2.869, -0.6832);
-
 float clamp(float x, float min, float max) {
   if (x < min) x = min;
   if (x > max) x = max;
@@ -42,16 +39,19 @@ GPSDrive::GPSDrive(FlushThread *ft, IMU *imu, Magnetometer *mag,
   config_item_ = 0;
   ierr_k_ = 0;
   ierr_v_ = 0;
-  last_u_esc_ = 0;
   brake_count_ = 0;
   last_v_ = 0;
   last_w_ = 0;
+  last_target_k_ = 0;
   lat_ = lon_ = 0;
   numSV_ = 0;
 
   ye_ = psie_ = k_ = 0;
   autodrive_k_ = 0;
   autodrive_v_ = 0;
+
+  control_hist_ptr_ = 0;
+  state_hist_ptr_ = 0;
 
   autodrive_ = false;
   x_down_ = y_down_ = false;
@@ -113,6 +113,89 @@ bool GPSDrive::Init(const INIReader &ini) {
 
 GPSDrive::~GPSDrive() {}
 
+void GPSDrive::UpdateControls(float in_throttle, float in_steering,
+                              bool radio_safe, const StateObservation &obs,
+                              float dt, ControlOutput *out) {
+  const float srv_off = 0.001f * config_.servo_offset;
+  const float srv_ratio =
+      100.f / (config_.servo_rate == 0 ? 100 : config_.servo_rate);
+  const float srv_kI = 0.01f * config_.servo_kI;
+
+  float u_s = clamp(in_steering + srv_off, config_.servo_min * 0.01f,
+                    config_.servo_max * 0.01f);
+
+  if (!autodrive_ && in_throttle <= 0.05) {
+    out->Set(2, in_throttle, u_s);
+    if (in_throttle < -0.05) {
+      brake_count_ = 10;
+    }
+    ierr_v_ = 0;
+    ierr_k_ = 0;
+    last_v_ = obs.vx;
+    last_w_ = obs.w;
+    return;
+  }
+
+  if (autodrive_ && !radio_safe) {
+    if (in_throttle < -0.5) {
+      autodrive_ = false;
+    }
+    out->Set(2, -1, 0);
+    return;
+  }
+
+  float max_throttle = 1.0;
+  float target_v = config_.speed_limit * 0.01 * clamp(in_throttle, 0.f, 1.f);
+  // float target_k = u_steering;
+  float target_k = -in_steering * 1;
+
+  // if autodriving, override target velocity and steering
+  if (autodrive_) {
+    // joystick control only goes up to 0.8, so give it a little boost
+    max_throttle = in_throttle * 1.3;
+    target_v = clamp(autodrive_v_, 0, config_.speed_limit * 0.01f);
+    target_k = autodrive_k_;
+  }
+
+  if (obs.vx > 1.0) {
+    // use a delayed target_k here so we're comparing against the yaw it
+    // induced last control frame
+
+    // 1 = t*kerr*srv_kI
+    // t = 1/(kerr * srv_kI)
+    // set srv_kI to, like, 10 or so except w is a bit noisy
+    // i think it's already set to 2?
+    float kerr = last_target_k_ - obs.w / obs.vx;
+    ierr_k_ = clamp(ierr_k_ + dt * srv_kI * kerr, -0.5f, 0.5f);
+  } else {
+    ierr_k_ = 0;
+  }
+
+  u_s = clamp((target_k + ierr_k_) * srv_ratio + srv_off,
+              config_.servo_min * 0.01f, config_.servo_max * 0.01f);
+
+  float vgain = 0.01 * config_.motor_gain;
+  float kI = 0.01 * config_.motor_kI;
+  float verr = target_v - obs.vx;
+  float u = vgain * verr + kI * (ierr_v_ + verr * dt);
+  if (u > -1 && u < 1) {
+    ierr_v_ += verr * dt;
+  }
+  if (target_v < obs.vx * 0.9) {
+    u = clamp(u, -1.f, max_throttle);
+  } else {
+    u = clamp(u, 0.f, max_throttle);
+  }
+  out->Set(1, u, u_s);
+
+  last_v_ = obs.vx;
+  last_w_ = obs.w;
+  last_target_k_ = target_k;
+  if (u < -0.05) {
+    brake_count_ = 10;
+  }
+}
+
 bool GPSDrive::OnControlFrame(CarHW *car, float dt) {
   if (js_) {
     js_->ReadInput(this);
@@ -128,39 +211,36 @@ bool GPSDrive::OnControlFrame(CarHW *car, float dt) {
   }
   gyro -= gyro_bias_;
 
+  mag = mag.Zero();
+  // disable magnetometer for now
+#if 0
   if (!mag_->ReadMag(&mag)) {
     fprintf(stderr, "magnetometer read failure\n");
-    mag = mag.Zero();
   }
   float MagN = mag.dot(MAGCALN);
   float MagE = mag.dot(MAGCALE);
   float renorm = sqrtf(MagN*MagN + MagE*MagE);
   MagN /= renorm;
   MagE /= renorm;
-
-  const float srv_off = 0.01f * config_.servo_offset;
-  const float srv_ratio =
-      100.f / (config_.servo_rate == 0 ? 100 : config_.servo_rate);
-  const float srv_kI = 0.01f * config_.servo_kI;
+#else
+  float MagN = 0, MagE = 0;
+#endif
 
   bool radio_safe = false;  // runaway protection
 
   float controls[2] = {0, 0};
-  float u_throttle = 0;
-  float u_steering = 0;
+  float in_throttle = 0;
+  float in_steering = 0;
   if (car->GetRadioInput(controls, 2)) {
-    u_throttle = controls[0];
-    u_steering = controls[1];
-    if (u_throttle > 0.15) {
+    in_throttle = controls[0];
+    in_steering = controls[1];
+    if (in_throttle > 0.15) {
       radio_safe = true;
     }
   } else {
-    u_throttle = js_throttle_ / 32768.0;
-    u_steering = js_steering_ / 32760.0;
+    in_throttle = js_throttle_ / 32768.0;
+    in_steering = js_steering_ / 32760.0;
   }
-
-  float u_s = clamp(u_steering + srv_off, config_.servo_min * 0.01f,
-                    config_.servo_max * 0.01f);
 
   float ds = 0, wheelv = 0;
   float w = gyro[2];
@@ -179,16 +259,23 @@ bool GPSDrive::OnControlFrame(CarHW *car, float dt) {
     v = gps_v_.norm();
   }
 
+  ControlOutput out;
+  StateObservation obs;
+  obs.vx = v;
+  obs.w = gyro[2];
+  UpdateControls(in_throttle, in_steering, radio_safe, obs, dt, &out);
+  car->SetControls(out.leds, out.u_esc, out.u_servo);
+
   if (record_fp_ != NULL) {
     timeval tv;
     gettimeofday(&tv, NULL);
     pthread_mutex_lock(&record_mut_);
     fprintf(record_fp_,
             "%ld.%06ld control %f %f wheel %f %f imu %f %f %f %f %f %f mag %f "
-            "%f %f\n",
-            tv.tv_sec, tv.tv_usec, u_throttle, u_steering, ds, v, accel[0],
+            "%f %f windup_vk %f %f\n",
+            tv.tv_sec, tv.tv_usec, out.u_esc, out.u_servo, ds, v, accel[0],
             accel[1], accel[2], gyro[0], gyro[1], gyro[2], mag[0], mag[1],
-            mag[2]);
+            mag[2], ierr_v_, ierr_k_);
     pthread_mutex_unlock(&record_mut_);
   }
 
@@ -199,69 +286,6 @@ bool GPSDrive::OnControlFrame(CarHW *car, float dt) {
                               psie_, autodrive_k_, autodrive_v_);
   }
 
-  if (!autodrive_ && u_throttle <= 0.05) {
-    car->SetControls(2, u_throttle, u_s);
-    if (u_throttle < -0.05) {
-      brake_count_ = 5;
-    }
-    ierr_v_ = 0;
-    ierr_k_ = 0;
-    last_v_ = v;
-    last_w_ = w;
-    last_u_esc_ = u_throttle;
-    return !done_;
-  }
-
-  if (autodrive_ && !radio_safe) {
-    if (u_throttle < -0.5) {
-      autodrive_ = false;
-    }
-    car->SetControls(2, -1, 0);
-    return !done_;
-  }
-
-  float max_throttle = 1.0;
-  float target_v = config_.speed_limit * 0.01 * clamp(u_throttle, 0.f, 1.f);
-  // float target_k = u_steering;
-  float target_k = -u_steering * 2;
-
-  // if autodriving, override target velocity and steering
-  if (autodrive_) {
-    max_throttle = u_throttle;
-    target_v = clamp(autodrive_v_, 0, config_.speed_limit * 0.01f);
-    target_k = autodrive_k_;
-  }
-
-  if (v > 1.0) {
-    float kerr = target_k - w / v;
-    ierr_k_ = clamp(ierr_k_ + dt * srv_kI * kerr, -2.f, 2.f);
-  } else {
-    ierr_k_ = 0;
-  }
-
-  u_s = clamp((target_k + ierr_k_) * srv_ratio + srv_off,
-              config_.servo_min * 0.01f, config_.servo_max * 0.01f);
-
-  float vgain = 0.01 * config_.motor_gain;
-  float kI = 0.01 * config_.motor_kI;
-  float verr = target_v - v;
-  float u = vgain * verr + kI * (ierr_v_ + verr * dt);
-  if (u > -1 && u < 1) {
-    ierr_v_ += verr * dt;
-  }
-  if (target_v < v * 0.9) {
-    u = clamp(u, -1.f, max_throttle);
-  } else {
-    u = clamp(u, 0.f, max_throttle);
-  }
-  car->SetControls(1, u, u_s);
-
-  last_v_ = v;
-  last_w_ = w;
-  last_u_esc_ = u;
-  if (u < -0.05) {
-    brake_count_ = 5;
-  }
   return !done_;
 }
 
@@ -335,7 +359,7 @@ void GPSDrive::OnNav(const nav_pvt &msg) {
         msg.velD, msg.sAcc, msg.headMot / 100000,
         std::abs(msg.headMot) % 100000, msg.headVeh, msg.headAcc / 100000,
         msg.headAcc % 100000);
-    fprintf(record_fp_, "%ld.%06ld nav %0.3f %0.3f %f kv %0.2f %0.2f",
+    fprintf(record_fp_, "%ld.%06ld nav %0.4f %0.4f %f kv %0.5f %0.4f\n",
             tv.tv_sec, tv.tv_usec, ye_, psie_, k_, autodrive_k_, autodrive_v_);
     pthread_mutex_unlock(&record_mut_);
   }

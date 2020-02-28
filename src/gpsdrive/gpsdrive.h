@@ -20,6 +20,29 @@ class INIReader;
 class JoystickInput;
 class UIDisplay;
 
+struct ControlOutput {
+  uint8_t leds;
+  float u_esc, u_servo;
+
+  ControlOutput() {
+    leds = 0;
+    u_esc = 0;
+    u_servo = 0;
+  }
+
+  void Set(uint8_t leds, float u_esc, float u_servo) {
+    this->leds = leds;
+    this->u_esc = u_esc;
+    this->u_servo = u_servo;
+  }
+};
+
+struct StateObservation {
+  float vx;  // forward velocity
+  float w;  // yaw rate
+  StateObservation() { vx = 0; w = 0; }
+};
+
 class GPSDrive : public ControlListener,
                  public JoystickListener,
                  public NavListener {
@@ -45,6 +68,10 @@ class GPSDrive : public ControlListener,
   virtual void OnAxisMove(int axis, int16_t value);
 
  private:
+  void UpdateControls(float in_throttle, float in_steering, bool radio_safe,
+                      const StateObservation &obs, float dt,
+                      ControlOutput *out);
+
   void StartRecording();
   void StopRecording();
   void UpdateDisplay();
@@ -61,23 +88,37 @@ class GPSDrive : public ControlListener,
 
   int16_t js_throttle_, js_steering_;
 
+  // controller state
   bool autodrive_;
   float ierr_k_;
   float ierr_v_;
   float last_v_, last_w_;
-  float last_u_esc_;
+  // TODO: circular buffer of observations, so we determine yaw rate
+  // error from ~11 frames ago
+  float last_target_k_;
   int brake_count_;
 
+  // IMU state
   Eigen::Vector3f gyro_last_, gyro_bias_;
 
+  // GPS state
   int32_t lat_, lon_;
   int32_t ref_lat_, ref_lon_;
   Eigen::Vector3f gps_v_;
   int numSV_;
   float mscale_lat_, mscale_lon_;
+
+  // TODO: remove these and compute in control frame
+  // replace with float x_, y_, theta_;
   float ye_, psie_, k_;
   float autodrive_k_, autodrive_v_;
 
+  ControlOutput control_hist_[16];
+  int control_hist_ptr_;
+  StateObservation state_hist_[16];
+  int state_hist_ptr_;
+
+  // game controller / display state
   int config_item_;
   bool x_down_, y_down_;
 
