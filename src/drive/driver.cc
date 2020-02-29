@@ -101,7 +101,7 @@ bool Driver::Init(const INIReader &ini) {
   float fx, fy, cx, cy, k1;
   std::string camcal = ini.GetString("camera", "calibration", "");
   if (camcal == "" || sscanf(camcal.c_str(), "%f %f %f %f %f", &fx, &fy, &cx, &cy, &k1) != 5) {
-    fprintf(stderr, "missing or invalid [camera].calibration in .ini file!");
+    fprintf(stderr, "missing or invalid [camera].calibration in .ini file!\n");
     fprintf(stderr, "syntax:\n[camera]\ncalibration=fx fy cx cy k1\n");
     return false;
   }
