@@ -105,7 +105,8 @@ bool Driver::Init(const INIReader &ini) {
     fprintf(stderr, "syntax:\n[camera]\ncalibration=fx fy cx cy k1\n");
     return false;
   }
-  lens_.SetCalibration(fx, fy, cx, cy, k1);
+  // adjust for 640x480
+  lens_.SetCalibration(fx/4.05, fy/4.05, cx/4.05, cy/4.05, k1);
   float camrot = ini.GetReal("camera", "rotation", 22) * M_PI / 180.0;
 
   if (!ceiltrack_.Init(lens_, camrot)) {

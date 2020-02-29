@@ -28,6 +28,7 @@ bool UIDisplay::Init() {
     fclose(fp);
   }
 
+  // TODO: compute this from lens calibration
   fp = fopen("frontlut.bin", "rb");
   if (!fp) {
     perror("no front lookup table (frontlut.bin)");
@@ -173,12 +174,13 @@ void UIDisplay::UpdateCameraView(
         int x = gridpts[i].first;
         int y = gridpts[i].second;
         if (x < 1 || x >= 319 || y < 1 || y > 239) {
-          buf[x + y*320 - 320] = c;
-          buf[x + y*320 - 1] = c;
-          buf[x + y*320] = c;
-          buf[x + y*320 + 1] = c;
-          buf[x + y*320 + 320] = c;
+          continue;
         }
+        buf[x + y * 320 - 320] = c;
+        buf[x + y * 320 - 1] = c;
+        buf[x + y * 320] = c;
+        buf[x + y * 320 + 1] = c;
+        buf[x + y * 320 + 320] = c;
       }
       scr = screen_.GetBuffer();
       memcpy(scr, buf, 320*240*2);

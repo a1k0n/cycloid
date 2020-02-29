@@ -272,10 +272,10 @@ bool GPSDrive::OnControlFrame(CarHW *car, float dt) {
     pthread_mutex_lock(&record_mut_);
     fprintf(record_fp_,
             "%ld.%06ld control %f %f wheel %f %f imu %f %f %f %f %f %f mag %f "
-            "%f %f windup_vk %f %f\n",
+            "%f %f windup_vk %f %f input %f %f\n",
             tv.tv_sec, tv.tv_usec, out.u_esc, out.u_servo, ds, v, accel[0],
             accel[1], accel[2], gyro[0], gyro[1], gyro[2], mag[0], mag[1],
-            mag[2], ierr_v_, ierr_k_);
+            mag[2], ierr_v_, ierr_k_, in_throttle, in_steering);
     pthread_mutex_unlock(&record_mut_);
   }
 
