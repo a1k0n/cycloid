@@ -15,6 +15,9 @@ import track_opt
 
 def load_texture(im):
     # gl.glEnable(gl.GL_TEXTURE_2D)
+    print(im.shape)
+    im = im[:, :(im.shape[1] & ~15), :].copy()
+    print(im.shape)
     texid = gl.glGenTextures(1)
     gl.glBindTexture(gl.GL_TEXTURE_2D, texid)
     gl.glTexParameteri(gl.GL_TEXTURE_2D,
