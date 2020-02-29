@@ -171,9 +171,9 @@ void UIDisplay::UpdateCameraView(
       }
       uint16_t c = 0x001f;
       for (size_t i = 0; i < gridpts.size(); i++) {
-        int x = gridpts[i].first;
-        int y = gridpts[i].second;
-        if (x < 1 || x >= 319 || y < 1 || y > 239) {
+        int x = gridpts[i].first * 0.5;
+        int y = gridpts[i].second * 0.5;
+        if (x < 1 || x >= 319 || y < 1 || y >= 239) {
           continue;
         }
         buf[x + y * 320 - 320] = c;
