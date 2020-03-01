@@ -6,11 +6,14 @@
 
 #include <vector>
 
+class FisheyeLens;
+
 class UIDisplay {
  public:
   enum DisplayMode { TRACKMAP = 0, CAMERAVIEW, FRONTVIEW, NUM_MODES };
 
   bool Init();
+  void InitCamera(const FisheyeLens &lens, float camtilt);
 
 #if 0
   void UpdateBirdseye(const uint8_t *yuv, int w, int h);

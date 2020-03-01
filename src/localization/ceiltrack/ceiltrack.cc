@@ -565,8 +565,10 @@ void CeilingTracker::GetMatchedGrid(
       float z = -St * Ru + Ct;
       float x = (Ct * Ru + St) / z;
       float y = Rv / z;
-      lens.DistortPoint(x, y, 1, &Ru, &Rv);
-      out->push_back(std::make_pair(Ru, Rv));
+      if (z > 0) {
+        lens.DistortPoint(x, y, 1, &Ru, &Rv);
+        out->push_back(std::make_pair(Ru, Rv));
+      }
     }
   }
 }

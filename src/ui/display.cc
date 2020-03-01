@@ -4,6 +4,7 @@
 #include <stdio.h>
 #include <string.h>
 
+#include "lens/fisheye.h"
 #include "ui/drawtext.h"
 #include "ui/yuvrgb565.h"
 
@@ -27,22 +28,36 @@ bool UIDisplay::Init() {
     fread(backgroundyuv_, 1, 76800, fp);
     fclose(fp);
   }
-
-  // TODO: compute this from lens calibration
-  fp = fopen("frontlut.bin", "rb");
-  if (!fp) {
-    perror("no front lookup table (frontlut.bin)");
-    frontremap_ = NULL;
-  } else {
-    uint8_t hdr[12];
-    fread(hdr, 1, 12, fp);
-    // yeah error checking would be great
-    frontremap_ = new uint16_t[2 * 320 * 120];
-    fread(frontremap_, 4, 320 * 120, fp);
-    fclose(fp);
-  }
-
+  frontremap_ = NULL;
   return true;
+}
+
+void UIDisplay::InitCamera(const FisheyeLens &lens, float camtilt) {
+  frontremap_ = new uint16_t[2 * 320 * 120];
+  uint16_t *remapdata = frontremap_;
+  float Rc = cos(camtilt - M_PI / 2);
+  float Rs = sin(camtilt - M_PI / 2);
+  for (int j = 0; j < 120; j++) {
+    for (int i = 0; i < 320; i++) {
+      // reverse-project i, j into world space through camera K
+      // -120   0 160
+      //    0 120  71
+      //    0   0   1
+      float x = (i - 160.0f) / -120.0f;
+      float y = (j - 71.0f) / 120.0f;
+      // un-rotate into camera frame by camera tilt about y axis
+      float u = y * Rc - Rs;
+      float v = x;
+      float z = y * Rs + Rc;
+      u /= fabsf(z);
+      v /= fabsf(z);
+      // swap u and v axes afterward and distort to image space
+      lens.DistortPoint(u, v, z > 0 ? 1 : -1, &x, &y);
+      // scale by 64 and write into table
+      *remapdata++ = (uint16_t)64.0f * x;
+      *remapdata++ = (uint16_t)64.0f * y;
+    }
+  }
 }
 
 #if 0

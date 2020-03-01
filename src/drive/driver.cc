@@ -114,6 +114,10 @@ bool Driver::Init(const INIReader &ini) {
     return false;
   }
 
+  if (display_) {
+    display_->InitCamera(lens_, camrot);
+  }
+
   if (config_.Load()) {
     fprintf(stderr, "Loaded driver configuration\n");
   }

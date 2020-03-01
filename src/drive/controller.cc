@@ -223,7 +223,7 @@ bool DriveController::GetControl(const DriverConfig &config,
 
   if (vr_ > 0.2) {
     float kerr = target_k - w_ / vr_;
-    ierr_k_ = clip(ierr_k_ + dt * srv_kI * kerr, -2, 2);
+    ierr_k_ = clip(ierr_k_ + dt * srv_kI * kerr, -0.5, 0.5);
   } else {
     ierr_k_ = 0;
   }
