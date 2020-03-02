@@ -129,10 +129,18 @@ float CeilingTracker::Update(const uint8_t *img, uint8_t thresh, float xgrid,
     img += mask_rle_[rleptr++];
     int n = mask_rle_[rleptr++];
     while (n--) {
+#if 1
       if ((*img++) > thresh) {
         xybuf[bufptr++] = uvmap_[uvptr];
         xybuf[bufptr++] = uvmap_[uvptr + 1];
       }
+#else
+      // this is branchless, but much much slower because of all the extra
+      // memory access
+      xybuf[bufptr] = uvmap_[uvptr];
+      xybuf[bufptr + 1] = uvmap_[uvptr + 1];
+      bufptr += 2 * ((*img++) > thresh);
+#endif
       uvptr += 2;
     }
   }

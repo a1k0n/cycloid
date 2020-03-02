@@ -10,7 +10,7 @@ class ObstacleDetector {
 
   bool Open(const char *lut_fname);
 
-  void Update(const uint8_t *yuv420, uint8_t carthresh, uint8_t conethresh);
+  void Update(uint8_t *yuv420, uint8_t carthresh, uint8_t conethresh);
 
   const int32_t* GetConePenalties() const { return orange_sum_; }
   const int32_t* GetCarPenalties() const { return black_sum_; }

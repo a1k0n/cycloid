@@ -97,7 +97,7 @@ def writefrontlut(K, dist):
 
 
 def main(fname):
-    view = cv2.imread(fname)
+    view = cv2.imread(fname, cv2.IMREAD_UNCHANGED)
 
     K = np.load("../camcal/camera_matrix.npy")
     dist = np.load("../camcal/dist_coeffs.npy")
@@ -111,9 +111,12 @@ def main(fname):
 
     r = np.sum((pts[:2] / pts[2])**2, axis=0)
     prelim_mask = ((pts[2] < 0) & (pts[0] > 0)) & (r > 4**2)
+    if view.shape[2] == 4:
+        prelim_mask &= view[:, :, 3] > 128
     im = prelim_mask[:, :, None] * view
     #im[~prelim_mask, :] = 255
     cv2.imwrite("premask.png", im)
+    cv2.imwrite("mask.png", np.uint8(prelim_mask * 255))
 
     # if the prelim mask is good enough, then we don't need to do anything else
     # so go ahead and write out floorlut.bin

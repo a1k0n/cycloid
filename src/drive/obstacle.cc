@@ -83,13 +83,13 @@ err:
   return false;
 }
 
-void ObstacleDetector::Update(const uint8_t *yuv420, uint8_t carthresh, uint8_t conethresh) {
+void ObstacleDetector::Update(uint8_t *yuv420, uint8_t carthresh, uint8_t conethresh) {
   memset(black_sum_, 0, sizeof(black_sum_));
   memset(orange_sum_, 0, sizeof(orange_sum_));
 
   int rleptr = 0;
   int amptr = 0;
-  const uint8_t *y = yuv420;
+  uint8_t *y = yuv420;
   while (rleptr < ymask_rlelen_) {
     // read zero-len
     y += ymask_rle_[rleptr++];
@@ -98,13 +98,14 @@ void ObstacleDetector::Update(const uint8_t *yuv420, uint8_t carthresh, uint8_t 
       if (*y < carthresh) {
         int a = yanglemap_[amptr];
         black_sum_[128+a] += carthresh - (*y);
+        *y = 255;
       }
       y++;
       amptr++;
     }
   }
 
-  const uint8_t *v = yuv420 + 640*480 + 320*240;
+  uint8_t *v = yuv420 + 640*480 + 320*240;
   rleptr = 0;
   amptr = 0;
   while (rleptr < uvmask_rlelen_) {
@@ -115,6 +116,7 @@ void ObstacleDetector::Update(const uint8_t *yuv420, uint8_t carthresh, uint8_t 
       if (*v > conethresh) {
         int a = uvanglemap_[amptr];
         orange_sum_[128+a] += (*v) - conethresh;
+        *v = 255;
       }
       v++;
       amptr++;
