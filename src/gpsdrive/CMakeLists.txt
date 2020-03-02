@@ -8,6 +8,6 @@ add_executable(gpsdrive
   trajtrack.h
 )
 
-target_link_libraries(gpsdrive car input gpio gps imu mag ui lcd inih pthread pigpio)
+target_link_libraries(gpsdrive car input gpio gps imu mag ui lcd lens inih pthread pigpio)
 install(TARGETS gpsdrive DESTINATION bin)
 
