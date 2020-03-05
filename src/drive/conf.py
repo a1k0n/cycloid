@@ -15,7 +15,8 @@ motor C2         0.40
 specif accel     1.00
 servo rate       1.00
 servo offset     0.00
-servo kI         0.20
+servo kP         1.00
+servo kI        10.00
 servo min       -1.00
 servo max        1.00
 '''.split('\n')[:-1]

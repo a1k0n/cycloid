@@ -21,12 +21,13 @@ const char *DriverConfig::confignames[] = {
   "specif accel",
   "servo rate",
   "servo offset",
+  "servo kP",
   "servo kI",
   "servo min",
   "servo max",
 };
 
-const int DriverConfig::N_CONFIGITEMS = 19;
+const int DriverConfig::N_CONFIGITEMS = 20;
 
 bool DriverConfig::Save() {
   FILE *fp = fopen("driverconf.txt", "w");
@@ -50,6 +51,7 @@ bool DriverConfig::Save() {
   fprintf(fp, "specif_accel         %d\n", specif_accel);
   fprintf(fp, "servo_rate           %d\n", servo_rate);
   fprintf(fp, "servo_offset         %d\n", servo_offset);
+  fprintf(fp, "servo_kP             %d\n", servo_kP);
   fprintf(fp, "servo_kI             %d\n", servo_kI);
   fprintf(fp, "servo_min            %d\n", servo_min);
   fprintf(fp, "servo_max            %d\n", servo_max);
@@ -83,6 +85,7 @@ bool DriverConfig::Load() {
     else if (!strcmp(varbuf, "specif_accel"))      { specif_accel         = valuebuf; }
     else if (!strcmp(varbuf, "servo_rate"))        { servo_rate           = valuebuf; }
     else if (!strcmp(varbuf, "servo_offset"))      { servo_offset         = valuebuf; }
+    else if (!strcmp(varbuf, "servo_kP"))          { servo_kP             = valuebuf; }
     else if (!strcmp(varbuf, "servo_kI"))          { servo_kI             = valuebuf; }
     else if (!strcmp(varbuf, "servo_min"))         { servo_min            = valuebuf; }
     else if (!strcmp(varbuf, "servo_max"))         { servo_max            = valuebuf; }

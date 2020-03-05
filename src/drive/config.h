@@ -23,6 +23,7 @@ class DriverConfig {
   int16_t specif_accel;
   int16_t servo_rate;
   int16_t servo_offset;
+  int16_t servo_kP;
   int16_t servo_kI;
   int16_t servo_min;
   int16_t servo_max;
@@ -45,7 +46,8 @@ class DriverConfig {
     specif_accel         = 100;
     servo_rate           = 100;
     servo_offset         = 0;
-    servo_kI             = 20;
+    servo_kP             = 100;
+    servo_kI             = 1000;
     servo_min            = -100;
     servo_max            = 100;
   }

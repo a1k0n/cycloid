@@ -173,6 +173,7 @@ bool DriveController::GetControl(const DriverConfig &config,
 
   float srv_ratio = 100. / (config.servo_rate == 0 ? 100 : config.servo_rate);
   float srv_kI = 0.01 * config.servo_kI;
+  float srv_kP = 0.01 * config.servo_kP;
 
   // if we're braking or coasting, just control that manually
   if (!autodrive && throttle_in <= 0) {
@@ -221,15 +222,17 @@ bool DriveController::GetControl(const DriverConfig &config,
   // okay, let's control for yaw rate!
   float target_w = target_k*vr_;
 
+  float kerr = 0;
   if (vr_ > 0.2) {
-    float kerr = target_k - w_ / vr_;
+    kerr = target_k - w_ / vr_;
     ierr_k_ = clip(ierr_k_ + dt * srv_kI * kerr, -0.5, 0.5);
   } else {
     ierr_k_ = 0;
   }
-  float accelerr =  target_ay_ - ay_;
-  *steering_out = clip((target_k - srv_off + ierr_k_) * srv_ratio,
-                       config.servo_min * 0.01, config.servo_max * 0.01);
+  float accelerr = target_ay_ - ay_;
+  *steering_out =
+      clip((target_k - srv_off + srv_kP * kerr + ierr_k_) * srv_ratio,
+           config.servo_min * 0.01, config.servo_max * 0.01);
 
   prev_steer_ = *steering_out;
 
