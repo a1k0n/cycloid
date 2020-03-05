@@ -6,10 +6,10 @@ motor gain       0.13
 motor kI         2.00
 servo rate      -0.84
 servo offset    -0.44
+servo kP         1.00
 servo kI        10.00
 servo min       -1.00
 servo max        1.00
-servo delay      0.11
 steering kpy     0.04
 steering kvy     0.50
 lookahead        0.00

@@ -12,15 +12,17 @@ const char *DriverConfig::confignames[] = {
   "motor kI",
   "servo rate",
   "servo offset",
+  "servo kP",
   "servo kI",
   "servo min",
   "servo max",
   "steering kpy",
   "steering kvy",
   "lookahead",
+  "deadreckon time",
 };
 
-const int DriverConfig::N_CONFIGITEMS = 13;
+const int DriverConfig::N_CONFIGITEMS = 15;
 
 bool DriverConfig::Save() {
   FILE *fp = fopen("driverconf.txt", "w");
@@ -35,12 +37,14 @@ bool DriverConfig::Save() {
   fprintf(fp, "motor_kI             %d\n", motor_kI);
   fprintf(fp, "servo_rate           %d\n", servo_rate);
   fprintf(fp, "servo_offset         %d\n", servo_offset);
+  fprintf(fp, "servo_kP             %d\n", servo_kP);
   fprintf(fp, "servo_kI             %d\n", servo_kI);
   fprintf(fp, "servo_min            %d\n", servo_min);
   fprintf(fp, "servo_max            %d\n", servo_max);
   fprintf(fp, "steering_kpy         %d\n", steering_kpy);
   fprintf(fp, "steering_kvy         %d\n", steering_kvy);
   fprintf(fp, "lookahead            %d\n", lookahead);
+  fprintf(fp, "deadreckon_time      %d\n", deadreckon_time);
 
   fclose(fp);
   return true;
@@ -62,12 +66,14 @@ bool DriverConfig::Load() {
     else if (!strcmp(varbuf, "motor_kI"))          { motor_kI             = valuebuf; }
     else if (!strcmp(varbuf, "servo_rate"))        { servo_rate           = valuebuf; }
     else if (!strcmp(varbuf, "servo_offset"))      { servo_offset         = valuebuf; }
+    else if (!strcmp(varbuf, "servo_kP"))          { servo_kP             = valuebuf; }
     else if (!strcmp(varbuf, "servo_kI"))          { servo_kI             = valuebuf; }
     else if (!strcmp(varbuf, "servo_min"))         { servo_min            = valuebuf; }
     else if (!strcmp(varbuf, "servo_max"))         { servo_max            = valuebuf; }
     else if (!strcmp(varbuf, "steering_kpy"))      { steering_kpy         = valuebuf; }
     else if (!strcmp(varbuf, "steering_kvy"))      { steering_kvy         = valuebuf; }
     else if (!strcmp(varbuf, "lookahead"))         { lookahead            = valuebuf; }
+    else if (!strcmp(varbuf, "deadreckon_time"))   { deadreckon_time      = valuebuf; }
     else { printf("driverconf.txt: ignoring unknown variable %s\n", varbuf); }
   }
   fclose(fp);

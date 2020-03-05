@@ -14,12 +14,14 @@ class DriverConfig {
   int16_t motor_kI;
   int16_t servo_rate;
   int16_t servo_offset;
+  int16_t servo_kP;
   int16_t servo_kI;
   int16_t servo_min;
   int16_t servo_max;
   int16_t steering_kpy;
   int16_t steering_kvy;
   int16_t lookahead;
+  int16_t deadreckon_time;
 
   DriverConfig() {
     // Default values
@@ -28,14 +30,16 @@ class DriverConfig {
     Ay_limit             = 1200;
     motor_gain           = 13;
     motor_kI             = 200;
-    servo_rate           = 100;
-    servo_offset         = 0;
-    servo_kI             = 20;
+    servo_rate           = -84;
+    servo_offset         = -44;
+    servo_kP             = 100;
+    servo_kI             = 1000;
     servo_min            = -100;
     servo_max            = 100;
-    steering_kpy         = 50;
-    steering_kvy         = 100;
+    steering_kpy         = 4;
+    steering_kvy         = 50;
     lookahead            = 0;
+    deadreckon_time      = 6;
   }
 
   static const char *confignames[];

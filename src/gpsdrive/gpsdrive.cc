@@ -120,6 +120,7 @@ void GPSDrive::UpdateControls(float in_throttle, float in_steering,
   const float srv_ratio =
       100.f / (config_.servo_rate == 0 ? 100 : config_.servo_rate);
   const float srv_kI = 0.01f * config_.servo_kI;
+  const float srv_kP = 0.01f * config_.servo_kP;
 
   float u_s = clamp(in_steering + srv_off, config_.servo_min * 0.01f,
                     config_.servo_max * 0.01f);
@@ -157,6 +158,7 @@ void GPSDrive::UpdateControls(float in_throttle, float in_steering,
     target_k = autodrive_k_;
   }
 
+  float kerr = 0;
   if (obs.vx > 1.0) {
     // use a delayed target_k here so we're comparing against the yaw it
     // induced last control frame
@@ -165,13 +167,13 @@ void GPSDrive::UpdateControls(float in_throttle, float in_steering,
     // t = 1/(kerr * srv_kI)
     // set srv_kI to, like, 10 or so except w is a bit noisy
     // i think it's already set to 2?
-    float kerr = last_target_k_ - obs.w / obs.vx;
+    kerr = last_target_k_ - obs.w / obs.vx;
     ierr_k_ = clamp(ierr_k_ + dt * srv_kI * kerr, -0.5f, 0.5f);
   } else {
     ierr_k_ = 0;
   }
 
-  u_s = clamp((target_k + ierr_k_) * srv_ratio + srv_off,
+  u_s = clamp((target_k + srv_kP * kerr + ierr_k_) * srv_ratio + srv_off,
               config_.servo_min * 0.01f, config_.servo_max * 0.01f);
 
   float vgain = 0.01 * config_.motor_gain;
