@@ -8,6 +8,7 @@
 #include "hw/cam/cam.h"
 #include "hw/car/car.h"
 #include "hw/input/input.h"
+#include "io/flushthread.h"
 #include "lens/fisheye.h"
 #include "localization/ceiltrack/ceiltrack.h"
 
@@ -23,12 +24,13 @@ class Driver : public CameraReceiver,
                public JoystickListener {
  public:
   // FIXME(a1k0n): CeilingTracker -> Localizer
-  Driver(FlushThread *ft, IMU *imu, JoystickInput *js, UIDisplay *disp);
+  Driver(IMU *imu, JoystickInput *js, UIDisplay *disp);
   ~Driver();
 
   bool Init(const INIReader &ini);
 
   virtual void OnCameraFrame(uint8_t *buf, size_t length);
+  virtual void OnH264Frame(uint8_t *buf, size_t length);
   virtual bool OnControlFrame(CarHW *car, float dt);
 
   virtual void OnDPadPress(char direction);
@@ -41,7 +43,7 @@ class Driver : public CameraReceiver,
   void Quit() { done_ = true; }
 
  private:
-  bool StartRecording(const char *fname, int frameskip);
+  bool StartRecording(const char *logname, const char *h264name);
   bool IsRecording();
   void StopRecording();
 
@@ -49,25 +51,24 @@ class Driver : public CameraReceiver,
 
   void UpdateDisplay();
 
-  void QueueRecordingData(const timeval &t, uint8_t *buf, size_t length);
+  void QueueRecordingData(const timeval &t);
 
   FisheyeLens lens_;
   CeilingTracker ceiltrack_;
   ObstacleDetector obstacledetect_;
   DriveController controller_;
   DriverConfig config_;
-  FlushThread *flush_thread_;
   IMU *imu_;
   JoystickInput *js_;
   UIDisplay *display_;
 
+  FlushThread flush_thread_;
+
   bool autodrive_;
   bool done_;
-  int frame_;
+  int log_frame_;
 
-  const char *name;
-  int output_fd_;
-  int frameskip_;
+  int log_fd_, h264_fd_;
   struct timeval last_t_, last_lap_;
   int16_t js_throttle_, js_steering_;
 

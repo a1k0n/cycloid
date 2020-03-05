@@ -167,7 +167,7 @@ void DriveController::Plan(const DriverConfig &config, const int32_t *cardetect,
 bool DriveController::GetControl(const DriverConfig &config,
     float throttle_in, float steering_in,
     float *throttle_out, float *steering_out, float dt,
-    bool autodrive, int frameno) {
+    bool autodrive) {
 
   float srv_off = 0.01 * config.servo_offset;
 

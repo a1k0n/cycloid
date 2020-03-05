@@ -5,18 +5,25 @@
 
 #include "interface/mmal/mmal.h"
 #include "interface/mmal/mmal_buffer.h"
+#include "interface/mmal/util/mmal_component_wrapper.h"
 #include "interface/mmal/util/mmal_connection.h"
 #include "interface/mmal/util/mmal_default_components.h"
 #include "interface/mmal/util/mmal_util.h"
 #include "interface/mmal/util/mmal_util_params.h"
 
 MMAL_POOL_T *Camera::camera_pool_ = NULL;
-MMAL_POOL_T *Camera::encoder_pool_ = NULL;
+MMAL_POOL_T *Camera::encoder_pool_in_ = NULL;
+MMAL_POOL_T *Camera::encoder_pool_out_ = NULL;
 MMAL_COMPONENT_T *Camera::camera_ = NULL;
 MMAL_COMPONENT_T *Camera::encoder_ = NULL;
 CameraReceiver *Camera::receiver_ = NULL;
 
 CameraReceiver::~CameraReceiver() {}
+
+static void inport_cb(MMAL_PORT_T *port, MMAL_BUFFER_HEADER_T *buffer) {
+  // input port callback: just release the buffer
+  mmal_buffer_header_release(buffer);
+}
 
 void Camera::ControlCallback(
     MMAL_PORT_T *port, MMAL_BUFFER_HEADER_T *buffer) {
@@ -54,7 +61,6 @@ void Camera::BufferCallback(MMAL_PORT_T *port,
 }
 
 void Camera::EncoderCallback(MMAL_PORT_T *port, MMAL_BUFFER_HEADER_T *buffer) {
-  printf("EncoderCallback %p %d\n", buffer->data, buffer->length);
   if (buffer->length) {
     if (receiver_ != NULL) {
       mmal_buffer_header_mem_lock(buffer);
@@ -66,14 +72,21 @@ void Camera::EncoderCallback(MMAL_PORT_T *port, MMAL_BUFFER_HEADER_T *buffer) {
   mmal_buffer_header_release(buffer);
 }
 
-void Camera::EncodeFrame(uint8_t *buf, size_t len) {
+void Camera::EncodeFrame(uint8_t *buf, size_t len, bool iframe) {
+  if (iframe) {
+    mmal_port_parameter_set_boolean(encoder_->output[0],
+                                    MMAL_PARAMETER_VIDEO_REQUEST_I_FRAME, 1);
+  }
+
   MMAL_STATUS_T status;
-  MMAL_BUFFER_HEADER_T *new_buffer = mmal_queue_get(encoder_pool_->queue);
+  MMAL_BUFFER_HEADER_T *new_buffer = mmal_queue_get(encoder_pool_in_->queue);
 
   // and back to the port from there.
   if (new_buffer) {
-    // FIXME: just send the buffer itself, don't do useless memcpys!
+    // TODO(a1k0n): is it possible to just send the video buffer itself,
+    // without doing memcpy?
     memcpy(new_buffer->data, buf, len);
+    new_buffer->length = len;
     status = mmal_port_send_buffer(encoder_->input[0], new_buffer);
     if (status != MMAL_SUCCESS) {
       fprintf(stderr, "mmal_port_send_buffer -> encoder: %d\n", status);
@@ -82,6 +95,14 @@ void Camera::EncodeFrame(uint8_t *buf, size_t len) {
 
   if (!new_buffer || status != MMAL_SUCCESS)
     fprintf(stderr, "Unable to send buffer to encoder port\n");
+
+  // refill empty output buffers
+  {
+    MMAL_BUFFER_HEADER_T *buffer;
+    while ((buffer = mmal_queue_get(encoder_pool_out_->queue)) != NULL) {
+      mmal_port_send_buffer(encoder_->output[0], buffer);
+    }
+  }
 }
 
 bool Camera::Init(int width, int height, int fps) {
@@ -158,7 +179,6 @@ bool Camera::Init(int width, int height, int fps) {
   }
 
   MMAL_PORT_T *encoder_input = encoder_->input[0];
-  MMAL_PORT_T *encoder_output = encoder_->output[0];
   encoder_input->format->encoding = MMAL_ENCODING_I420;
   encoder_input->format->encoding_variant = MMAL_ENCODING_I420;
   encoder_input->format->es->video.width = width;
@@ -167,26 +187,30 @@ bool Camera::Init(int width, int height, int fps) {
   encoder_input->format->es->video.crop.y = 0;
   encoder_input->format->es->video.crop.width = width;
   encoder_input->format->es->video.crop.height = height;
-  encoder_input->format->es->video.frame_rate.num = fps;
-  encoder_input->format->es->video.frame_rate.den = 1;
+  // encoder_input->format->es->video.frame_rate.num = fps;
+  // encoder_input->format->es->video.frame_rate.den = 1;
   if (mmal_port_format_commit(encoder_input) != MMAL_SUCCESS) {
     fprintf(stderr, "cannot commit encoder input format\n");
     return false;
   }
 
+  MMAL_PORT_T *encoder_output = encoder_->output[0];
+  mmal_format_copy(encoder_output->format, encoder_input->format);
+  encoder_output->format->type = MMAL_ES_TYPE_VIDEO;
   encoder_output->format->encoding = MMAL_ENCODING_H264;
   encoder_output->format->bitrate = 8000000;
-  encoder_output->format->es->video.width = width;
-  encoder_output->format->es->video.height = height;
-  encoder_output->format->es->video.crop.x = 0;
-  encoder_output->format->es->video.crop.y = 0;
-  encoder_output->format->es->video.crop.width = width;
-  encoder_output->format->es->video.crop.height = height;
-  encoder_output->format->es->video.frame_rate.num = fps;
-  encoder_output->format->es->video.frame_rate.den = 1;
+
+  encoder_input->buffer_size = encoder_input->buffer_size_recommended;
+  encoder_input->buffer_num = encoder_input->buffer_num_min;
   encoder_output->buffer_size = encoder_output->buffer_size_recommended;
+  encoder_output->buffer_num = encoder_output->buffer_num_min;
   if (mmal_port_format_commit(encoder_output) != MMAL_SUCCESS) {
     fprintf(stderr, "cannot commit encoder output format\n");
+    return false;
+  }
+
+  if (mmal_port_enable(encoder_input, inport_cb) != MMAL_SUCCESS) {
+    fprintf(stderr, "Failed to enable encoder input\n");
     return false;
   }
 
@@ -222,10 +246,17 @@ bool Camera::Init(int width, int height, int fps) {
     return false;
   }
 
-  encoder_pool_ = mmal_port_pool_create(
+  encoder_pool_in_ = mmal_port_pool_create(
       encoder_input, encoder_input->buffer_num, encoder_input->buffer_size);
-  if (!encoder_pool_) {
-    fprintf(stderr, "cannot create buffer header pool for encoder port\n");
+  if (!encoder_pool_in_) {
+    fprintf(stderr, "cannot create buffer header pool for encoder in port\n");
+    return false;
+  }
+
+  encoder_pool_out_ = mmal_port_pool_create(
+      encoder_output, encoder_output->buffer_num, encoder_output->buffer_size);
+  if (!encoder_pool_out_) {
+    fprintf(stderr, "cannot create buffer header pool for encoder out port\n");
     return false;
   }
 
@@ -270,9 +301,6 @@ bool Camera::StartRecord(CameraReceiver *receiver) {
     return false;
   }
 
-  // i... don't think this is necessary?
-  mmal_port_parameter_set_boolean(encoder_->output[0],
-                                  MMAL_PARAMETER_VIDEO_REQUEST_I_FRAME, 1);
 
   return true;
 }

@@ -74,18 +74,17 @@ struct CarState {
   }
 } carstate_;
 
-Driver::Driver(FlushThread *ft, IMU *imu, JoystickInput *js, UIDisplay *disp)
-    : flush_thread_(ft),
-      imu_(imu),
+Driver::Driver(IMU *imu, JoystickInput *js, UIDisplay *disp)
+    : imu_(imu),
       js_(js),
       display_(disp),
       gyro_last_(0, 0, 0),
       gyro_bias_(0, 0, 0),
       accel_last_(0, 0, 0),
       accel_bias_(0, 0, 0) {
-  output_fd_ = -1;
-  frame_ = 0;
-  frameskip_ = 0;
+  log_fd_ = -1;
+  h264_fd_ = -1;
+  log_frame_ = 0;
   autodrive_ = false;
   memset(&last_t_, 0, sizeof(last_t_));
   memset(&last_lap_, 0, sizeof(last_lap_));
@@ -114,6 +113,10 @@ bool Driver::Init(const INIReader &ini) {
     return false;
   }
 
+  if (!flush_thread_.Init()) {
+    return false;
+  }
+
   if (display_) {
     display_->InitCamera(lens_, camrot);
   }
@@ -132,36 +135,40 @@ bool Driver::Init(const INIReader &ini) {
   return true;
 }
 
-bool Driver::StartRecording(const char *fname, int frameskip) {
-  frameskip_ = frameskip;
-  frame_ = 0;
-  if (!strcmp(fname, "-")) {
-    output_fd_ = fileno(stdout);
-  } else {
-    output_fd_ = open(fname, O_CREAT | O_TRUNC | O_WRONLY, 0666);
-  }
-  if (output_fd_ == -1) {
-    perror(fname);
+bool Driver::StartRecording(const char *logname, const char *h264name) {
+  log_frame_ = 0;
+  log_fd_ = open(logname, O_CREAT | O_TRUNC | O_WRONLY, 0666);
+  if (log_fd_ == -1) {
+    perror(logname);
     return false;
   }
-  printf("--- recording %s ---\n", fname);
+  h264_fd_ = open(h264name, O_CREAT | O_TRUNC | O_WRONLY, 0666);
+  if (h264_fd_ == -1) {
+    perror(h264name);
+    close(log_fd_);
+    log_fd_ = -1;
+    return false;
+  }
+  printf("--- recording %s ---\n", logname);
   // write header IFF chunk immediately: store the car config
   int siz = config_.SerializedSize();
   uint8_t *hdrbuf = new uint8_t[siz];
   config_.Serialize(hdrbuf, siz);
-  write(output_fd_, hdrbuf, siz);
+  write(log_fd_, hdrbuf, siz);
   delete[] hdrbuf;
   return true;
 }
 
-bool Driver::IsRecording() { return output_fd_ != -1; }
+bool Driver::IsRecording() { return log_fd_ != -1; }
 
 void Driver::StopRecording() {
-  if (output_fd_ == -1) {
+  if (log_fd_ == -1) {
     return;
   }
-  flush_thread_->AddEntry(output_fd_, NULL, -1);
-  output_fd_ = -1;
+  flush_thread_.AddEntry(log_fd_, NULL, -1);
+  flush_thread_.AddEntry(h264_fd_, NULL, -1);
+  log_fd_ = -1;
+  h264_fd_ = -1;
 }
 
 Driver::~Driver() { StopRecording(); }
@@ -170,14 +177,14 @@ Driver::~Driver() { StopRecording(); }
 // ck = chunk.Chunk(file, align=False, bigendian=False, inclheader=True)
 // each frame is stored in a CYCF chunk which includes an 8-byte timestamp,
 // and further set of chunks encoded by each piece below.
-void Driver::QueueRecordingData(const timeval &t, uint8_t *buf, size_t length) {
+void Driver::QueueRecordingData(const timeval &t) {
   uint32_t chunklen = 8 + 8;           // iff header, timestamp
-  uint32_t yuvcklen = length + 8 + 2;  // iff header, width, camera frame
+  uint32_t camframelen = 4 + 8;  // iff header, width, camera frame
   // each of the following entries is expected to be a valid
   // IFF chunk on its own
   chunklen += carstate_.SerializedSize();
   chunklen += controller_.SerializedSize();
-  chunklen += yuvcklen;
+  chunklen += camframelen;
 
   // copy our frame, push it onto a stack to be flushed
   // asynchronously to sdcard
@@ -192,13 +199,11 @@ void Driver::QueueRecordingData(const timeval &t, uint8_t *buf, size_t length) {
   ptr += controller_.Serialize(chunkbuf + ptr, chunklen - ptr);
 
   // write the 640x480 yuv420 buffer last
-  memcpy(chunkbuf + ptr, "Y420", 4);
-  memcpy(chunkbuf + ptr + 4, &yuvcklen, 4);
-  uint16_t framewidth = 640;  // hardcoded, fixme
-  memcpy(chunkbuf + ptr + 8, &framewidth, 2);
-  memcpy(chunkbuf + ptr + 10, buf, length);
+  memcpy(chunkbuf + ptr, "vfra", 4);
+  memcpy(chunkbuf + ptr + 4, &camframelen, 4);
+  memcpy(chunkbuf + ptr + 8, &log_frame_, 4);
 
-  flush_thread_->AddEntry(output_fd_, chunkbuf, chunklen);
+  flush_thread_.AddEntry(log_fd_, chunkbuf, chunklen);
 }
 
   // Update controller from gyro and wheel encoder inputs
@@ -262,7 +267,6 @@ void Driver::UpdateFromCamera(uint8_t *buf, float dt) {
 void Driver::OnCameraFrame(uint8_t *buf, size_t length) {
   struct timeval t;
   gettimeofday(&t, NULL);
-  frame_++;
 
   float dt = t.tv_sec - last_t_.tv_sec + (t.tv_usec - last_t_.tv_usec) * 1e-6;
   if (dt > 0.1 && last_t_.tv_sec != 0) {
@@ -275,9 +279,19 @@ void Driver::OnCameraFrame(uint8_t *buf, size_t length) {
 
   UpdateFromCamera(buf, dt);
 
-  if (IsRecording() && frame_ > frameskip_) {
-    frame_ = 0;
-    QueueRecordingData(t, buf, length);
+  if (IsRecording()) {
+    Camera::EncodeFrame(buf, length, log_frame_ == 0);
+    QueueRecordingData(t);
+    log_frame_++;
+  }
+}
+
+void Driver::OnH264Frame(uint8_t *buf, size_t length) {
+  if (h264_fd_ != -1) {
+    // make a memcpy for output buffering
+    uint8_t *fbuf = new uint8_t[length];
+    memcpy(fbuf, buf, length);
+    flush_thread_.AddEntry(h264_fd_, fbuf, length);
   }
 }
 
@@ -318,10 +332,9 @@ bool Driver::OnControlFrame(CarHW *car, float dt) {
   float u_a = carstate_.throttle / 127.0;
   float u_s = carstate_.steering / 127.0;
   if (controller_.GetControl(config_, js_throttle_ / 32767.0,
-                             js_steering_ / 32767.0, &u_a, &u_s, dt, autodrive_,
-                             frame_)) {
-    uint8_t leds = (frame_ & 4);    // blink green LED
-    leds |= IsRecording() ? 2 : 0;  // solid red when recording
+                             js_steering_ / 32767.0, &u_a, &u_s, dt,
+                             autodrive_)) {
+    uint8_t leds = (log_frame_ & 4);    // blink green LED
     car->SetControls(leds, u_a, u_s);
   }
   carstate_.throttle = 127*u_a;
@@ -372,13 +385,15 @@ void Driver::OnButtonPress(char button) {
   switch (button) {
     case '+':  // start button: start recording
       if (!IsRecording()) {
-        char fnamebuf[256];
+        char fnamebuf[256], fnamebuf2[256];
         time_t start_time = time(NULL);
         struct tm start_time_tm;
         localtime_r(&start_time, &start_time_tm);
         strftime(fnamebuf, sizeof(fnamebuf), "cycloid-%Y%m%d-%H%M%S.rec",
                  &start_time_tm);
-        if (StartRecording(fnamebuf, 0)) {
+        strftime(fnamebuf2, sizeof(fnamebuf2), "cycloid-%Y%m%d-%H%M%S.h264",
+                 &start_time_tm);
+        if (StartRecording(fnamebuf, fnamebuf2)) {
           fprintf(stderr, "%ld.%06ld started recording %s\n", tv.tv_sec,
                   tv.tv_usec, fnamebuf);
           if (display_) display_->UpdateStatus(fnamebuf, 0xffe0);

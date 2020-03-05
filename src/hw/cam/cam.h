@@ -23,13 +23,14 @@ class Camera {
   static bool StartRecord(CameraReceiver *receiver);
   static bool StopRecord();
 
-  static void EncodeFrame(uint8_t *buf, size_t len);
+  static void EncodeFrame(uint8_t *buf, size_t len, bool iframe);
 
  private:
   static MMAL_COMPONENT_T *camera_;
   static MMAL_COMPONENT_T *encoder_;
   static MMAL_POOL_T *camera_pool_;
-  static MMAL_POOL_T *encoder_pool_;
+  static MMAL_POOL_T *encoder_pool_in_;  // use camera_pool for this?
+  static MMAL_POOL_T *encoder_pool_out_;
   static CameraReceiver *receiver_;
 
   static void ControlCallback(MMAL_PORT_T *port, MMAL_BUFFER_HEADER_T *buffer);

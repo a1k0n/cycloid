@@ -12,7 +12,6 @@
 #include "hw/imu/imu.h"
 #include "hw/input/js.h"
 #include "inih/cpp/INIReader.h"
-#include "io/flushthread.h"
 #include "localization/ceiltrack/ceiltrack.h"
 #include "ui/display.h"
 
@@ -26,7 +25,6 @@ int main(int argc, char *argv[]) {
   CarHW *carhw;
   IMU *imu;
   UIDisplay display;
-  FlushThread flush_thread;
   CeilingTracker ceiltrack;
   ObstacleDetector obstacledetector;
 
@@ -47,11 +45,7 @@ int main(int argc, char *argv[]) {
     }
   }
 
-  int fps = ini.GetInteger("camera", "fps", 30);
-
-  if (!flush_thread.Init()) {
-    return 1;
-  }
+  int fps = ini.GetInteger("camera", "fps", 60);
 
   if (!Camera::Init(640, 480, fps)) return 1;
 
@@ -98,8 +92,8 @@ int main(int argc, char *argv[]) {
     has_display = false;
   }
 
-  driver_ = new Driver(&flush_thread, imu, has_joystick ? &js : NULL,
-                       has_display ? &display : NULL);
+  driver_ =
+      new Driver(imu, has_joystick ? &js : NULL, has_display ? &display : NULL);
 
   if (!driver_->Init(ini)) {
     return 1;

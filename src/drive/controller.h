@@ -23,7 +23,7 @@ class DriveController {
 
   bool GetControl(const DriverConfig &config, float throttle_in,
                   float steering_in, float *throttle_out, float *steering_out,
-                  float dt, bool autodrive, int frameno);
+                  float dt, bool autodrive);
 
   void ResetState();
 
