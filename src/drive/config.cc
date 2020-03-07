@@ -13,6 +13,8 @@ const char *DriverConfig::confignames[] = {
   "path penalty",
   "cone penalty",
   "car penalty",
+  "orange thresh",
+  "black thresh",
   "motor gain",
   "motor kI",
   "motor u0",
@@ -27,7 +29,7 @@ const char *DriverConfig::confignames[] = {
   "servo max",
 };
 
-const int DriverConfig::N_CONFIGITEMS = 20;
+const int DriverConfig::N_CONFIGITEMS = 22;
 
 bool DriverConfig::Save() {
   FILE *fp = fopen("driverconf.txt", "w");
@@ -43,6 +45,8 @@ bool DriverConfig::Save() {
   fprintf(fp, "path_penalty         %d\n", path_penalty);
   fprintf(fp, "cone_penalty         %d\n", cone_penalty);
   fprintf(fp, "car_penalty          %d\n", car_penalty);
+  fprintf(fp, "orange_thresh        %d\n", orange_thresh);
+  fprintf(fp, "black_thresh         %d\n", black_thresh);
   fprintf(fp, "motor_gain           %d\n", motor_gain);
   fprintf(fp, "motor_kI             %d\n", motor_kI);
   fprintf(fp, "motor_u0             %d\n", motor_u0);
@@ -77,6 +81,8 @@ bool DriverConfig::Load() {
     else if (!strcmp(varbuf, "path_penalty"))      { path_penalty         = valuebuf; }
     else if (!strcmp(varbuf, "cone_penalty"))      { cone_penalty         = valuebuf; }
     else if (!strcmp(varbuf, "car_penalty"))       { car_penalty          = valuebuf; }
+    else if (!strcmp(varbuf, "orange_thresh"))     { orange_thresh        = valuebuf; }
+    else if (!strcmp(varbuf, "black_thresh"))      { black_thresh         = valuebuf; }
     else if (!strcmp(varbuf, "motor_gain"))        { motor_gain           = valuebuf; }
     else if (!strcmp(varbuf, "motor_kI"))          { motor_kI             = valuebuf; }
     else if (!strcmp(varbuf, "motor_u0"))          { motor_u0             = valuebuf; }

@@ -15,6 +15,8 @@ class DriverConfig {
   int16_t path_penalty;
   int16_t cone_penalty;
   int16_t car_penalty;
+  int16_t orange_thresh;
+  int16_t black_thresh;
   int16_t motor_gain;
   int16_t motor_kI;
   int16_t motor_u0;
@@ -38,11 +40,13 @@ class DriverConfig {
     path_penalty         = 9;
     cone_penalty         = 10;
     car_penalty          = 10;
+    orange_thresh        = 150;
+    black_thresh         = 40;
     motor_gain           = 13;
     motor_kI             = 200;
     motor_u0             = 10;
-    motor_C1             = 2126;
-    motor_C2             = 40;
+    motor_C1             = 60;
+    motor_C2             = 60;
     specif_accel         = 100;
     servo_rate           = 100;
     servo_offset         = 0;

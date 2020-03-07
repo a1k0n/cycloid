@@ -7,7 +7,7 @@
 #include "drive/config.h"
 #include "drive/vflookup.h"
 
-static const int kTractionCircleAngles = 16;
+static const int kTractionCircleAngles = 128;
 
 class DriveController {
  public:

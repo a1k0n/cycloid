@@ -109,6 +109,8 @@ bool Driver::Init(const INIReader &ini) {
   lens_.SetCalibration(fx/4.05, fy/4.05, cx/4.05, cy/4.05, k1);
   float camrot = ini.GetReal("camera", "rotation", 22) * M_PI / 180.0;
 
+  frameskip_ = ini.GetInteger("datalog", "frameskip", 0);
+
   if (!ceiltrack_.Init(lens_, camrot)) {
     fprintf(stderr, "ceiltrack init failure");
     return false;
@@ -132,8 +134,7 @@ bool Driver::Init(const INIReader &ini) {
   return true;
 }
 
-bool Driver::StartRecording(const char *fname, int frameskip) {
-  frameskip_ = frameskip;
+bool Driver::StartRecording(const char *fname) {
   frame_ = 0;
   if (!strcmp(fname, "-")) {
     output_fd_ = fileno(stdout);
@@ -237,7 +238,8 @@ void Driver::UpdateFromCamera(uint8_t *buf, float dt) {
     last_lap_ = last_t_;
   }
 
-  obstacledetect_.Update(buf, 40, 150);  // FIXME(a1k0n): needs config
+  obstacledetect_.Update(buf, config_.black_thresh,
+                         config_.orange_thresh);  // FIXME(a1k0n): needs config
   const int32_t *pcar = obstacledetect_.GetCarPenalties();
   const int32_t *pcone = obstacledetect_.GetConePenalties();
 
@@ -378,7 +380,7 @@ void Driver::OnButtonPress(char button) {
         localtime_r(&start_time, &start_time_tm);
         strftime(fnamebuf, sizeof(fnamebuf), "cycloid-%Y%m%d-%H%M%S.rec",
                  &start_time_tm);
-        if (StartRecording(fnamebuf, 0)) {
+        if (StartRecording(fnamebuf)) {
           fprintf(stderr, "%ld.%06ld started recording %s\n", tv.tv_sec,
                   tv.tv_usec, fnamebuf);
           if (display_) display_->UpdateStatus(fnamebuf, 0xffe0);

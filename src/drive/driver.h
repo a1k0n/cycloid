@@ -41,7 +41,7 @@ class Driver : public CameraReceiver,
   void Quit() { done_ = true; }
 
  private:
-  bool StartRecording(const char *fname, int frameskip);
+  bool StartRecording(const char *fname);
   bool IsRecording();
   void StopRecording();
 

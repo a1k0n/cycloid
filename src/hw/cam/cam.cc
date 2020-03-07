@@ -86,7 +86,7 @@ bool Camera::Init(int width, int height, int fps) {
   cam_config.one_shot_stills = 0;
   cam_config.max_preview_video_w = width;
   cam_config.max_preview_video_h = height;
-  cam_config.num_preview_video_frames = 3;
+  cam_config.num_preview_video_frames = 15;
   cam_config.stills_capture_circular_buffer_height = 0;
   cam_config.fast_preview_resume = 0;
   cam_config.use_stc_timestamp = MMAL_PARAM_TIMESTAMP_MODE_RESET_STC;

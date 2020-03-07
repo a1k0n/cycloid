@@ -243,10 +243,10 @@ bool DriveController::GetControl(const DriverConfig &config,
   // ...or don't, we need to prevent oscillation
   // vgain = clip(vgain / (1 - 0.025*vr_), 0.01, 2.0);
   float verr = target_v - vr_;
-  float u = vgain * (verr + kI*ierr_v_);
-  if (u > -1 && u < 1) {
+  if (prev_throttle_ > -1 && prev_throttle_ < 1) {
     ierr_v_ += verr * dt;
   }
+  float u = vgain * (verr + kI*ierr_v_);
 #else
   float u0 = config.motor_u0 * 0.01f;
   float u = u0 + (config.motor_kI * 0.01f * target_a +
