@@ -214,6 +214,6 @@ module CamMount() {
 
 %BaseplateMounts();
 %RpiMounts();
-*Template();
+%Template();
 PiMount();
 CamMount();
