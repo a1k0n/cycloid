@@ -23,8 +23,7 @@ Touring car:
  - TrackStar TS-411MG digital servo ($17)
  - Basher 6600mAh 2S2P 40C hardcase LiHV pack ($38) (smaller batteries are
    fine, but I like being able to run the computer all day on one charge)
- - Tires appropriate for track (testing out Gravity RC foam tires, but
- haven't decided yet)
+ - Tires appropriate for track (Schumacher Racing SST Mini Pins are the way to go on carpet)
 
 Electronics:
 
