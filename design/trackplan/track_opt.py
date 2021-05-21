@@ -9,21 +9,25 @@ import scipy.optimize
 
 
 TRACK_SPACING = 20  # 20 cm track spacing
+CURV_SPACING = 20
 
 
-def SVGPathToTrackPoints(fname, spacing=TRACK_SPACING):
-    path = svgpathtools.parse_path(open(fname).read())
+def SVGPathToTrackPoints(path_str, spacing=TRACK_SPACING, curv_spacing=CURV_SPACING):
+    path = svgpathtools.parse_path(path_str)
 
 # input: svg based on a 100px / m image
     def next_t(path, t, dist):
         p = path.point(t)
         L = path.length()
         # t += 1.0 / np.abs(path.derivative(t))
+        dd = dist/(1 + curv_spacing*np.abs(path.curvature(t)))
+        if np.isinf(dd) or dd == 0:
+            dd = dist
         itr = 0
-        while itr < 20:
+        while itr < 50:
             itr += 1
             p1 = path.point(t)
-            err = np.abs(p1 - p) - dist
+            err = np.abs(p1 - p) - dd
             d1 = path.derivative(t)
             if np.abs(err) < 1e-5:
                 return t, p1, d1 / np.abs(d1)
@@ -226,7 +230,7 @@ if __name__ == '__main__':
     import sys
 
     TRACK_SPACING = 10  # cm
-    x = SVGPathToTrackPoints(sys.argv[1], TRACK_SPACING)[:-1]
+    x = SVGPathToTrackPoints(open(sys.argv[1]).read(), TRACK_SPACING)[:-1]
     x = x[::-1]  # path is backwards?
 
     xm = np.array(x)[:, 0] / 50  # 50 pixels / meter

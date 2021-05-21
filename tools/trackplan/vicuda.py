@@ -6,15 +6,16 @@ import numpy as np
 from tqdm import trange
 import struct
 
-TIMESTEP = 1.0/8
-STEER_LIMIT_K = 0.66
+TIMESTEP = 1.0/16
+# STEER_LIMIT_K = 0.66
+STEER_LIMIT_K = 1.2
 NANGLES = 48
 NSPEEDS = 12
 GRID_RES = 0.05
-TRACK_HALFWIDTH = 0.76
+TRACK_HALFWIDTH = 0.7
 CONE_RADIUS = 0.3  # 30cm radius keep-out zone around cones
-XSIZE = 20  # track size, meters
-YSIZE = 10
+XSIZE = 13  # track size, meters
+YSIZE = 9
 VMIN = 2
 VMAX = 13
 AxMAX = 8
@@ -41,23 +42,38 @@ def savebin(V):
     print("vf4.bin saved")
 
 
-f = open("track.txt")
-N = int(f.readline())
-track = np.zeros((N, 5))
-for i in range(N):
-    track[i] = [float(x) for x in f.readline().strip().split()]
-f.close()
+#f = open("track.txt")
+#N = int(f.readline())
+#track = np.zeros((N, 5))
+#for i in range(N):
+#    track[i] = [float(x) for x in f.readline().strip().split()]
+#f.close()
+track = np.load("trackdata.npy")
+track[:, 2:4] = np.stack([-track[:, 3], track[:, 2]]).T
 
-f = open("lm.txt")
-N = int(f.readline())
-cones = np.zeros((N, 2))
-for i in range(N):
-    cones[i] = [float(x) for x in f.readline().strip().split()]
-homex, homey, hometheta = [float(x) for x in f.readline().strip().split()[1:]]
-f.close()
+if False: # FIRST HALF
+    track = np.roll(track, -61, axis=0)[-125:]
+    homex, homey = track[-1, :2]
+    hometheta = 0
+else: # SECOND HALF
+    track = np.roll(track, -61, axis=0)[:146]
+    homex, homey = track[0, :2]
+    hometheta = 0
 
-xsize = int(XSIZE/GRID_RES)
-ysize = int(YSIZE/GRID_RES)
+
+#f = open("lm.txt")
+#N = int(f.readline())
+#cones = np.zeros((N, 2))
+#for i in range(N):
+#    cones[i] = [float(x) for x in f.readline().strip().split()]
+#homex, homey, hometheta = [float(x) for x in f.readline().strip().split()[1:]]
+#f.close()
+
+cones = np.zeros((0, 2))
+
+
+xsize = (int(XSIZE/GRID_RES) + 15) & (~15)
+ysize = (int(YSIZE/GRID_RES) + 15) & (~15)
 
 
 def initgrid(w, h):
@@ -76,7 +92,9 @@ def initgrid(w, h):
     return ye, tk, tN
 
 
-ye, _, _ = initgrid(400, 200)
+ye, _, _ = initgrid(xsize, ysize)
+np.save("ye.npy", ye)
+
 
 mod = SourceModule("""
 // just hardcode these for now, we can make them format args eventually
@@ -88,7 +106,7 @@ const int XSIZE = %d;
 const int YSIZE = %d;
 const int VMIN = %d;
 const int VMAX = %d;
-const float TRACK_HALFWIDTH = 0.65f;  // 0.76f; artifically reduce this to leave room for the car
+const float TRACK_HALFWIDTH = 0.55f;  // 0.76f; artifically reduce this to leave room for the car
 const float AxMAX = %f;
 const float AyMAX = %f;
 const float dt = %f;
@@ -244,7 +262,7 @@ v0 = np.sum(V, dtype=np.float64)
 for j in s:
     for i in range(20):
         valueiter(V0_gpu, V0_gpu, ye_in, block=(16, 8, 1),
-                  grid=(400//16, 200//8, NANGLES*NSPEEDS))
+                  grid=(xsize//16, ysize//8, NANGLES*NSPEEDS))
     cuda.memcpy_dtoh(V, V0_gpu)
     v1 = np.sum(V, dtype=np.float64)
     dv = v1 - v0

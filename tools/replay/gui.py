@@ -158,8 +158,8 @@ class ReplayGUI:
         else:
             self.acts = None
         im = cv2.cvtColor(yuv420, cv2.COLOR_YUV2BGR_I420)
-        cv2.line(im, (229-5, 243), (229+5, 243), (0, 255, 0), 2)
-        cv2.line(im, (229, 243-5), (229, 243+5), (0, 255, 0), 2)
+        # cv2.line(im, (229-5, 243), (229+5, 243), (0, 255, 0), 2)
+        # cv2.line(im, (229, 243-5), (229, 243+5), (0, 255, 0), 2)
         self.frametexid = load_texture(im)
         frontim = renderfront(im)
         self.fronttexid = load_texture(frontim)

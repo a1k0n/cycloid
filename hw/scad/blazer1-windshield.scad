@@ -238,5 +238,5 @@ module CamBoardThing() {
 %translate([rpi_mount_x, 0, rpi_mount_height]) RaspiMountReference();
 %translate([cam_mount_x, 0, cam_mount_height]) CamMountReference();
 
-*RpiBoardThing();
+RpiBoardThing();
 CamBoardThing();
