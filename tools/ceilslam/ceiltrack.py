@@ -6,7 +6,7 @@ CAM_TILT = np.array([0, 22. * np.pi / 180., 0])
 ft2m = 0.3048  # measurements were orig. in feet; conv to meters
 CEIL_HEIGHT = 8.25*ft2m
 X_GRID = 10*ft2m/CEIL_HEIGHT
-Y_GRID = 12*ft2m/CEIL_HEIGHT
+Y_GRID = 10*ft2m/CEIL_HEIGHT
 
 # camera stands 90mm off the ground, which is almost exactly 0.3 feet (4")
 # however, this value was determined empirically to work and isn't

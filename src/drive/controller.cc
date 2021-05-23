@@ -1,17 +1,23 @@
+#include "drive/controller.h"
+
 #include <math.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <sys/time.h>
 
 #include "drive/config.h"
-#include "drive/controller.h"
 
 using Eigen::Vector3f;
 
 DriveController::DriveController() {
   ResetState();
-  if (!V_.Init()) {
-    perror("*** WARNING: no vf.bin (value function) found, cannot autodrive!");
+  if (!V_[0].Init("vf4_1.bin")) {
+    perror(
+        "*** WARNING: no vf4_1.bin (value function) found, cannot autodrive!");
+  }
+  if (!V_[1].Init("vf4_2.bin")) {
+    perror(
+        "*** WARNING: no vf4_2.bin (value function) found, cannot autodrive!");
   }
 }
 
@@ -26,6 +32,7 @@ void DriveController::ResetState() {
   target_ay_ = 0;
   target_k_ = 0;
   target_v_ = 0;
+  vi_ = 0;
 }
 
 static inline float clip(float x, float min, float max) {
@@ -48,17 +55,40 @@ void DriveController::UpdateLocation(const DriverConfig &config,
   x_ = xytheta[0];
   y_ = xytheta[1];
   theta_ = xytheta[2];
+
+  // ********** HACK HACK HACK **************
+  if (vi_ == 1 && y_ < -6.5 && x_ < 6) {
+    vi_ = 0;
+    printf(" *** switched to map 0\n");
+  }
+  if (vi_ == 0 && x_ > 10.5 && x_ < 12.5 && y_ > -5 && y_ < -3) {
+    vi_ = 1;
+    printf(" *** switched to map 1\n");
+  }
+}
+
+void _integrate(float theta, float v, float w, float dt, float *x, float *y) {
+  float C = cos(theta);
+  float S = sin(theta);
+  if (abs(w) < 1e-3) {
+    *x += dt * v * C;
+    *y += dt * v * S;
+    return;
+  }
+
+  float x0 = dt * w + theta;
+  float x1 = v / w;
+  *x += x1 * (-sin(theta) + sin(x0));
+  *y += x1 * (cos(theta) - cos(x0));
 }
 
 void DriveController::Plan(const DriverConfig &config, const int32_t *cardetect,
                            const int32_t *conedetect) {
-  const float s = config.reaction_time * 0.01 * vr_;
   const float t0 = theta_ + config.reaction_time * 0.01 * w_;
-  const float t0h = (theta_ + t0) / 2;
-  const float C = cos(t0h), S = sin(t0h);
-  const float x0 = x_ + s * C;
-  const float y0 = y_ + s * S;
   const float v0 = clip(vr_, 2, 14);
+  float x0 = x_;
+  float y0 = y_;
+  _integrate(theta_, vr_, w_, config.reaction_time * 0.01, &x0, &y0);
 
   // best action value, best accel, best curvature
   float cbest = 10e3;
@@ -72,12 +102,19 @@ void DriveController::Plan(const DriverConfig &config, const int32_t *cardetect,
     float w1 = k1 * v0;
     float relang = w1 * pdt;
     float theta1 = t0 + relang;
+    float dx = 0;
+    float dy = 0;
     // FIXME: min/max speeds hardcoded
     float v1 = clip(v0 + accelx * pdt, 2, 14);
-    float dx = v1 * cos(theta1) * pdt;
-    float dy = v1 * sin(theta1) * pdt;
+    _integrate(t0, (v0 + v1) / 2, w1, pdt, &dx, &dy);
 
-    float cost = V_.V(x0 + dx, y0 + dy, theta1, v1);
+    float cost = V_[vi_].V(x0 + dx, y0 + dy, theta1, v1);
+    // HACK HACK HACK
+    // don't go into the other lane!@!@!
+    if (vi_ == 0 && x_ > 5.5 && y_ < -3.2 && (y0 + dy) > -3.2) {
+      // printf("eliminated drive into wall %f %f -> %f %f\n", x_, y_, x0+dx, y0+dy);
+      cost = 100;
+    }
 
     // check whether we hit a cone or a car at this angle
     int iang = (relang * 256 / M_PI) + 128;
@@ -85,7 +122,8 @@ void DriveController::Plan(const DriverConfig &config, const int32_t *cardetect,
       cost += cardetect[(iang + d) & 255] * config.car_penalty * 0.01;
       cost += conedetect[(iang + d) & 255] * config.cone_penalty * 0.01;
     }
-    //printf("  control (%d %0.3f %0.3f) %f,%f,%f,%f V=%f k=%f v=%f\n", a, accelx,
+    // printf("  control (%d %0.3f %0.3f) %f,%f,%f,%f V=%f k=%f v=%f\n", a,
+    // accelx,
     //       accely, x0 + dx, y0 + dy, theta1, v1, cost, k1, v1);
     // FIXME: add in obstacle detection here
     target_ks_[a] = k1;
@@ -164,11 +202,10 @@ void DriveController::Plan(const DriverConfig &config, const int32_t *cardetect,
   */
 }
 
-bool DriveController::GetControl(const DriverConfig &config,
-    float throttle_in, float steering_in,
-    float *throttle_out, float *steering_out, float dt,
-    bool autodrive, int frameno) {
-
+bool DriveController::GetControl(const DriverConfig &config, float throttle_in,
+                                 float steering_in, float *throttle_out,
+                                 float *steering_out, float dt, bool autodrive,
+                                 int frameno) {
   float srv_off = 0.01 * config.servo_offset;
 
   float srv_ratio = 100. / (config.servo_rate == 0 ? 100 : config.servo_rate);
@@ -211,7 +248,6 @@ bool DriveController::GetControl(const DriverConfig &config,
     target_v = clip(target_v_, 0, config.speed_limit * 0.01);
   }
 
-
 #if 0
   float kmin = config.traction_limit * 0.01 / (vmax*vmax);
   if (fabs(vk) > kmin) {  // any curvature more than this will reduce speed
@@ -220,7 +256,7 @@ bool DriveController::GetControl(const DriverConfig &config,
 #endif
 
   // okay, let's control for yaw rate!
-  float target_w = target_k*vr_;
+  float target_w = target_k * vr_;
 
   float kerr = 0;
   if (vr_ > 0.2) {
@@ -246,14 +282,15 @@ bool DriveController::GetControl(const DriverConfig &config,
   if (prev_throttle_ > -1 && prev_throttle_ < 1) {
     ierr_v_ += verr * dt;
   }
-  float u = vgain * (verr + kI*ierr_v_);
+  float u = vgain * (verr + kI * ierr_v_);
 #else
   float u0 = config.motor_u0 * 0.01f;
   float u = u0 + (config.motor_kI * 0.01f * target_a +
                   config.motor_C2 * 0.01f * vr_) /
                      (config.motor_C1 * 0.01f - vr_);
   if (target_a < 0 && vr_ > 0) {
-    u = -u0 + (config.motor_kI * 0.01f * target_a) / vr_ + config.motor_C2 * 0.01f;
+    u = -u0 + (config.motor_kI * 0.01f * target_a) / vr_ +
+        config.motor_C2 * 0.01f;
   }
   printf("target_a %f vr_ %f u %f\n", target_a, vr_, u);
 #endif
@@ -271,13 +308,13 @@ bool DriveController::GetControl(const DriverConfig &config,
   target_v_ = target_v;
   target_w_ = target_w;
   bw_w_ = srv_ratio;
-  bw_v_ = config.motor_gain*0.01f;
+  bw_v_ = config.motor_gain * 0.01f;
 
   return true;
 }
 
 int DriveController::SerializedSize() const {
-  return 8 + sizeof(float) * (14 + kTractionCircleAngles*3);
+  return 8 + sizeof(float) * (14 + kTractionCircleAngles * 3);
 }
 
 int DriveController::Serialize(uint8_t *buf, int buflen) const {
@@ -332,6 +369,4 @@ int DriveController::Serialize(uint8_t *buf, int buflen) const {
   return len;
 }
 
-void DriveController::Dump() const {
-  printf("deprecated");
-}
+void DriveController::Dump() const { printf("deprecated"); }

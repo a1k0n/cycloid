@@ -15,7 +15,7 @@ class ValueFuncLookup {
   }
   ~ValueFuncLookup();
 
-  bool Init();
+  bool Init(const char *fname);
 
   static float h2f(uint16_t h) {
     typedef union {

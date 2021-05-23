@@ -44,9 +44,10 @@ def undistort():
 
 
 def genlut():
-    K = np.load("../../tools/camcal/cl20200307/camera_matrix.npy")
-    dist = np.load("../../tools/camcal/cl20200307/dist_coeffs.npy")
-    print("cl2020307")
+    #K = np.load("../../tools/camcal/cl20200307/camera_matrix.npy")
+    #dist = np.load("../../tools/camcal/cl20200307/dist_coeffs.npy")
+    K = np.load("../../tools/camcal/camera_matrix.npy")
+    dist = np.load("../../tools/camcal/dist_coeffs.npy")
     K[:2] /= 4.05
     fx, fy = np.diag(K)[:2]
     cx, cy = K[:2, 2]

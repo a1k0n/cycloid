@@ -22,11 +22,11 @@
 const float CEILHOME_X = -3.03, CEILHOME_Y = 0.73, CEILHOME_THETA = 0;
 const float CEIL_HEIGHT = 8.25*0.3048;
 const float CEIL_X_GRID = 0.3048*10/CEIL_HEIGHT;
-const float CEIL_Y_GRID = 0.3048*12/CEIL_HEIGHT;
+const float CEIL_Y_GRID = 0.3048*10/CEIL_HEIGHT;
 
 // finish line for built-in lap timer
-const float FINISHX = 9.5;
-const float FINISHY = 160/60.0;
+const float FINISHX = 8;
+const float FINISHY = -3;
 
 // const int PWMCHAN_STEERING = 14;
 // const int PWMCHAN_ESC = 15;
@@ -221,7 +221,7 @@ void Driver::UpdateFromCamera(uint8_t *buf, float dt) {
   xytheta[2] = -carstate_.ceiltrack_pos[2];
 
   // lap timer
-  if (prevxy[0] < FINISHX && xytheta[0] >= FINISHX && xytheta[1] < FINISHY) {
+  if (prevxy[0] < FINISHX && xytheta[0] >= FINISHX && xytheta[1] > FINISHY) {
     if (last_lap_.tv_sec != 0) {
       float laptime = (last_t_.tv_sec - last_lap_.tv_sec) +
                       (last_t_.tv_usec - last_lap_.tv_usec) * 1e-6;
@@ -396,6 +396,7 @@ void Driver::OnButtonPress(char button) {
       break;
     case 'H':  // home button: init to start line
       carstate_.SetHome();
+      controller_.vi_ = 0;
       gyro_bias_ = gyro_last_;
       accel_bias_ = accel_last_;
       printf("gyro bias %0.3f %0.3f %0.3f\n", gyro_bias_[0], gyro_bias_[1],

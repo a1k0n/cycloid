@@ -3,8 +3,8 @@
 
 #include "drive/vflookup.h"
 
-bool ValueFuncLookup::Init() {
-  FILE *fp = fopen("vf4.bin", "rb");
+bool ValueFuncLookup::Init(const char *fname) {
+  FILE *fp = fopen(fname, "rb");
   if (!fp) {
     return false;
   }

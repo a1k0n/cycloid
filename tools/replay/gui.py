@@ -106,7 +106,7 @@ class ReplayGUI:
         self.learn_controls = False
         self.lap_timer = False
         self.show_frontview = False
-        self.startlinexy = np.array([9.5, 160/60.0])
+        self.startlinexy = np.array([9.5, -3])
         for frdata in recordreader.RecordIterator(self.f):
             self.ts.append(frdata['tstamp'])
             (throttle, steering, accel, gyro, servo,
@@ -133,13 +133,15 @@ class ReplayGUI:
         except IOError:
             print("no lm.txt found; skipping")
         try:
-            f = open("track.txt", "r")
-            n = int(f.readline())
-            self.track = np.zeros((n, 5))
-            for i in range(n):
-                self.track[i] = [
-                    float(x) for x in f.readline().strip().split()]
-            f.close()
+            #f = open("track.txt", "r")
+            #n = int(f.readline())
+            #self.track = np.zeros((n, 5))
+            #for i in range(n):
+            #    self.track[i] = [
+            #        float(x) for x in f.readline().strip().split()]
+            #f.close()
+            self.track = np.load("../trackplan/trackdata.npy")
+            self.track[:, 2:4] = np.stack([-self.track[:, 3], self.track[:, 2]]).T
         except IOError:
             print("no track.txt found; skipping")
 
@@ -366,7 +368,7 @@ class ReplayGUI:
         y = self.controlstate[:, 1]
         lapidxs = np.nonzero((x[:-1] < self.startlinexy[0]) &
                              (x[1:] > self.startlinexy[0]) & (
-                                 y[1:] < self.startlinexy[1]))[0]
+                                 y[1:] > self.startlinexy[1]))[0]
 
         n = 0
         for i in range(1, len(lapidxs)):

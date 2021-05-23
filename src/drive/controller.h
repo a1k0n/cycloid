@@ -50,8 +50,10 @@ class DriveController {
   float target_v_, target_w_;  // control targets
   float bw_w_, bw_v_;          // control bandwidth for yaw and speed
 
+  int vi_;  // which value function we're looking at (for multi-part tracks)
+
  private:
-  ValueFuncLookup V_;
+  ValueFuncLookup V_[2];
 };
 
 #endif  // DRIVE_CONTROLLER_H_
