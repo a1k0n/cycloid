@@ -257,4 +257,4 @@ def replay(fname, f):
 if __name__ == '__main__':
     import sys
 
-    replay(sys.argv[1], open(sys.argv[1]))
+    replay(sys.argv[1], open(sys.argv[1], 'rb'))

@@ -1,3 +1,4 @@
+import sys
 import pycuda.driver as cuda
 from pycuda import gpuarray
 import pycuda.autoinit
@@ -14,16 +15,17 @@ NSPEEDS = 12
 GRID_RES = 0.05
 TRACK_HALFWIDTH = 0.7
 CONE_RADIUS = 0.3  # 30cm radius keep-out zone around cones
-XSIZE = 13  # track size, meters
-YSIZE = 9
+XSIZE = 16  # track size, meters
+YSIZE = 10
 VMIN = 2
 VMAX = 13
 AxMAX = 8
-AyMAX = 12
+AyMAX = 14
 
 
-def savebin(V):
-    f = open("vf4.bin", "wb")
+def savebin(V, half):
+    fname = "vf4_%d.bin" % half
+    f = open(fname, "wb")
     v, a, h, w = V.shape
     # header:
     #  - uint16 num velocities
@@ -39,7 +41,7 @@ def savebin(V):
                         1.0/GRID_RES, VMIN, 1))
     f.write(V.astype(np.float16).tobytes())
     f.close()
-    print("vf4.bin saved")
+    print("%s saved" % fname)
 
 
 #f = open("track.txt")
@@ -51,14 +53,21 @@ def savebin(V):
 track = np.load("trackdata.npy")
 track[:, 2:4] = np.stack([-track[:, 3], track[:, 2]]).T
 
-if False: # FIRST HALF
-    track = np.roll(track, -61, axis=0)[-125:]
-    homex, homey = track[-1, :2]
+half = int(sys.argv[1])
+
+if half == 2: # SECOND HALF
+    homex, homey = track[109, :2]
+    track = np.roll(track, -50, axis=0)[:60]
     hometheta = 0
-else: # SECOND HALF
-    track = np.roll(track, -61, axis=0)[:146]
-    homex, homey = track[0, :2]
+    finishorient = 2
+elif half == 1: # FIRST HALF
+    homex, homey = track[67, :2]
+    track = np.roll(track, -69, axis=0)[-91:]
     hometheta = 0
+    finishorient = 1
+else:
+    print("usage: %s [half]" % (sys.argv[0]))
+    os.exit(1)
 
 
 #f = open("lm.txt")
@@ -106,11 +115,12 @@ const int XSIZE = %d;
 const int YSIZE = %d;
 const int VMIN = %d;
 const int VMAX = %d;
-const float TRACK_HALFWIDTH = 0.55f;  // 0.76f; artifically reduce this to leave room for the car
+const float TRACK_HALFWIDTH = 0.51f;  // 0.76f; artifically reduce this to leave room for the car
 const float AxMAX = %f;
 const float AyMAX = %f;
 const float dt = %f;
 const float finishx = %f, finishy = %f;
+const int finishorient = %d;
 
 __device__ bool viability(float *yebuf, float x, float y) {
     float fx = x * (1.0/GRID_RES);
@@ -130,12 +140,28 @@ __device__ bool viability(float *yebuf, float x, float y) {
 
 __device__ float vlookup(float *V, float x, float y, float theta, float v) {
     // check for terminal state (crossing finish line)
-    float C = cos(theta);
-    if (y >= (finishy - TRACK_HALFWIDTH) && y <= (finishy + TRACK_HALFWIDTH) &&
-      x < finishx && x + v*dt*C >= finishx) {
-        // solve for exact time we hit the finish line
-        // x0 + v*t*C = finishx
-        return (finishx - x) / (v*C);
+    if (finishorient == 0) { // LEFT-TO-RIGHT
+        float C = cos(theta);
+        if (y >= (finishy - TRACK_HALFWIDTH) && y <= (finishy + TRACK_HALFWIDTH) &&
+          x < finishx && x + v*dt*C >= finishx) {
+            // solve for exact time we hit the finish line
+            // x0 + v*t*C = finishx
+            return (finishx - x) / (v*C);
+        }
+    } else if (finishorient == 1) { // RIGHT-TO-LEFT
+        float C = cos(theta);  // note: cos(theta) is negative
+        if (y >= (finishy - TRACK_HALFWIDTH) && y <= (finishy + TRACK_HALFWIDTH) &&
+          x > finishx && x + v*dt*C <= finishx) {
+            // solve for exact time we hit the finish line
+            // x0 + v*t*C = finishx
+            return (finishx - x) / (v*C);
+        }
+    } else if (finishorient == 2) { // DOWN-TO-UP
+        float S = sin(theta);
+        if (x >= (finishx - TRACK_HALFWIDTH) && x <= (finishx + TRACK_HALFWIDTH) &&
+          y < finishy && y + v*dt*S >= finishy) {
+            return (finishy - y) / (v*S);
+        }
     }
 
     float ftheta = (theta * NANGLES / (2*M_PI));
@@ -247,7 +273,7 @@ __global__ void valueiter(float *V, float *Vprev, float *yebuf) {
     V[di] = bestcost;
 }
 """ % (STEER_LIMIT_K, NANGLES, NSPEEDS, GRID_RES, xsize, ysize, VMIN, VMAX,
-       AxMAX, AyMAX, TIMESTEP, homex, homey))
+       AxMAX, AyMAX, TIMESTEP, homex, homey, finishorient))
 
 valueiter = mod.get_function("valueiter")
 V0_gpu = cuda.mem_alloc(NSPEEDS*NANGLES*xsize*ysize*4)
@@ -272,5 +298,5 @@ for j in s:
         break
     s.set_postfix_str("dv %f lap time %f" % (dv, np.min(V[0, 0, :, 155])))
 
-savebin(V)
-np.save("V.npy", V)
+savebin(V, half)
+np.save("V_%d.npy" % half, V)

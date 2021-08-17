@@ -106,7 +106,7 @@ class ReplayGUI:
         self.learn_controls = False
         self.lap_timer = False
         self.show_frontview = False
-        self.startlinexy = np.array([9.5, -3])
+        self.startlinexy = np.array([7.4, -3])
         for frdata in recordreader.RecordIterator(self.f):
             self.ts.append(frdata['tstamp'])
             (throttle, steering, accel, gyro, servo,

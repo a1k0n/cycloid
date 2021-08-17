@@ -1,8 +1,8 @@
 # 450x160
 import recordreader
 
-FINISHX = 450/50.0
-FINISHY = 160/60.0
+FINISHX = 7.4
+FINISHY = 150/50.0
 
 
 def laptimer(fname, f):
