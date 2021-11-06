@@ -110,6 +110,11 @@ class GPSDrive : public ControlListener,
 
   // TODO: remove these and compute in control frame
   // replace with float x_, y_, theta_;
+  float navheading_, navheading_last_;  // heading from nav (radians)
+  float heading_;  // heading (radians) complementary filter state
+  float heading_rollover_;  // adjustment for extra revolutions of heading (dumb hack)
+  bool heading_init_;  // flag used to bootstrap initial heading
+
   float ye_, psie_, k_;
   float autodrive_k_, autodrive_v_;
 

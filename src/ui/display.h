@@ -36,7 +36,7 @@ class UIDisplay {
   void UpdateDashboard(float v, float w, int32_t lon, int32_t lat, int numSV,
                        float gpsv, float mlon, float mlat, float mag_north,
                        float mag_east, float ye, float psie, float autok,
-                       float autov);
+                       float autov, float heading);
 
   void UpdateEncoders(uint16_t *wheel_pos);
   void UpdateStatus(const char *status, uint16_t color = 0xffff);

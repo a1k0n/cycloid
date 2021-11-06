@@ -20,9 +20,10 @@ const char *DriverConfig::confignames[] = {
   "steering kvy",
   "lookahead",
   "deadreckon time",
+  "cfilter cutoff",
 };
 
-const int DriverConfig::N_CONFIGITEMS = 15;
+const int DriverConfig::N_CONFIGITEMS = 16;
 
 bool DriverConfig::Save() {
   FILE *fp = fopen("driverconf.txt", "w");
@@ -45,6 +46,7 @@ bool DriverConfig::Save() {
   fprintf(fp, "steering_kvy         %d\n", steering_kvy);
   fprintf(fp, "lookahead            %d\n", lookahead);
   fprintf(fp, "deadreckon_time      %d\n", deadreckon_time);
+  fprintf(fp, "cfilter_cutoff       %d\n", cfilter_cutoff);
 
   fclose(fp);
   return true;
@@ -74,6 +76,7 @@ bool DriverConfig::Load() {
     else if (!strcmp(varbuf, "steering_kvy"))      { steering_kvy         = valuebuf; }
     else if (!strcmp(varbuf, "lookahead"))         { lookahead            = valuebuf; }
     else if (!strcmp(varbuf, "deadreckon_time"))   { deadreckon_time      = valuebuf; }
+    else if (!strcmp(varbuf, "cfilter_cutoff"))    { cfilter_cutoff       = valuebuf; }
     else { printf("driverconf.txt: ignoring unknown variable %s\n", varbuf); }
   }
   fclose(fp);

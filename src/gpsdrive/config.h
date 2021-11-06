@@ -22,6 +22,7 @@ class DriverConfig {
   int16_t steering_kvy;
   int16_t lookahead;
   int16_t deadreckon_time;
+  int16_t cfilter_cutoff;
 
   DriverConfig() {
     // Default values
@@ -40,6 +41,7 @@ class DriverConfig {
     steering_kvy         = 50;
     lookahead            = 0;
     deadreckon_time      = 6;
+    cfilter_cutoff       = 60;
   }
 
   static const char *confignames[];

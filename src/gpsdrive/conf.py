@@ -14,6 +14,7 @@ steering kpy     0.04
 steering kvy     0.50
 lookahead        0.00
 deadreckon time  0.06
+cfilter cutoff   0.60
 '''.split('\n')[:-1]
 
 

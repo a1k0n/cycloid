@@ -353,7 +353,7 @@ void UIDisplay::UpdateStatus(const char *status, uint16_t color) {
 void UIDisplay::UpdateDashboard(float v, float w, int32_t lon, int32_t lat,
                                 int numSV, float gpsv, float mlon, float mlat,
                                 float mag_north, float mag_east, float ye,
-                                float psie, float autok, float autov) {
+                                float psie, float autok, float autov, float heading) {
   char numbuf[32];
   uint16_t buf[120 * 320];
   memset(buf, 0, sizeof(buf));
@@ -367,7 +367,7 @@ void UIDisplay::UpdateDashboard(float v, float w, int32_t lon, int32_t lat,
   DrawTextBig(numbuf, 0, 60, 0xffff, buf);
   snprintf(numbuf, sizeof(numbuf) - 1, "y %0.1fm psi %+0.3f", ye, psie);
   DrawTextBig(numbuf, 0, 80, 0xffff, buf);
-  snprintf(numbuf, sizeof(numbuf) - 1, "k %0.3f v %0.1f", autok, autov);
+  snprintf(numbuf, sizeof(numbuf) - 1, "k %0.3f v %0.1f h %0.3f", autok, autov, heading);
   DrawTextBig(numbuf, 0, 100, 0xffff, buf);
 
   for (int i = 0; i < 20; i++) {

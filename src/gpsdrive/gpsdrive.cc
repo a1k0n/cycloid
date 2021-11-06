@@ -50,6 +50,12 @@ GPSDrive::GPSDrive(FlushThread *ft, IMU *imu, Magnetometer *mag,
   autodrive_k_ = 0;
   autodrive_v_ = 0;
 
+  navheading_ = 0;
+  navheading_last_ = 0;
+  heading_ = 0;
+  heading_init_ = false;
+  heading_rollover_ = 0;
+
   control_hist_ptr_ = 0;
   state_hist_ptr_ = 0;
 
@@ -261,6 +267,22 @@ bool GPSDrive::OnControlFrame(CarHW *car, float dt) {
     v = gps_v_.norm();
   }
 
+  // update heading w/ complementary filter
+  {
+    float p = exp(-config_.cfilter_cutoff * 0.01 * dt);
+    float gain1 = (1-p)/2.;
+    float gain2 = (1+p)/2.;
+
+    float heading_rollover_last = heading_rollover_;
+    if (navheading_ - navheading_last_ > M_PI) {
+      heading_rollover_ -= 2*M_PI;
+    } else if (navheading_ - navheading_last_ < -M_PI) {
+      heading_rollover_ += 2*M_PI;
+    }
+    heading_ = gain1*(navheading_ + heading_rollover_ + navheading_last_ + heading_rollover_last) + gain2*gyro[2]*dt + p*heading_;
+    navheading_last_ = navheading_;
+  }
+
   ControlOutput out;
   StateObservation obs;
   obs.vx = v;
@@ -274,10 +296,10 @@ bool GPSDrive::OnControlFrame(CarHW *car, float dt) {
     pthread_mutex_lock(&record_mut_);
     fprintf(record_fp_,
             "%ld.%06ld control %f %f wheel %f %f imu %f %f %f %f %f %f mag %f "
-            "%f %f windup_vk %f %f input %f %f\n",
+            "%f %f windup_vk %f %f input %f %f head %f\n",
             tv.tv_sec, tv.tv_usec, out.u_esc, out.u_servo, ds, v, accel[0],
             accel[1], accel[2], gyro[0], gyro[1], gyro[2], mag[0], mag[1],
-            mag[2], ierr_v_, ierr_k_, in_throttle, in_steering);
+            mag[2], ierr_v_, ierr_k_, in_throttle, in_steering, heading_);
     pthread_mutex_unlock(&record_mut_);
   }
 
@@ -285,7 +307,7 @@ bool GPSDrive::OnControlFrame(CarHW *car, float dt) {
     display_->UpdateDashboard(v, w, lon_, lat_, numSV_, gps_v_.norm(),
                               (lon_ - ref_lon_) * mscale_lon_,
                               (lat_ - ref_lat_) * mscale_lat_, MagN, MagE, ye_,
-                              psie_, autodrive_k_, autodrive_v_);
+                              psie_, autodrive_k_, autodrive_v_, heading_);
   }
 
   return !done_;
@@ -316,9 +338,17 @@ void GPSDrive::OnNav(const nav_pvt &msg) {
   float Cp = 1;  // cos(psi)
   float Sp = 0;  // sin(psi)
   if (mag > 300) {
+    // update complementary filter state from nav
+    float headobs = atan2(S, C);
+    navheading_ = headobs;
+    if (!heading_init_) {
+      heading_ = headobs;
+      heading_rollover_ = 0;
+      heading_init_ = true;
+    }
     // if we're moving more than 0.3 m/s, then compute a proper psie
-    C /= mag;
-    S /= mag;
+    C = cos(heading_);
+    S = sin(heading_);
     Cp = -S * Nx + C * Ny;
     Sp = S * Ny + C * Nx;
     psie_ = atan2(Sp, Cp);
@@ -361,8 +391,8 @@ void GPSDrive::OnNav(const nav_pvt &msg) {
         msg.velD, msg.sAcc, msg.headMot / 100000,
         std::abs(msg.headMot) % 100000, msg.headVeh, msg.headAcc / 100000,
         msg.headAcc % 100000);
-    fprintf(record_fp_, "%ld.%06ld nav %0.4f %0.4f %f kv %0.5f %0.4f\n",
-            tv.tv_sec, tv.tv_usec, ye_, psie_, k_, autodrive_k_, autodrive_v_);
+    fprintf(record_fp_, "%ld.%06ld nav %0.4f %0.4f %f kv %0.5f %0.4f %0.4f\n",
+            tv.tv_sec, tv.tv_usec, ye_, psie_, k_, autodrive_k_, autodrive_v_, navheading_);
     pthread_mutex_unlock(&record_mut_);
   }
 }
