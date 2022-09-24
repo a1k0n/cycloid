@@ -256,7 +256,7 @@ void Driver::UpdateFromCamera(uint8_t *buf, float dt) {
     display_->UpdateCameraView(buf, gridpts);
     display_->UpdateCeiltrackView(xytheta, CEIL_X_GRID * CEIL_HEIGHT,
                                   CEIL_Y_GRID * CEIL_HEIGHT, 20, 10,
-                                  pcar, pcone, carstate_.wheel_v, 1.0/dt);
+                                  pcar, pcone, carstate_.wheel_v, 1.0/dt, controller_.vi_);
   }
 }
 

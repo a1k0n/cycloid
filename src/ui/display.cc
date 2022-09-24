@@ -217,7 +217,7 @@ void UIDisplay::UpdateCameraView(
 void UIDisplay::UpdateCeiltrackView(const float *xytheta, float xgrid,
                                     float ygrid, float sizx, float sizy,
                                     const int32_t *obs1, const int32_t *obs2,
-                                    float wheel_v, float fps) {
+                                    float wheel_v, float fps, int map) {
   if (mode_ != TRACKMAP) {
     return;
   }
@@ -297,6 +297,10 @@ void UIDisplay::UpdateCeiltrackView(const float *xytheta, float xgrid,
 
   snprintf(vbuf, sizeof(vbuf), "%0.1f fps", fps);
   DrawText(vbuf, 320 - 60, 10, 0xffff, buf);
+
+  snprintf(vbuf, sizeof(vbuf), "map %d", map);
+  DrawText(vbuf, 320 - 60, 20, 0xffff, buf);
+
 
   // blit buffer to screen all at once
   uint16_t *scr = screen_.GetBuffer();

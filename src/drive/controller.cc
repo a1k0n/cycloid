@@ -59,11 +59,11 @@ void DriveController::UpdateLocation(const DriverConfig &config,
   // ********** HACK HACK HACK **************
   if (vi_ == 1 && y_ < -7.5 && x_ < 7) {
     vi_ = 0;
-    printf(" *** switched to map 0\n");
+    printf(" *** switched to map 0 %f %f\n", x_, y_);
   }
   if (vi_ == 0 && x_ > 10.5 && x_ < 12.5 && y_ > -5 && y_ < -3) {
     vi_ = 1;
-    printf(" *** switched to map 1\n");
+    printf(" *** switched to map 1 %f %f\n", x_, y_);
   }
 }
 

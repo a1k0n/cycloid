@@ -9,6 +9,8 @@ def laptimer(fname, f):
     px, py = None, None
     prevlap = None
     lapcount = 0
+    i = 0
+    lapstart = 0
     for rec in recordreader.RecordIterator(f):
         ts = rec['tstamp']
         x, y = rec['controldata2'][:2]
@@ -16,8 +18,10 @@ def laptimer(fname, f):
             if px < FINISHX and x >= FINISHX and y < FINISHY:
                 if prevlap is not None:
                     lapcount += 1
-                    print("%s lap %d: %0.2f" % (fname, lapcount, ts-prevlap))
+                    print("%s lap %d: %0.2f [%d, %d]" % (fname, lapcount, ts-prevlap, lapstart, i))
+                lapstart = i
                 prevlap = ts
+        i += 1
         px, py = x, y
 
 
