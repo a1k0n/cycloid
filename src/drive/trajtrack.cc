@@ -49,6 +49,53 @@ bool TrajectoryTracker::LoadTrack(const char *fname) {
   return true;
 }
 
+int TrajectoryTracker::ClosestIdx(float x, float y) {
+  float best_dist = 1e9;
+  int best_idx = 0;
+  for (int i = 0; i < n_pts_; i++) {
+    float dx = pts_[i].x - x;
+    float dy = pts_[i].y - y;
+    float dist = dx * dx + dy * dy;
+    if (dist < best_dist) {
+      best_dist = dist;
+      best_idx = i;
+    }
+  }
+  return best_idx;
+}
+
+void TrajectoryTracker::LocalState(float xg, float yg, float theta, int *i, float *xl, float *yl, float *cl, float *sl) {
+  for (;;) {
+    int i1 = *i + 1;
+    if (i1 >= n_pts_) {
+      i1 = 0;
+    }
+    // have we reached the next waypoint?
+    float dx = xg - pts_[i1].x;
+    float dy = yg - pts_[i1].y;
+    if (dx * pts_[i1].nx + dy * pts_[i1].ny < 0) {
+      break;
+    }
+    *i = i1;
+  }
+
+  int idx = *i;
+  float dx = xg - pts_[idx].x;
+  float dy = yg - pts_[idx].y;
+
+  float nx = pts_[idx].nx;
+  float ny = pts_[idx].ny;
+
+  *xl =  dx * nx + dy * ny;
+  *yl = -dx * ny + dy * nx;
+
+  float c = cos(theta);
+  float s = sin(theta);
+
+  *cl =  c * nx + s * ny;
+  *sl = -c * ny + s * nx;
+}
+
 bool TrajectoryTracker::GetTarget(float x, float y, int lookahead,
     float *closestx, float *closesty,
     float *normx, float *normy,

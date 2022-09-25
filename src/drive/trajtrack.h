@@ -14,6 +14,12 @@ class TrajectoryTracker {
 
   bool LoadTrack(const char *fname);
 
+  int ClosestIdx(float x, float y);
+
+  // Lookup next local coordinate frame from global coordinates xg, yg, theta, index *i
+  // Outputs updated *i (if changed), local x, y, cosine, sine
+  void LocalState(float xg, float yg, float theta, int *i, float *xl, float *yl, float *cl, float *sl);
+
   bool GetTarget(float x, float y, int lookahead,
       float *closestx, float *closesty,
       float *normx, float *normy,

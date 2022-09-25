@@ -2,7 +2,7 @@
 
 #include "drive/trajtrack.h"
 
-const char *testdata_file = "../src/drive/testdata/track.txt";
+const char *testdata_file = "../src/drive/testdata/track2.txt";
 
 int main() {
   TrajectoryTracker tt;
@@ -11,22 +11,18 @@ int main() {
     return 1;
   }
 
-  float cx, cy, nx, ny, k, t;
-  if (!tt.GetTarget(/*x=*/ 0, /*y=*/0, /*lookahead=*/12, /*closestx=*/&cx,
-          /*closesty=*/&cy, /*normx=*/&nx, /*normy=*/&ny, /*kappa=*/&k,
-          /*lookahead_kappa=*/&t)) {
-    fprintf(stderr, "failed to get target?!");
-    return 1;
-  }
+  float xg = 11.494, yg = -3.9093, theta = 6.2637;
 
-  printf("%f %f %f %f %f\n", cx, cy, nx, ny, k);
+  int i = tt.ClosestIdx(xg, yg);
+  printf("ClosestIdx(%f, %f) = %d\n", xg, yg, i);
 
-  if (!tt.GetTarget(/*x=*/ 51, /*y=*/20, /*lookahead=*/42, /*closestx=*/&cx,
-            /*closesty=*/&cy, /*normx=*/&nx, /*normy=*/&ny, /*kappa=*/&k,
-            /*lookahead_kappa=*/&t)) {
-    fprintf(stderr, "failed to get target?!");
-    return 1;
-  }
+  xg = 11.6269, yg = -3.9280, theta = 6.1432;
 
-  printf("%f %f %f %f %f\n", cx, cy, nx, ny, k);
+  float xl, yl, cl, sl;
+  tt.LocalState(xg, yg, theta, &i, &xl, &yl, &cl, &sl);
+  printf("LocalState(%f, %f, %f) = %d, %f, %f, %f, %f\n", xg, yg, theta, i, xl, yl, cl, sl);
+  
+  xg = 11.7509, yg = -3.9617, theta = 6.0173;
+  tt.LocalState(xg, yg, theta, &i, &xl, &yl, &cl, &sl);
+  printf("LocalState(%f, %f, %f) = %d, %f, %f, %f, %f\n", xg, yg, theta, i, xl, yl, cl, sl);
 }
