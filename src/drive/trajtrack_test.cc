@@ -1,13 +1,19 @@
 #include <stdio.h>
 
+#include "drive/pinet.h"
 #include "drive/trajtrack.h"
 
 const char *testdata_file = "../src/drive/testdata/track2.txt";
 
 int main() {
   TrajectoryTracker tt;
+  PiNetwork pi;
 
   if (!tt.LoadTrack(testdata_file)) {
+    return 1;
+  }
+
+  if (!pi.Load("../src/drive/testdata/pinet.bin")) {
     return 1;
   }
 
@@ -25,4 +31,8 @@ int main() {
   xg = 11.7509, yg = -3.9617, theta = 6.0173;
   tt.LocalState(xg, yg, theta, &i, &xl, &yl, &cl, &sl);
   printf("LocalState(%f, %f, %f) = %d, %f, %f, %f, %f\n", xg, yg, theta, i, xl, yl, cl, sl);
+
+  float u1, u2;
+  pi.Action(i, 5, -1, xl, yl, cl, sl, 1, 1, &u1, &u2);
+  printf("%f %f", u1, u2);
 }

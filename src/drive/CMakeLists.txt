@@ -8,6 +8,8 @@ add_executable(drive
     main.cc
     obstacle.cc
     obstacle.h
+    pinet.cc
+    pinet.h
     trajtrack.cc
     trajtrack.h
     vflookup.cc
@@ -18,7 +20,7 @@ target_link_libraries(drive car cam mmal input gpio imu ui lcd coneslam ceiltrac
 install(TARGETS drive DESTINATION bin)
 
 # add_executable(localize_test localize_test.cc localize.cc)
-add_executable(trajtrack_test trajtrack_test.cc trajtrack.cc)
+add_executable(trajtrack_test trajtrack_test.cc trajtrack.cc pinet.cc)
 install(TARGETS trajtrack_test DESTINATION bin)
 
 add_executable(controller_test controller_test.cc controller.cc trajtrack.cc vflookup.cc vflookup.h)
