@@ -239,12 +239,11 @@ void Driver::UpdateFromCamera(uint8_t *buf, float dt) {
   }
 
   obstacledetect_.Update(buf, config_.black_thresh,
-                         config_.orange_thresh);  // FIXME(a1k0n): needs config
+                         config_.orange_thresh);
   const int32_t *pcar = obstacledetect_.GetCarPenalties();
   const int32_t *pcone = obstacledetect_.GetConePenalties();
 
   controller_.UpdateLocation(config_, xytheta);
-  controller_.Plan(config_, pcar, pcone);
 
   // display_.UpdateConeView(buf, 0, NULL);
   // display_->UpdateEncoders(carstate_.wheel_pos);
@@ -256,7 +255,7 @@ void Driver::UpdateFromCamera(uint8_t *buf, float dt) {
     display_->UpdateCameraView(buf, gridpts);
     display_->UpdateCeiltrackView(xytheta, CEIL_X_GRID * CEIL_HEIGHT,
                                   CEIL_Y_GRID * CEIL_HEIGHT, 20, 10,
-                                  pcar, pcone, carstate_.wheel_v, 1.0/dt, controller_.vi_);
+                                  pcar, pcone, carstate_.wheel_v, 1.0/dt, controller_.ix_);
   }
 }
 
@@ -396,7 +395,7 @@ void Driver::OnButtonPress(char button) {
       break;
     case 'H':  // home button: init to start line
       carstate_.SetHome();
-      controller_.vi_ = 0;
+      controller_.ResetState();
       gyro_bias_ = gyro_last_;
       accel_bias_ = accel_last_;
       printf("gyro bias %0.3f %0.3f %0.3f\n", gyro_bias_[0], gyro_bias_[1],

@@ -231,21 +231,21 @@ class ReplayGUI:
         mi = max(0, i - 30*3)
         temp = self.controlstate[mi:i+1, 3].copy()
         imgui.plot_lines("velocity", temp)
-        temp = self.controlstate[mi:i+1, 8].copy()
-        imgui.plot_lines("target v", temp)
+        #temp = self.controlstate[mi:i+1, 8].copy()
+        #imgui.plot_lines("target v", temp)
         temp = self.controls[mi:i+1, 0].copy()
         imgui.plot_lines("control v", temp)
         temp = self.controls[mi:i+1, 1].copy()
         imgui.plot_lines("control steer", temp)
-        temp = self.controlstate[mi:i+1, 9].copy()
-        imgui.plot_lines("target w", temp)
+        #temp = self.controlstate[mi:i+1, 9].copy()
+        #imgui.plot_lines("target w", temp)
         temp = self.controlstate[mi:i+1, 4].copy()
         imgui.plot_lines("yaw rate", temp)
 
         # live variables
         maxv = int(np.ceil(np.max(self.controlstate[:, 3]) * 1.1))
         imgui.slider_float("wheel v", self.controlstate[i, 3], 0, maxv)
-        imgui.slider_float("target v", self.controlstate[i, 8], 0, maxv)
+        #imgui.slider_float("target v", self.controlstate[i, 8], 0, maxv)
         lv = 0
         if i > 0:
             dx = self.controlstate[i, 0] - self.controlstate[i-1, 0]
@@ -260,7 +260,7 @@ class ReplayGUI:
         # so that turning right is to the right
         maxw = int(np.ceil(np.max(np.abs(self.controlstate[:, 4])) * 1.1))
         imgui.slider_float("yaw rate", self.controlstate[i, 4], maxw, -maxw)
-        imgui.slider_float("target w", self.controlstate[i, 9], maxw, -maxw)
+        #imgui.slider_float("target w", self.controlstate[i, 9], maxw, -maxw)
         v = self.controlstate[i, 3]
         if v > 0.5:
             k = self.controlstate[i, 4] / v
@@ -268,8 +268,8 @@ class ReplayGUI:
             k = 0
         imgui.slider_float("curvature", k, 2, -2)
 
-        targetK = self.controlstate[self.i, 7]
-        imgui.slider_float("target k", targetK, 2, -2)
+        #targetK = self.controlstate[self.i, 7]
+        #imgui.slider_float("target k", targetK, 2, -2)
 
         # render overview
         pos = imgui.get_cursor_screen_pos()
@@ -333,7 +333,7 @@ class ReplayGUI:
                         origin[1] - scale*(y + v*S),
                         imgui.get_color_u32_rgba(0, 1, 0, 1), 1)
 
-        targetaccel = self.controlstate[self.i][12:14] / 9.8
+        #targetaccel = self.controlstate[self.i][12:14] / 9.8
         accel = self.carstate[self.i][2]
         ox, oy = origin[0] + scale*3, origin[1] + scale*9
         for i in range(100):
@@ -349,10 +349,10 @@ class ReplayGUI:
                 imgui.get_color_u32_rgba(0.7, 0.7, 0.7, 1), 1)
         dl.add_line(ox, oy, ox + scale*accel[1], oy - scale*accel[0],
                     imgui.get_color_u32_rgba(0.3, 1, 0.5, 1), 3)
-        dl.add_rect(
-            ox - scale*targetaccel[1] - 2, oy + scale*targetaccel[0] - 2,
-            ox - scale*targetaccel[1] + 2, oy + scale*targetaccel[0] + 2,
-            imgui.get_color_u32_rgba(0.0, 1, 1, 1), 1)
+        #dl.add_rect(
+        #    ox - scale*targetaccel[1] - 2, oy + scale*targetaccel[0] - 2,
+        #    ox - scale*targetaccel[1] + 2, oy + scale*targetaccel[0] + 2,
+        #    imgui.get_color_u32_rgba(0.0, 1, 1, 1), 1)
 
         imgui.end()
 

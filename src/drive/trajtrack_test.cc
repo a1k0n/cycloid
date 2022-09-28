@@ -33,6 +33,6 @@ int main() {
   printf("LocalState(%f, %f, %f) = %d, %f, %f, %f, %f\n", xg, yg, theta, i, xl, yl, cl, sl);
 
   float u1, u2;
-  pi.Action(i, 5, -1, xl, yl, cl, sl, 1, 1, &u1, &u2);
+  pi.Action(i, 5, -1, xl, yl, cl, sl, 1, 1, 1, &u1, &u2);
   printf("%f %f", u1, u2);
 }

@@ -8,50 +8,32 @@
 class DriverConfig {
  public:
   int16_t speed_limit;
-  int16_t Ax_limit;
-  int16_t Ay_limit;
-  int16_t reaction_time;
-  int16_t lookahead_time;
-  int16_t path_penalty;
-  int16_t cone_penalty;
-  int16_t car_penalty;
+  int16_t throttle_cap;
+  int16_t throttle_slew;
+  int16_t throttle_bias;
+  int16_t pi_thr_scale;
+  int16_t pi_brake_scale;
+  int16_t pi_steer_scale;
+  int16_t pi_v_scale;
   int16_t orange_thresh;
   int16_t black_thresh;
-  int16_t motor_gain;
-  int16_t motor_kI;
-  int16_t motor_u0;
-  int16_t motor_C1;
-  int16_t motor_C2;
-  int16_t specif_accel;
-  int16_t servo_rate;
   int16_t servo_offset;
-  int16_t servo_kP;
-  int16_t servo_kI;
   int16_t servo_min;
   int16_t servo_max;
 
   DriverConfig() {
     // Default values
     speed_limit          = 300;
-    Ax_limit             = 800;
-    Ay_limit             = 1200;
-    reaction_time        = 6;
-    lookahead_time       = 15;
-    path_penalty         = 9;
-    cone_penalty         = 10;
-    car_penalty          = 10;
+    throttle_cap         = 100;
+    throttle_slew        = 400;
+    throttle_bias        = 0;
+    pi_thr_scale         = 100;
+    pi_brake_scale       = 100;
+    pi_steer_scale       = 100;
+    pi_v_scale           = 100;
     orange_thresh        = 150;
     black_thresh         = 40;
-    motor_gain           = 13;
-    motor_kI             = 200;
-    motor_u0             = 10;
-    motor_C1             = 60;
-    motor_C2             = 60;
-    specif_accel         = 100;
-    servo_rate           = 100;
     servo_offset         = 0;
-    servo_kP             = 10;
-    servo_kI             = 1000;
     servo_min            = -100;
     servo_max            = 100;
   }

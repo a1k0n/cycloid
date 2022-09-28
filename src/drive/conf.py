@@ -1,24 +1,15 @@
 configitems = '''\
 speed limit      3.00
-Ax limit         8.00
-Ay limit        12.00
-reaction time    0.06
-lookahead time   0.15
-path penalty     0.09
-cone penalty     0.10
-car penalty      0.10
+throttle cap     1.00
+throttle slew    4.00
+throttle bias    0.00
+pi thr scale     1.00
+pi brake scale   1.00
+pi steer scale   1.00
+pi v scale       1.00
 orange thresh    1.50
 black thresh     0.40
-motor gain       0.13
-motor kI         2.00
-motor u0         0.10
-motor C1         0.60
-motor C2         0.60
-specif accel     1.00
-servo rate       1.00
 servo offset     0.00
-servo kP         0.10
-servo kI        10.00
 servo min       -1.00
 servo max        1.00
 '''.split('\n')[:-1]

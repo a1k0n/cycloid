@@ -11,13 +11,11 @@ using Eigen::Vector3f;
 
 DriveController::DriveController() {
   ResetState();
-  if (!V_[0].Init("vf4_1.bin")) {
-    perror(
-        "*** WARNING: no vf4_1.bin (value function) found, cannot autodrive!");
+  if (!pi_.Load("pinet.bin")) {
+    perror(" *** WARNING: failed to load pinet.bin\n");
   }
-  if (!V_[1].Init("vf4_2.bin")) {
-    perror(
-        "*** WARNING: no vf4_2.bin (value function) found, cannot autodrive!");
+  if (!track_.LoadTrack("track.txt")) {
+    perror(" *** WARNING: failed to load track.txt\n");
   }
 }
 
@@ -26,13 +24,7 @@ void DriveController::ResetState() {
   w_ = 0;
   prev_throttle_ = 0;
   prev_steer_ = 0;
-  ierr_v_ = 0;
-  ierr_k_ = 0;
-  target_ax_ = 0;
-  target_ay_ = 0;
-  target_k_ = 0;
-  target_v_ = 0;
-  vi_ = 0;
+  ix_ = -1;
 }
 
 static inline float clip(float x, float min, float max) {
@@ -55,15 +47,8 @@ void DriveController::UpdateLocation(const DriverConfig &config,
   x_ = xytheta[0];
   y_ = xytheta[1];
   theta_ = xytheta[2];
-
-  // ********** HACK HACK HACK **************
-  if (vi_ == 1 && y_ < -7.5 && x_ < 7) {
-    vi_ = 0;
-    printf(" *** switched to map 0 %f %f\n", x_, y_);
-  }
-  if (vi_ == 0 && x_ > 10.5 && x_ < 12.5 && y_ > -5 && y_ < -3) {
-    vi_ = 1;
-    printf(" *** switched to map 1 %f %f\n", x_, y_);
+  if (ix_ == -1) {
+    ix_ = track_.ClosestIdx(x_, y_);
   }
 }
 
@@ -82,6 +67,7 @@ void _integrate(float theta, float v, float w, float dt, float *x, float *y) {
   *y += x1 * (cos(theta) - cos(x0));
 }
 
+#if 0
 void DriveController::Plan(const DriverConfig &config, const int32_t *cardetect,
                            const int32_t *conedetect) {
   const float t0 = theta_ + config.reaction_time * 0.01 * w_;
@@ -201,120 +187,63 @@ void DriveController::Plan(const DriverConfig &config, const int32_t *cardetect,
   }
   */
 }
+#endif
 
 bool DriveController::GetControl(const DriverConfig &config, float throttle_in,
                                  float steering_in, float *throttle_out,
                                  float *steering_out, float dt, bool autodrive,
                                  int frameno) {
   float srv_off = 0.01 * config.servo_offset;
+  float srv_min = 0.01 * config.servo_min;
+  float srv_max = 0.01 * config.servo_max;
 
-  float srv_ratio = 100. / (config.servo_rate == 0 ? 100 : config.servo_rate);
-  float srv_kI = 0.01 * config.servo_kI;
-  float srv_kP = 0.01 * config.servo_kP;
-
-  // if we're braking or coasting, just control that manually
-  if (!autodrive && throttle_in <= 0) {
-    *throttle_out = throttle_in;
-    // yaw is backwards
-    *steering_out = clip(
-        steering_in * (config.servo_rate < 0 ? 1 : -1) - srv_off * srv_ratio,
-        config.servo_min * 0.01, config.servo_max * 0.01);
-    prev_steer_ = *steering_out;
-    prev_throttle_ = *throttle_out;
-    ierr_v_ = 0;
-    ierr_k_ = 0;
-    return true;
+  float throttle_max = 0.01 * config.throttle_cap;
+  if (prev_throttle_ + config.throttle_slew * 0.01 * dt < throttle_max) {
+    throttle_max = prev_throttle_ + config.throttle_slew * 0.01 * dt;
+  }
+  float throttle_min = prev_throttle_ - config.throttle_slew * 0.01 * dt;
+  if (throttle_min < -1) {
+    throttle_min = -1;
   }
 
-  // pull in the values from Plan() before we mess with them further
-  // in case the controller gives infeasible curvatures, clamp them
-  // 0.5m smallest turn radius
-  float target_k = clip(target_k_, -2, 2);
-  float target_a = target_ax_;
-  if (vr_ >= config.speed_limit && target_a > 0) {
-    target_a = 0;
+  // rev limiter
+  if (vr_ >= config.speed_limit * 0.01) {
+    throttle_max = 0.95*prev_throttle_;
   }
 
-  float target_v = target_v_;
-  if (!autodrive) {
-    // manual override:
+  // update track index and get our local coordinate frame
+  // (need to do this even if we aren't autodriving, just to sync localization)
+  float xl, yl, cl, sl;
+  if (ix_ != -1) {
+    // we could dead-reckon x,y,theta by integrating over v, w; for now let's not
+    track_.LocalState(x_, y_, theta_, &ix_, &xl, &yl, &cl, &sl);
+  }
 
-    // max curvature is servo_rate (unless servo can be driven past 1)
-    // use a quadratic curve to give finer control near center
-    target_k = -steering_in * 2 * fabs(steering_in);
-    target_v = throttle_in * config.speed_limit * 0.01;
-    target_a = (target_v - vr_) * config.motor_gain * 0.01;
+  if (!autodrive || ix_ == -1) {
+    *throttle_out = clip(throttle_in, throttle_min, throttle_max);
+    *steering_out = clip(steering_in + srv_off, srv_min, srv_max);
   } else {
-    target_v = clip(target_v_, 0, config.speed_limit * 0.01);
+    // autodrive
+    float u_throttle = 0, u_steer = 0;
+    pi_.Action(ix_, vr_ * config.pi_v_scale * 0.01f, w_, xl, yl, cl, sl,
+              config.pi_thr_scale * 0.01f, config.pi_brake_scale * 0.01f,
+              config.pi_steer_scale * 0.01f,
+              &u_throttle, &u_steer);
+    // fprintf(stderr, "                        ix %d vr %+0.2f w %+0.2f xl %+0.2f yl %+0.2f cl %+0.2f sl %+0.2f u_throttle %+0.2f (%+0.2f,%+0.2f) u_steer %+0.2f\r",
+    //         ix_, vr_, w_, xl, yl, cl, sl, u_throttle, throttle_min, throttle_max, u_steer);
+    // fflush(stderr);
+    *throttle_out = clip(u_throttle + config.throttle_bias * 0.01f, throttle_min, throttle_max);
+    *steering_out = clip(u_steer + srv_off, srv_min, srv_max);
   }
-
-#if 0
-  float kmin = config.traction_limit * 0.01 / (vmax*vmax);
-  if (fabs(vk) > kmin) {  // any curvature more than this will reduce speed
-    target_v = sqrt(config.traction_limit * 0.01 / fabs(vk));
-  }
-#endif
-
-  // okay, let's control for yaw rate!
-  float target_w = target_k * vr_;
-
-  float kerr = 0;
-  if (vr_ > 0.2) {
-    kerr = target_k - w_ / vr_;
-    ierr_k_ = clip(ierr_k_ + dt * srv_kI * kerr, -0.5, 0.5);
-  } else {
-    ierr_k_ = 0;
-  }
-  float accelerr = target_ay_ - ay_;
-  *steering_out =
-      clip((target_k - srv_off + srv_kP * kerr + ierr_k_) * srv_ratio,
-           config.servo_min * 0.01, config.servo_max * 0.01);
 
   prev_steer_ = *steering_out;
-
-#if 1
-  float vgain = 0.01 * config.motor_gain;
-  float kI = 0.01 * config.motor_kI;
-  // boost control gain at high velocities
-  // ...or don't, we need to prevent oscillation
-  // vgain = clip(vgain / (1 - 0.025*vr_), 0.01, 2.0);
-  float verr = target_v - vr_;
-  if (prev_throttle_ > -1 && prev_throttle_ < 1) {
-    ierr_v_ += verr * dt;
-  }
-  float u = vgain * (verr + kI * ierr_v_);
-#else
-  float u0 = config.motor_u0 * 0.01f;
-  float u = u0 + (config.motor_kI * 0.01f * target_a +
-                  config.motor_C2 * 0.01f * vr_) /
-                     (config.motor_C1 * 0.01f - vr_);
-  if (target_a < 0 && vr_ > 0) {
-    u = -u0 + (config.motor_kI * 0.01f * target_a) / vr_ +
-        config.motor_C2 * 0.01f;
-  }
-  printf("target_a %f vr_ %f u %f\n", target_a, vr_, u);
-#endif
-  *throttle_out = clip(u, -1, 1);
   prev_throttle_ = *throttle_out;
-
-#if 0  // this is crap
-  // heuristic: subtract magnitude of yaw rate error from throttle control
-  float werr = fabsf(target_w - w_) * 0.01 * config.turnin_lift;
-  *throttle_out = clip(*throttle_out - werr, -1, 1);
-#endif
-
-  // update state for datalogging
-  target_ax_ = target_a;
-  target_v_ = target_v;
-  target_w_ = target_w;
-  bw_w_ = srv_ratio;
-  bw_v_ = config.motor_gain * 0.01f;
 
   return true;
 }
 
 int DriveController::SerializedSize() const {
-  return 8 + sizeof(float) * (14 + kTractionCircleAngles * 3);
+  return 8 + sizeof(float) * 7;
 }
 
 int DriveController::Serialize(uint8_t *buf, int buflen) const {
@@ -339,32 +268,6 @@ int DriveController::Serialize(uint8_t *buf, int buflen) const {
   buf += 4;
   memcpy(buf, &prev_throttle_, 4);
   buf += 4;
-  memcpy(buf, &target_k_, 4);
-  buf += 4;
-  memcpy(buf, &target_v_, 4);
-  buf += 4;
-  memcpy(buf, &target_w_, 4);
-  buf += 4;
-  memcpy(buf, &bw_w_, 4);
-  buf += 4;
-  memcpy(buf, &bw_v_, 4);
-  buf += 4;
-  memcpy(buf, &target_ax_, 4);
-  buf += 4;
-  memcpy(buf, &target_ay_, 4);
-  buf += 4;
-  for (int a = 0; a < kTractionCircleAngles; a++) {
-    memcpy(buf, &target_ks_[a], 4);
-    buf += 4;
-  }
-  for (int a = 0; a < kTractionCircleAngles; a++) {
-    memcpy(buf, &target_vs_[a], 4);
-    buf += 4;
-  }
-  for (int a = 0; a < kTractionCircleAngles; a++) {
-    memcpy(buf, &target_Vs_[a], 4);
-    buf += 4;
-  }
 
   return len;
 }

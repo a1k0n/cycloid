@@ -6,30 +6,21 @@
 
 const char *DriverConfig::confignames[] = {
   "speed limit",
-  "Ax limit",
-  "Ay limit",
-  "reaction time",
-  "lookahead time",
-  "path penalty",
-  "cone penalty",
-  "car penalty",
+  "throttle cap",
+  "throttle slew",
+  "throttle bias",
+  "pi thr scale",
+  "pi brake scale",
+  "pi steer scale",
+  "pi v scale",
   "orange thresh",
   "black thresh",
-  "motor gain",
-  "motor kI",
-  "motor u0",
-  "motor C1",
-  "motor C2",
-  "specif accel",
-  "servo rate",
   "servo offset",
-  "servo kP",
-  "servo kI",
   "servo min",
   "servo max",
 };
 
-const int DriverConfig::N_CONFIGITEMS = 22;
+const int DriverConfig::N_CONFIGITEMS = 13;
 
 bool DriverConfig::Save() {
   FILE *fp = fopen("driverconf.txt", "w");
@@ -38,25 +29,16 @@ bool DriverConfig::Save() {
     return false;
   }
   fprintf(fp, "speed_limit          %d\n", speed_limit);
-  fprintf(fp, "Ax_limit             %d\n", Ax_limit);
-  fprintf(fp, "Ay_limit             %d\n", Ay_limit);
-  fprintf(fp, "reaction_time        %d\n", reaction_time);
-  fprintf(fp, "lookahead_time       %d\n", lookahead_time);
-  fprintf(fp, "path_penalty         %d\n", path_penalty);
-  fprintf(fp, "cone_penalty         %d\n", cone_penalty);
-  fprintf(fp, "car_penalty          %d\n", car_penalty);
+  fprintf(fp, "throttle_cap         %d\n", throttle_cap);
+  fprintf(fp, "throttle_slew        %d\n", throttle_slew);
+  fprintf(fp, "throttle_bias        %d\n", throttle_bias);
+  fprintf(fp, "pi_thr_scale         %d\n", pi_thr_scale);
+  fprintf(fp, "pi_brake_scale       %d\n", pi_brake_scale);
+  fprintf(fp, "pi_steer_scale       %d\n", pi_steer_scale);
+  fprintf(fp, "pi_v_scale           %d\n", pi_v_scale);
   fprintf(fp, "orange_thresh        %d\n", orange_thresh);
   fprintf(fp, "black_thresh         %d\n", black_thresh);
-  fprintf(fp, "motor_gain           %d\n", motor_gain);
-  fprintf(fp, "motor_kI             %d\n", motor_kI);
-  fprintf(fp, "motor_u0             %d\n", motor_u0);
-  fprintf(fp, "motor_C1             %d\n", motor_C1);
-  fprintf(fp, "motor_C2             %d\n", motor_C2);
-  fprintf(fp, "specif_accel         %d\n", specif_accel);
-  fprintf(fp, "servo_rate           %d\n", servo_rate);
   fprintf(fp, "servo_offset         %d\n", servo_offset);
-  fprintf(fp, "servo_kP             %d\n", servo_kP);
-  fprintf(fp, "servo_kI             %d\n", servo_kI);
   fprintf(fp, "servo_min            %d\n", servo_min);
   fprintf(fp, "servo_max            %d\n", servo_max);
 
@@ -74,25 +56,16 @@ bool DriverConfig::Load() {
   int valuebuf;
   while (fscanf(fp, "%20s %d", varbuf, &valuebuf) == 2) {
          if (!strcmp(varbuf, "speed_limit"))       { speed_limit          = valuebuf; }
-    else if (!strcmp(varbuf, "Ax_limit"))          { Ax_limit             = valuebuf; }
-    else if (!strcmp(varbuf, "Ay_limit"))          { Ay_limit             = valuebuf; }
-    else if (!strcmp(varbuf, "reaction_time"))     { reaction_time        = valuebuf; }
-    else if (!strcmp(varbuf, "lookahead_time"))    { lookahead_time       = valuebuf; }
-    else if (!strcmp(varbuf, "path_penalty"))      { path_penalty         = valuebuf; }
-    else if (!strcmp(varbuf, "cone_penalty"))      { cone_penalty         = valuebuf; }
-    else if (!strcmp(varbuf, "car_penalty"))       { car_penalty          = valuebuf; }
+    else if (!strcmp(varbuf, "throttle_cap"))      { throttle_cap         = valuebuf; }
+    else if (!strcmp(varbuf, "throttle_slew"))     { throttle_slew        = valuebuf; }
+    else if (!strcmp(varbuf, "throttle_bias"))     { throttle_bias        = valuebuf; }
+    else if (!strcmp(varbuf, "pi_thr_scale"))      { pi_thr_scale         = valuebuf; }
+    else if (!strcmp(varbuf, "pi_brake_scale"))    { pi_brake_scale       = valuebuf; }
+    else if (!strcmp(varbuf, "pi_steer_scale"))    { pi_steer_scale       = valuebuf; }
+    else if (!strcmp(varbuf, "pi_v_scale"))        { pi_v_scale           = valuebuf; }
     else if (!strcmp(varbuf, "orange_thresh"))     { orange_thresh        = valuebuf; }
     else if (!strcmp(varbuf, "black_thresh"))      { black_thresh         = valuebuf; }
-    else if (!strcmp(varbuf, "motor_gain"))        { motor_gain           = valuebuf; }
-    else if (!strcmp(varbuf, "motor_kI"))          { motor_kI             = valuebuf; }
-    else if (!strcmp(varbuf, "motor_u0"))          { motor_u0             = valuebuf; }
-    else if (!strcmp(varbuf, "motor_C1"))          { motor_C1             = valuebuf; }
-    else if (!strcmp(varbuf, "motor_C2"))          { motor_C2             = valuebuf; }
-    else if (!strcmp(varbuf, "specif_accel"))      { specif_accel         = valuebuf; }
-    else if (!strcmp(varbuf, "servo_rate"))        { servo_rate           = valuebuf; }
     else if (!strcmp(varbuf, "servo_offset"))      { servo_offset         = valuebuf; }
-    else if (!strcmp(varbuf, "servo_kP"))          { servo_kP             = valuebuf; }
-    else if (!strcmp(varbuf, "servo_kI"))          { servo_kI             = valuebuf; }
     else if (!strcmp(varbuf, "servo_min"))         { servo_min            = valuebuf; }
     else if (!strcmp(varbuf, "servo_max"))         { servo_max            = valuebuf; }
     else { printf("driverconf.txt: ignoring unknown variable %s\n", varbuf); }

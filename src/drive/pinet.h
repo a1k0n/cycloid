@@ -16,7 +16,7 @@ class PiNetwork {
   bool Load(const char *fname);
 
   void Action(int ix, float v, float w, float xl, float yl, float cl, float sl,
-              float tscale, float sscale, float *u_throttle, float *u_steering);
+              float tscale, float bscale, float sscale, float *u_throttle, float *u_steering);
 
  private:
   float emb[NEMBED][HIDDEN];

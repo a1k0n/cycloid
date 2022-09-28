@@ -5,7 +5,8 @@
 #include <Eigen/Dense>
 
 #include "drive/config.h"
-#include "drive/vflookup.h"
+#include "drive/trajtrack.h"
+#include "drive/pinet.h"
 
 static const int kTractionCircleAngles = 128;
 
@@ -33,27 +34,16 @@ class DriveController {
 
   // car state
   float x_, y_, theta_;
+  int ix_;               // index in the track table
   float vf_, vr_;        // front and rear wheel velocity
   float w_;              // gyro reading: yaw rate
   float ax_, ay_;        // accelerometer readings
   float prev_throttle_;  // previous throttle control
   float prev_steer_;     // previous steer control
-  float ierr_v_;         // integrated velocity error
-  float ierr_k_;         // integrated curvature error
-
-  float target_ks_[kTractionCircleAngles];  // next potential control actions
-  float target_vs_[kTractionCircleAngles];  // next potential control actions
-  float target_Vs_[kTractionCircleAngles];  // total value of each action
-  float target_k_;
-  float target_ax_, target_ay_;
-
-  float target_v_, target_w_;  // control targets
-  float bw_w_, bw_v_;          // control bandwidth for yaw and speed
-
-  int vi_;  // which value function we're looking at (for multi-part tracks)
 
  private:
-  ValueFuncLookup V_[2];
+  TrajectoryTracker track_;
+  PiNetwork pi_;
 };
 
 #endif  // DRIVE_CONTROLLER_H_
