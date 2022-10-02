@@ -27,6 +27,7 @@ STM32HatSerial::STM32HatSerial(const INIReader &ini) {
 bool STM32HatSerial::Init() {
   fd_ = open(device_, O_RDWR);
   if (fd_ == -1) {
+    fprintf(stderr, "STM32HatSerial: open fail\n");
     perror(device_);
     return false;
   }

@@ -5,7 +5,8 @@ throttle slew    4.00
 throttle bias    0.00
 pi thr scale     1.00
 pi brake scale   1.00
-pi steer scale   1.00
+pi steer scale  -0.50
+pi steer_v scale 0.03
 pi v scale       1.00
 orange thresh    1.50
 black thresh     0.40

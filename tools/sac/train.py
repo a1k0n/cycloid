@@ -19,7 +19,7 @@ import pickle
 lr_pi = 1e-3
 lr_q = 3e-3
 gamma = 0.99
-alpha = 0.005
+alpha = 0.1
 polyak = 0.995
 batch_size = 65536
 steps_per_rollout = 25
@@ -30,7 +30,8 @@ assert (graph_interval//steps_per_rollout)*steps_per_rollout == graph_interval
 
 nrollouts = 500
 rolloutlen = 20
-randrollouts = nrollouts//10
+randrollouts1 = nrollouts//10
+randrollouts2 = nrollouts//100
 
 q_hid = 128
 pi_hid = 16
@@ -54,11 +55,13 @@ dssum = torch.tensor(np.cumsum(np.concatenate([[0], ds, ds])),
 
 
 class CarEnv:
-    def __init__(self, mk1=51, mk2=1.8, maxa=18, mk3=0.1):
+    def __init__(self, mk1=28.8, mk2=1.35, maxa=18):
         self.mk1 = mk1
         self.mk2 = mk2
-        self.mk3 = mk3
+        self.mk3 = 0.42*5
+        self.mk4 = 0.17*3
         self.maxa = maxa
+        self.brake_k2, self.brake_k3 = 1.23, 0.875
 
     def randstate(self, N):
         si = np.random.randint(0, M, (N,))
@@ -92,9 +95,13 @@ class CarEnv:
         u_v = a[:, 0]
         u_delta = a[:, 1]
 
-        V = (1 + torch.sign(u_v))/2
-        dc = torch.abs(u_v)
-        dv = self.mk1*V*dc - self.mk2*v*dc - self.mk3*v
+        # handle accel
+        dv = self.mk1 * u_v - self.mk2 * v * u_v - self.mk4*v
+        dv[(u_v > 0) * (v > 0)] -= self.mk3
+
+        # handle braking
+        dv[u_v < 0] = self.brake_k2 * v[u_v < 0] * u_v[u_v < 0]
+        dv[(u_v < 0) * (v > 0)] -= self.brake_k3
 
         k = u_delta*1.5
         # verlet integration of acceleration; first half
@@ -108,7 +115,7 @@ class CarEnv:
         dv -= 100*dt*torch.cos(k)
         # second half
         v = v + dv*dt*0.5
-        w = 0.8*w + 0.2*(k*v)
+        w = 0.475*w + 0.525*(k*v)
         sp[:, 4] = w
 
         v[v<0] = 0
@@ -327,7 +334,7 @@ replay_idx = frozen
 replay_size = replay_s0.shape[0]
 
 testlap_state = torch.zeros((1, 9), device="cuda")
-testlap_state[:, :2] = Ttrack[21, :2]
+testlap_state[:, :2] = Ttrack[5, :2]
 testlap_idx = torch.tensor([21], dtype=torch.long, device="cuda")
 
 
@@ -399,6 +406,7 @@ while step < 10000000:
                 firsts, firsti = replay_s0[fsample], replay_i0[fsample]
 
                 # for robustness, randomly replace 1% of samples in replay with random ones and roll them out
+                randrollouts = step < 10000 and randrollouts1 or randrollouts2
                 firsts[:randrollouts], firsti[:randrollouts] = env.randstate(randrollouts)
 
                 s0, i0, a, r, sp, ip, done = rollout(env, firsts, firsti, pipolicy, rolloutlen)
@@ -444,7 +452,7 @@ while step < 10000000:
                 plt.ylim(-10, 0)
                 writer.add_figure('rollouts', fig, global_step=step)
 
-            if (step % 100000) == 0:
+            if (step % 10000) == 0:
                 checkpoint()
 
         step += 1

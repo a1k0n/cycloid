@@ -31,6 +31,9 @@ class CFIR : public JoystickListener, public ControlListener {
     js_ = js;
     js_throttle_ = 0;
     js_steering_ = 0;
+    steertrim_ = 5;
+    esctrim_ = 0;
+    esctarget_ = 30;
     exit_ = false;
     recording_ = NULL;
     mode_ = Control;
@@ -46,10 +49,41 @@ class CFIR : public JoystickListener, public ControlListener {
         StopRecording();
         break;
       case 'L':
-        mode_ = SysId;
+        esctrim_ = -127;
         break;
       case 'R':
-        mode_ = Control;
+        esctrim_ = esctarget_;
+        break;
+    }
+  }
+
+  virtual void OnButtonRelease(char button) {
+    switch (button) {
+      case 'L':
+      // fall through
+      case 'R':
+        esctrim_ = 0;
+        break;
+    }
+  }
+
+  virtual void OnDPadPress(char direction) {
+    switch (direction) {
+      case 'R':
+        steertrim_ += 1;
+        printf("Steer trim: %d\n", steertrim_);
+        break;
+      case 'L':
+        steertrim_ -= 1;
+        printf("Steer trim: %d\n", steertrim_);
+        break;
+      case 'U':
+        esctarget_ += 1;
+        printf("ESC target: %d\n", esctarget_);
+        break;
+      case 'D':
+        esctarget_ -= 1;
+        printf("ESC target: %d\n", esctarget_);
         break;
     }
   }
@@ -95,6 +129,9 @@ class CFIR : public JoystickListener, public ControlListener {
 
   int16_t js_throttle_;
   int16_t js_steering_;
+  int8_t steertrim_;
+  int8_t esctrim_;
+  int8_t esctarget_;
   bool exit_;
   FILE *recording_;
 
@@ -122,62 +159,25 @@ class CFIR : public JoystickListener, public ControlListener {
     float u_esc = 0;
     float u_steer = 0;
     switch (mode_) {
-      case SysId: {
-        if (!was_learning) {
-          fprintf(stderr, "starting system identification\n");
-        }
-#if 0
-          if (v > 0) {
-            // separate brake_id is unsafe for now
-            motor_id.AddObservation(v, 1, u_esc, dt);
-            steer_id.AddObservation(gyro[2], v, u_steer, dt);
+      case SysId:
+        {
+          if (!was_learning) {
+            fprintf(stderr, "starting system identification\n");
           }
-#endif
-        // hold PID loops in reset while learning
-        // motor_pi.Reset();
-        // steer_pi.Reset();
-        was_learning = true;
-        break;
-      }
-      case Control: {
-        float v_target = 8 * Throttle() / 32767.0;
-        if (v_target <= 0) {
-          // don't wind up the integrator! just stop the car.
-          v_target = 0;
+          was_learning = true;
+          break;
         }
-        // turn left -> positive gyro rate, hence negative sign
-        float k_target = -Steering() / 32768.0;  // +-1m turning radius
-
-        if (was_learning) {
-          /*
-          auto km = motor_id.Solve();
-          fprintf(stderr, "motor sysid: %f %f %f %f %f\n", km[0], km[1], km[2],
-                  km[3], km[4]);
-          auto k = steer_id.Solve();
-          fprintf(stderr, "steer sysid: %f %f %f %f\n", k[0], k[1], k[2], k[3]);
-          */
-          was_learning = false;
+      case Control:
+        {
+          break;
         }
-
-#if 0
-        auto k = motor_id.Solve();
-        motor_pi.SetK(1, 0, 0);
-        u_esc = motor_pi.Control(v_target - v, dt);
-        k = steer_id.Solve();
-        steer_pi.SetK(1, 0, 0);
-        float kerr = 0;
-        if (v > 0.5) {  // must be going at least 0.5 m/s for closed loop yaw
-                        // control
-          kerr = k_target - gyro[2] / v;
-        } else {
-          // reset wind-up at low speeds
-          steer_pi.Reset();
-        }
-        u_steer = clipi16(k_target * k[0] + k[3] + steer_pi.Control(kerr, dt),
-                          STEER_LIMIT_LOW, STEER_LIMIT_HIGH);
-#endif
-      } break;
     }
+
+    u_steer = Steering() / 32768. / 4. + steertrim_ / 127.0;
+    u_esc = Throttle() / 32768. / 4. + esctrim_ / 127.0;
+
+    fprintf(stderr, "%4d %4d\r", (int) (u_steer*127), (int) (u_esc*127));
+    fflush(stderr);
 
     if (!car->SetControls(n >> 4, u_esc, u_steer)) {
       fprintf(stderr, "SetControls returned false?\n");
@@ -279,9 +279,20 @@ void controltest() {
 int main(int argc, char *argv[]) {
   JoystickInput js;
   INIReader ini("cycloid.ini");
+  {
+    int inierr = ini.ParseError();
+    if (inierr != 0) {
+      if (inierr == -1) {
+        fprintf(stderr, "please create cycloid.ini!\n");
+      } else {
+        fprintf(stderr, "error loading cycloid.ini on line %d\n", inierr);
+      }
+      return 1;
+    }
+  }
+
   I2C i2c;
   IMU *imu = IMU::GetI2CIMU(i2c, ini);
-  CarHW *car = CarHW::GetCar(&i2c, ini);
 
   if (!i2c.Open()) {
     fprintf(stderr, "need to enable i2c in raspi-config, probably\n");
@@ -289,12 +300,17 @@ int main(int argc, char *argv[]) {
   }
 
   if (!js.Open(ini)) {
-    return 1;
-  }
-  if (!car->Init()) {
+    fprintf(stderr, "js.Open() fail\n");
     return 1;
   }
   if (!imu->Init()) {
+    fprintf(stderr, "imu->Init() fail\n");
+    return 1;
+  }
+
+  CarHW *car = CarHW::GetCar(&i2c, ini);
+  if (!car || !car->Init()) {
+    fprintf(stderr, "car->Init() fail\n");
     return 1;
   }
 

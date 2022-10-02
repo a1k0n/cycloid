@@ -225,9 +225,9 @@ bool DriveController::GetControl(const DriverConfig &config, float throttle_in,
   } else {
     // autodrive
     float u_throttle = 0, u_steer = 0;
+    float sscale = config.pi_steer_scale * 0.01 + config.pi_steer_v_scale * 0.01 * vr_;
     pi_.Action(ix_, vr_ * config.pi_v_scale * 0.01f, w_, xl, yl, cl, sl,
-              config.pi_thr_scale * 0.01f, config.pi_brake_scale * 0.01f,
-              config.pi_steer_scale * 0.01f,
+              config.pi_thr_scale * 0.01f, config.pi_brake_scale * 0.01f, sscale,
               &u_throttle, &u_steer);
     // fprintf(stderr, "                        ix %d vr %+0.2f w %+0.2f xl %+0.2f yl %+0.2f cl %+0.2f sl %+0.2f u_throttle %+0.2f (%+0.2f,%+0.2f) u_steer %+0.2f\r",
     //         ix_, vr_, w_, xl, yl, cl, sl, u_throttle, throttle_min, throttle_max, u_steer);

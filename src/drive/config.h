@@ -14,6 +14,7 @@ class DriverConfig {
   int16_t pi_thr_scale;
   int16_t pi_brake_scale;
   int16_t pi_steer_scale;
+  int16_t pi_steer_v_scale;
   int16_t pi_v_scale;
   int16_t orange_thresh;
   int16_t black_thresh;
@@ -29,7 +30,8 @@ class DriverConfig {
     throttle_bias        = 0;
     pi_thr_scale         = 100;
     pi_brake_scale       = 100;
-    pi_steer_scale       = 100;
+    pi_steer_scale       = -50;
+    pi_steer_v_scale     = 3;
     pi_v_scale           = 100;
     orange_thresh        = 150;
     black_thresh         = 40;

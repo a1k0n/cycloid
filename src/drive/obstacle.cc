@@ -108,6 +108,7 @@ void ObstacleDetector::Update(uint8_t *yuv420, uint8_t carthresh, uint8_t coneth
   uint8_t *v = yuv420 + 640*480 + 320*240;
   rleptr = 0;
   amptr = 0;
+  bool clear = true;
   while (rleptr < uvmask_rlelen_) {
     // read zero-len
     v += uvmask_rle_[rleptr++];
@@ -117,9 +118,21 @@ void ObstacleDetector::Update(uint8_t *yuv420, uint8_t carthresh, uint8_t coneth
         int a = uvanglemap_[amptr];
         orange_sum_[128+a] += (*v) - conethresh;
         *v = 255;
+        clear = false;
       }
       v++;
       amptr++;
     }
   }
+  #if 0
+  if (!clear) {
+    // debug print the orange sum buffer
+    for (int i = 128-80; i < 128+80; i += 4) {
+      fprintf(stderr, "%4d ",
+       orange_sum_[i] + orange_sum_[i+1] + orange_sum_[i+2] + orange_sum_[i+3]);
+    }
+    fprintf(stderr, "\n");
+    fflush(stderr);
+  }
+  #endif
 }

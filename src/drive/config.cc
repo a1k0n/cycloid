@@ -12,6 +12,7 @@ const char *DriverConfig::confignames[] = {
   "pi thr scale",
   "pi brake scale",
   "pi steer scale",
+  "pi steer_v scale",
   "pi v scale",
   "orange thresh",
   "black thresh",
@@ -20,7 +21,7 @@ const char *DriverConfig::confignames[] = {
   "servo max",
 };
 
-const int DriverConfig::N_CONFIGITEMS = 13;
+const int DriverConfig::N_CONFIGITEMS = 14;
 
 bool DriverConfig::Save() {
   FILE *fp = fopen("driverconf.txt", "w");
@@ -35,6 +36,7 @@ bool DriverConfig::Save() {
   fprintf(fp, "pi_thr_scale         %d\n", pi_thr_scale);
   fprintf(fp, "pi_brake_scale       %d\n", pi_brake_scale);
   fprintf(fp, "pi_steer_scale       %d\n", pi_steer_scale);
+  fprintf(fp, "pi_steer_v_scale     %d\n", pi_steer_v_scale);
   fprintf(fp, "pi_v_scale           %d\n", pi_v_scale);
   fprintf(fp, "orange_thresh        %d\n", orange_thresh);
   fprintf(fp, "black_thresh         %d\n", black_thresh);
@@ -62,6 +64,7 @@ bool DriverConfig::Load() {
     else if (!strcmp(varbuf, "pi_thr_scale"))      { pi_thr_scale         = valuebuf; }
     else if (!strcmp(varbuf, "pi_brake_scale"))    { pi_brake_scale       = valuebuf; }
     else if (!strcmp(varbuf, "pi_steer_scale"))    { pi_steer_scale       = valuebuf; }
+    else if (!strcmp(varbuf, "pi_steer_v_scale"))  { pi_steer_v_scale     = valuebuf; }
     else if (!strcmp(varbuf, "pi_v_scale"))        { pi_v_scale           = valuebuf; }
     else if (!strcmp(varbuf, "orange_thresh"))     { orange_thresh        = valuebuf; }
     else if (!strcmp(varbuf, "black_thresh"))      { black_thresh         = valuebuf; }
