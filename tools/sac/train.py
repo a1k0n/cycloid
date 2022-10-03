@@ -13,13 +13,14 @@ from copy import deepcopy
 from torch.utils.tensorboard import SummaryWriter
 import sys
 import pickle
+import tqdm
 
 
 # HYPERPARAMETERS
 lr_pi = 1e-3
 lr_q = 3e-3
 gamma = 0.99
-alpha = 0.1
+alpha = 0.03
 polyak = 0.995
 batch_size = 65536
 steps_per_rollout = 25
@@ -34,9 +35,15 @@ randrollouts1 = nrollouts//10
 randrollouts2 = nrollouts//100
 
 q_hid = 128
-pi_hid = 16
+pi_hid = 32
 
+smooth_penalty = 1.0  # lose x meters of distance reward per full state swing
+understeer_penalty = 0.003  # lose x meters of distance per m/s^2 lateral acceleration over limit per frame
 
+fullstatedim = 11
+statedim = fullstatedim - 3  # remove x, y, theta from observation states
+
+MAXSTEP = 100000
 LOG_STD_MIN, LOG_STD_MAX = -20, 2
 
 RUN_NAME = sys.argv[1]
@@ -63,10 +70,20 @@ class CarEnv:
         self.maxa = maxa
         self.brake_k2, self.brake_k3 = 1.23, 0.875
 
+    def randomize_domain(self, N):
+        ''' not used '''
+        Iscale = (torch.randn((N,), device="cuda")*0.7).exp()
+        powerscale = (torch.randn((N,), device="cuda")*0.7).exp()
+        self.mk1 = Iscale * powerscale * 28.8
+        self.mk2 = Iscale * 1.35
+        # use the nominal values for the first two though, always
+        self.mk1[:2] = 28.8
+        self.mk2[:2] = 1.35
+
     def randstate(self, N):
         si = np.random.randint(0, M, (N,))
 
-        ss = np.random.randn(9*N).reshape(-1, 9)
+        ss = np.random.randn(fullstatedim*N).reshape(-1, fullstatedim)
 
         ss[:, 2] = 0.2*ss[:, 2] + np.arctan2(track[si, 3], track[si, 2])  # theta
         ss[:, 3] = np.abs(ss[:, 3])*4  # velocity
@@ -79,21 +96,26 @@ class CarEnv:
         CS = np.stack([np.cos(ss[:, 2]), np.sin(ss[:, 2])], axis=1)
         ss[:, 7:9] = np.einsum('jki,ji->jk', R, CS)
 
+        # leave ss[:, 9:11] as random control inputs
+
         return torch.tensor(ss, dtype=torch.float32).to("cuda"), torch.tensor(si, dtype=torch.long).to("cuda")
 
     # take a step in the env; returns r (reward), sp (s prime aka next state), offtrack (done-ish)
     def step(self, s, i, a, dt=1.0/30):
         # 1. step in xg, yg, v, w space
-        #   0   1    2    3  4   5   6   7   8
-        # (xg, yg, theta, v, w, xl, yl, cl, sl)
+        #   0   1    2    3  4   5   6   7   8     9          10
+        # (xg, yg, theta, v, w, xl, yl, cl, sl, prevu_v, prevu_delta)
 
         sp = s.clone()
         theta = s[:, 2]
         v = s[:, 3]
         w = s[:, 4]
 
-        u_v = a[:, 0]
-        u_delta = a[:, 1]
+        # treat motor action as differential
+        u_v = (s[:, 9] + a[:, 0]).clamp(-1, 1)
+
+        # steering is actually one sample delayed at 30Hz; previous actions are populated below
+        u_delta = s[:, 10]
 
         # handle accel
         dv = self.mk1 * u_v - self.mk2 * v * u_v - self.mk4*v
@@ -108,17 +130,19 @@ class CarEnv:
         v = v + dv*dt*0.5
         acc = v**2 * torch.abs(k)
 
-        # max out lateral acceleration by understeering samples which are too fast for their curvature
+        # max out lateral acceleration by understeering samples which are too
+        # fast for their curvature
         toofast = acc > self.maxa
         k[toofast] = torch.sign(k[toofast]) * self.maxa / v[toofast]**2
 
         dv -= 100*dt*torch.cos(k)
         # second half
         v = v + dv*dt*0.5
-        w = 0.475*w + 0.525*(k*v)
+        # w = 0.475*w + 0.525*(k*v)  this filter is for emulating the sample delay
+        w = 0.3*w + 0.7*(k*v)  # this is more realistic after one 30Hz sample delay
         sp[:, 4] = w
 
-        v[v<0] = 0
+        v[v < 0] = 0
         sp[:, 3] = v
         theta = (theta+w*dt) % (2*torch.pi)
         sp[:, 2] = theta
@@ -136,12 +160,21 @@ class CarEnv:
                 break
 
         # 3. recompute local xl, yl, cl, sl
+        # states 5:7 are the local x, y offset from the local track reference
         dxy = sp[:, :2] - Ttrack[ip, :2]
         R = torch.stack([Ttrack[ip, 2:4], torch.stack([-Ttrack[ip, 3], Ttrack[ip, 2]]).T], axis=1)
         sp[:, 5:7] = torch.einsum('jki,ji->jk', R, dxy)
+
+        # states 7-9 are cos/sin of heading w.r.t. track
         CS = torch.stack([torch.cos(sp[:, 2]), torch.sin(sp[:, 2])], axis=1)
         sp[:, 7:9] = torch.einsum('jki,ji->jk', R, CS)
-        return sp, ip
+
+        # last two states are the previous actions for smoothness constraints
+        # treat actions as differential
+        sp[:, 9:11] += a
+        sp[:, 9:11].clamp_(-1, 1)
+
+        return sp, ip, torch.clamp(acc-self.maxa, 0)*understeer_penalty
 
 
 def defaultpolicy(s, i):
@@ -174,19 +207,27 @@ def rollout(env, s, i, policy, N):
     for j in range(N):
         s0[j] = s
         i0[j] = i
+        # TODO: add sensor noise to observation
+
         a[j] = policy(s, i)
-        s_, i_ = env.step(s, i, a[j])
+        s_, i_, envpenalty = env.step(s, i, a[j])
         sp[j], ip[j] = s_, i_
         trackk = Ttrack[i_, 4]
         i_[i_ < i] += M
         # s[., 5] = x along track direction
-        r[j] = dssum[i_] + s_[:, 5] - dssum[i] - s[:, 5]
-        # s[., 6] = y across track
+        # reward is distance along track minus a smoothness cost
 
+        # apenalty = ((s[:, 9:11] - a[j])**2).sum(dim=-1) * smooth_penalty
+        # with differential actions, we just take the square of the action values as a penalty
+        apenalty = (a[j]**2).sum(dim=-1) * smooth_penalty
+        r[j] = (dssum[i_] + s_[:, 5] - dssum[i] - s[:, 5]) - apenalty - envpenalty
+
+        # s[., 6] = y across track
         # going off track to the outside -> penalty = distance off track
         penalty = torch.abs(s_[:, 6]) > TRACK_HALFWIDTH
         # going a full track width farther -> done
         r[j, penalty] = TRACK_HALFWIDTH - torch.abs(s_[penalty, 6])
+
         done[j] = torch.abs(s_[:, 6]) > 2*TRACK_HALFWIDTH
 
         # cutting on the inside -> you're done
@@ -211,8 +252,15 @@ class QNet(nn.Module):
         self.net = nn.Sequential(
             nn.Linear(hidden_dim, hidden_dim),
             nn.Mish(),
+            nn.Linear(hidden_dim, hidden_dim),
+            nn.Mish(),
             nn.Linear(hidden_dim, 1),
         )
+
+        # fix initialization
+        self.emb.weight.data /= 3
+        self.sL1.weight.data /= 3
+        self.aL1.weight.data /= 3
 
     def forward(self, s, ix, a):
         i = self.emb(ix) + self.sL1(s) + self.aL1(a)
@@ -232,6 +280,10 @@ class PiNet(nn.Module):
         )
         self.mulayer = nn.Linear(hidden_dim, action_dim)
         self.logstdlayer = nn.Linear(hidden_dim, action_dim)
+
+        # fix initialization
+        self.emb.weight.data /= 2
+        self.sL1.weight.data /= 2
 
     def forward(self, s, ix, deterministic=False, with_logprob=True):
         o = self.act(self.emb(ix) + self.sL1(s))
@@ -263,9 +315,9 @@ class ActorCritic(nn.Module):
     def __init__(self):
         super().__init__()
 
-        self.pi = PiNet(M, pi_hid)
-        self.q1 = QNet(M, q_hid)
-        self.q2 = QNet(M, q_hid)
+        self.pi = PiNet(M, pi_hid, state_dim=statedim)
+        self.q1 = QNet(M, q_hid, state_dim=statedim)
+        self.q2 = QNet(M, q_hid, state_dim=statedim)
 
     def act(self, o, i, deterministic=False):
         with torch.no_grad():
@@ -333,9 +385,12 @@ frozen = 0
 replay_idx = frozen
 replay_size = replay_s0.shape[0]
 
-testlap_state = torch.zeros((1, 9), device="cuda")
-testlap_state[:, :2] = Ttrack[5, :2]
-testlap_idx = torch.tensor([21], dtype=torch.long, device="cuda")
+testlap_state = torch.zeros((2, fullstatedim), device="cuda")
+testlap_state[:, :2] = Ttrack[20, :2]
+testlap_state[0, 1] -= 0.3
+testlap_state[1, 1] += 0.3
+testlap_idx = torch.tensor([20, 20], dtype=torch.long, device="cuda")
+testlap_state, testlap_idx, _ = env.step(testlap_state, testlap_idx, torch.zeros((2, 2), device="cuda"))
 
 
 def checkpoint():
@@ -348,7 +403,7 @@ def checkpoint():
     print("checkpoint written to", fname)
 
 
-while step < 10000000:
+for step in tqdm.trange(0, MAXSTEP+1):
     try:
         b = torch.randint(0, replay_size, (batch_size,), device="cuda")
         q_opt.zero_grad()
@@ -408,6 +463,8 @@ while step < 10000000:
                 # for robustness, randomly replace 1% of samples in replay with random ones and roll them out
                 randrollouts = step < 10000 and randrollouts1 or randrollouts2
                 firsts[:randrollouts], firsti[:randrollouts] = env.randstate(randrollouts)
+                # also include test lap initial states, always
+                firsts[randrollouts:randrollouts+2], firsti[randrollouts:randrollouts+2] = testlap_state, testlap_idx
 
                 s0, i0, a, r, sp, ip, done = rollout(env, firsts, firsti, pipolicy, rolloutlen)
                 ravg_ = (r*(~done)).sum()
@@ -437,7 +494,7 @@ while step < 10000000:
                 s0, i0, a, r, sp, ip, done = rollout(env, testlap_state, testlap_idx, pipolicy_det, 400)
                 # also add test rollout to replay buffer at the beginning for further sampling
                 u = 0
-                v = 400
+                v = 800
                 replay_s0[u:v] = s0.view(-1, s0.shape[-1])
                 replay_i0[u:v] = i0.view(-1)
                 replay_obs1[u:v] = sp.view(-1, sp.shape[-1])[:, 3:]
@@ -445,12 +502,26 @@ while step < 10000000:
                 replay_a[u:v] = a.view(-1, a.shape[-1])
                 replay_r[u:v] = r.view(-1)
                 replay_done[u:v] = done.view(-1)
-                writer.add_scalar("reward/testlap", r.sum(), step)
+                writer.add_scalar("reward/testlap", r.sum()/2, step)
 
                 plt.plot(s0[:, :, 0].cpu(), s0[:, :, 1].cpu(), '--', color="red")
                 plt.xlim(2, 17)
                 plt.ylim(-10, 0)
                 writer.add_figure('rollouts', fig, global_step=step)
+
+                fig = plt.figure(figsize=(12, 4))
+                plt.plot(sp[:, 0, 9:11].cpu())
+                writer.add_figure('rollouts/inputs', fig, global_step=step)
+
+                fig = plt.figure(figsize=(12, 4))
+                k = sp[:, 0, 10]*1.5
+                v = s0[:, 0, 3]
+                w = s0[:, 0, 4]
+                plt.plot(v.cpu())  # velocity
+                plt.plot((v**2 * k).cpu())  # commanded lateral acceleration
+                plt.plot((v*w).cpu())  # actual lateral acceleration
+
+                writer.add_figure('rollouts/forces', fig, global_step=step)
 
             if (step % 10000) == 0:
                 checkpoint()
